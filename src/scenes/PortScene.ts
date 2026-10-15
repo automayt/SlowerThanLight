@@ -5,6 +5,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { weapon } from '../data/weapons';
 import { CREW_PRICE, HULL_PRICE, MAX_GUNS, type Run } from '../sim/Run';
+import { badges } from '../sim/Skills';
 import type { WeaponDef } from '../sim/types';
 import { saveRun } from './save';
 
@@ -111,7 +112,7 @@ export class PortScene extends Phaser.Scene {
       if (who) this.say(`${who} signs the articles.`);
     }, `Bunks for ${run.maxCrew}`);
     y += ROW + 4;
-    const roster = run.condition.crew.map((c) => `${c.name}  ${c.hp}%`).join('\n');
+    const roster = run.condition.crew.map((c) => `${c.name}  ${c.hp}%  ${badges(c)}`).join('\n');
     this.dyn.push(this.add.text(x, y, roster, textStyle(12, COLORS.text, { lineSpacing: 2 })));
   }
 

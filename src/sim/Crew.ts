@@ -1,5 +1,6 @@
 import { findRoute } from './pathfinding';
 import type { Crew, CrewTask, Ship, Waypoint } from './Ship';
+import { rank, REPAIR_BONUS, train } from './Skills';
 
 /** Tiles per second. */
 export const CREW_SPEED = 2.2;
@@ -57,14 +58,16 @@ export function updateCrew(ship: Ship, dt: number): void {
       room.fire = Math.max(0, room.fire - FIREFIGHT_RATE * workers.length * dt);
     } else if (room.breach) {
       task = 'breach';
-      room.breachProgress += PATCH_RATE * workers.length * dt;
+      room.breachProgress += PATCH_RATE * workers.reduce((n, w) => n + 1 + rank(w, 'repair') * REPAIR_BONUS, 0) * dt;
+      for (const w of workers) train(w, 'repair', dt);
       if (room.breachProgress >= 100) {
         room.breach = false;
         room.breachProgress = 0;
       }
     } else if (sys && sys.damage > 0) {
       task = 'repair';
-      sys.repair += REPAIR_RATE * workers.length * dt;
+      sys.repair += REPAIR_RATE * workers.reduce((n, w) => n + 1 + rank(w, 'repair') * REPAIR_BONUS, 0) * dt;
+      for (const w of workers) train(w, 'repair', dt * 2);
       if (sys.repair >= 100) {
         sys.damage -= 1;
         sys.repair = 0;

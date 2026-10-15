@@ -1,4 +1,5 @@
 import type { BattleEvent } from './events';
+import { GUNNERY_RELOAD, rank, train } from './Skills';
 import type { Rng } from './rng';
 import type { GunState, Ship } from './Ship';
 import type { ShotType, Side, SystemId } from './types';
@@ -98,7 +99,8 @@ export function changeShot(gun: GunState, shot: ShotType): void {
 /** Load guns and fire any that are loaded and aimed. */
 export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile[], events: BattleEvent[], stats: CombatStats): void {
   const working = ship.level('guns') > 0;
-  const rate = ship.isManned('guns') ? 1.15 : 1;
+  const gunner = ship.stationed('guns');
+  const rate = gunner ? 1.15 + rank(gunner, 'gunnery') * GUNNERY_RELOAD : 1;
   ship.guns.forEach((g, i) => {
     if (!g.powered || !working) {
       g.charge = Math.max(0, g.charge - dt * 3);
@@ -120,6 +122,7 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
     }
     stats.shotsFired += g.def.shots;
     g.charge = 0;
+    if (gunner) train(gunner, 'gunnery', 3, events);
     events.push({ t: 'shot', side: ship.side, gun: i, shot: g.shot });
   });
 }

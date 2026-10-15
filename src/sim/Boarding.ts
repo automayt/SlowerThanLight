@@ -1,5 +1,6 @@
 import type { BattleEvent } from './events';
 import type { Crew, Ship } from './Ship';
+import { COMBAT_BONUS, rank, train } from './Skills';
 import type { Side } from './types';
 
 /** Seconds to swing or row across to the other ship. */
@@ -55,11 +56,14 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): v
         [boarders, own, 1],
       ] as const) {
         const target = foes.reduce((a, b) => (b.hp < a.hp ? b : a));
-        const strength = attackers.reduce((sum, c) => sum + c.melee, 0);
+        const strength = attackers.reduce((sum, c) => sum + c.melee * (1 + rank(c, 'combat') * COMBAT_BONUS), 0);
         hits.set(target, (hits.get(target) ?? 0) + strength * MELEE_DPS * bonus * dt);
       }
       for (const [c, dmg] of hits) c.hp -= dmg;
-      for (const c of [...own, ...boarders]) c.task = 'fight';
+      for (const c of [...own, ...boarders]) {
+        c.task = 'fight';
+        train(c, 'combat', dt, events);
+      }
       room.sabotage = 0;
       continue;
     }

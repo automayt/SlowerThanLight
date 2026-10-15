@@ -2,6 +2,7 @@ import { weapon } from '../data/weapons';
 import { buildDoors, type Door } from './pathfinding';
 import type { RoomDef, ShipDef, ShotType, Side, SystemId, Vec, WeaponDef } from './types';
 import { HANDS_SYSTEMS } from './types';
+import { rank, SEAMANSHIP_EVASION, type SkillXp } from './Skills';
 
 /** Water level (0..100) at which a room's system stops working. */
 export const SWAMP_LEVEL = 50;
@@ -69,6 +70,8 @@ export interface Crew {
   task: CrewTask;
   /** Hand-to-hand fighting strength, from the ship they signed on with. */
   melee: number;
+  /** Experience per skill (player crew only gain it). */
+  xp: SkillXp;
 }
 
 /** A crew member as remembered between battles. */
@@ -76,6 +79,8 @@ export interface CrewRecord {
   name: string;
   hp: number;
   home: string;
+  /** Experience per skill; missing for green hands. */
+  xp?: SkillXp;
 }
 
 /** Wear and tear a ship carries from one encounter to the next. */
@@ -147,6 +152,7 @@ export class Ship {
         waypoints: [],
         task: 'idle',
         melee: def.melee ?? 1,
+        xp: { ...(c.xp ?? {}) },
       });
     }
 
@@ -166,7 +172,7 @@ export class Ship {
     for (const s of this.systems.values()) if (s.damage > 0) damage[s.id] = s.damage;
     return {
       hull: Math.max(0, this.hull),
-      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home })),
+      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home, ...(Object.keys(c.xp).length ? { xp: { ...c.xp } } : {}) })),
       damage,
     };
   }
@@ -314,8 +320,13 @@ export class Ship {
   }
 
   isManned(id: SystemId): boolean {
+    return !!this.stationed(id);
+  }
+
+  /** The crew member manning a system's station, if anyone is. */
+  stationed(id: SystemId): Crew | undefined {
     const s = this.systems.get(id);
-    return !!s && this.crew.some((c) => c.side === this.side && c.room === s.room && c.task === 'man');
+    return s && this.crew.find((c) => c.side === this.side && c.room === s.room && c.task === 'man');
   }
 
   /** Percent chance an incoming ball misses. */
@@ -323,7 +334,7 @@ export class Ship {
     if (this.level('helm') <= 0 || !this.isManned('helm')) return 0;
     const sails = this.level('sails');
     if (sails <= 0) return 0;
-    let ev = sails * 6 + this.def.speedBonus + (this.level('helm') - 1) * 4;
+    let ev = sails * 6 + this.def.speedBonus + (this.level('helm') - 1) * 4 + rank(this.stationed('helm'), 'seamanship') * SEAMANSHIP_EVASION;
     if (this.isManned('sails')) ev += 5;
     return Math.max(0, Math.min(60, ev));
   }

@@ -5,6 +5,7 @@ import { ShipAI, type AIOptions } from './EnemyAI';
 import type { BattleEvent } from './events';
 import { isSinking, updateHazards } from './Hazards';
 import { Rng } from './rng';
+import { train } from './Skills';
 import { Ship, type Crew, type ShipCondition } from './Ship';
 import type { ShipDef, ShotType, Side, SystemId } from './types';
 
@@ -147,6 +148,9 @@ export class Battle {
       updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
+    // Steering under fire is how helmsmen learn.
+    const helmsman = this.player.stationed('helm');
+    if (helmsman) train(helmsman, 'seamanship', dt * 0.5, this.events);
 
     for (const ship of [this.player, this.enemy]) {
       const dead = ship.crew.filter((c) => c.hp <= 0);

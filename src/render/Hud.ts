@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Battle } from '../sim/Battle';
 import { SHOT_EFFECTS } from '../sim/Combat';
+import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
 import type { Ship } from '../sim/Ship';
 import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/types';
@@ -185,6 +186,7 @@ export class Hud {
         return;
       }
       row.bg.setStrokeStyle(state.selectedCrew.has(id) ? 2 : 1, state.selectedCrew.has(id) ? COLORS.select : COLORS.panelEdge);
+      row.name.setText(`${c.name}  ${badges(c)}`);
       const aboard = battle.shipOf(c);
       row.task.setText(!aboard ? 'Crossing over…' : aboard === player ? `${taskLabel(c.task)} · ${player.room(c.room).def.name}` : `${taskLabel(c.task)} · HER ${aboard.room(c.room).def.name}`);
       row.task.setColor(aboard && aboard !== player ? COLORS.gold : COLORS.textDim);
