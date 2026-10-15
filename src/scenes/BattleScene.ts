@@ -10,7 +10,7 @@ import { BOARD_TIME, grappleSpeed } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
 import { SYSTEM_NAMES, type Side } from '../sim/types';
-import { saveRun } from './save';
+import { bumpProfile, saveRun } from './save';
 
 const TILE = 42;
 const SHIP_CENTER_Y = 292;
@@ -300,6 +300,7 @@ export class BattleScene extends Phaser.Scene {
   private endBattle(): void {
     this.ending = true;
     const o = this.battle.outcome!;
+    if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
     this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(40);
     this.add

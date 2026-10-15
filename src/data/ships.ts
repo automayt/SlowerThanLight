@@ -85,7 +85,43 @@ export const PLAYER_SHIPS: ShipDef[] = [
       { name: 'Barnaby Coil', room: 'fore' },
     ],
   },
+  {
+    id: 'wolf',
+    name: 'The Sea Wolf',
+    className: 'Corsair Xebec',
+    description: 'A lateen-rigged xebec out of Salé, crewed by cutthroats from every shore. Light guns, but more blades for boarding than any ship her size.',
+    hull: 22,
+    hands: 8,
+    speedBonus: 5,
+    melee: 1.25,
+    systems: { helm: 2, sails: 4, guns: 3, pumps: 2, surgeon: 1 },
+    rooms: [
+      { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
+      { id: 'surgeon', name: "Barber's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
+      { id: 'sails', name: 'Mainmast', x: 2, y: 1, w: 2, h: 2, system: 'sails' },
+      { id: 'pumps', name: 'Bilge', x: 2, y: 3, w: 2, h: 1, system: 'pumps' },
+      { id: 'quarters', name: 'Crew Quarters', x: 4, y: 0, w: 2, h: 1 },
+      { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 2, h: 2, system: 'guns' },
+      { id: 'arms', name: 'Arms Locker', x: 4, y: 3, w: 2, h: 1 },
+      { id: 'fore', name: 'Boarding Deck', x: 6, y: 1, w: 2, h: 2 },
+    ],
+    guns: [{ weapon: 'pdr6' }, { weapon: 'pdr6' }, { weapon: 'pdr9' }],
+    crew: [
+      { name: 'Rais Hamid', room: 'helm' },
+      { name: 'Selim the Gunner', room: 'guns' },
+      { name: 'Old Tamsin', room: 'sails' },
+      { name: 'Joachim Brandt', room: 'pumps' },
+      { name: 'Kara Vey', room: 'fore' },
+      { name: 'Grim Ben', room: 'fore' },
+      { name: 'Lisette Duval', room: 'fore' },
+    ],
+  },
 ];
+
+/** Ships that must be earned before they can be chosen, and how. */
+export const SHIP_UNLOCKS: Record<string, { captures: number; text: string }> = {
+  wolf: { captures: 2, text: 'Capture 2 prizes by boarding' },
+};
 
 export function playerShip(id: string): ShipDef {
   const s = PLAYER_SHIPS.find((p) => p.id === id);

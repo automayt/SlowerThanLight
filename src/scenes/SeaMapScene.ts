@@ -105,7 +105,7 @@ export class SeaMapScene extends Phaser.Scene {
       case 'battle': {
         const foe = run.currentEnemy();
         const title = enc.boss ? 'The Blockade' : enc.ambush ? 'Overrun!' : 'Sail Ho!';
-        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]], enc.boss ? 'blockade' : undefined);
+        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]], enc.boss ? 'blockade' : `enemy-${foe.id}`);
         break;
       }
       case 'event':

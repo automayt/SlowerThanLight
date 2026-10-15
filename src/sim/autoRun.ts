@@ -8,6 +8,8 @@ export interface AutoRunOptions {
   battleLimit?: number;
   /** Spend spare gold in port on guns and upgrades (default true). */
   shop?: boolean;
+  /** Send boarding parties of this size in battle. */
+  boardWith?: number;
 }
 
 export interface AutoRunResult {
@@ -34,7 +36,7 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
       }
       case 'battle': {
         const enemy = run.currentEnemy().id;
-        const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus });
+        const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus, playerBoardWith: opts.boardWith });
         battle.runToEnd(opts.battleLimit ?? 900);
         if (!battle.outcome) {
           run.concede('The battle dragged on to a stalemate.');

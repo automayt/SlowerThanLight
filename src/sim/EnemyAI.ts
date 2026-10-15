@@ -30,6 +30,8 @@ const FIRST_BOARDING = 12;
 const BOARDING_COOLDOWN = 40;
 /** Boarders come home below this HP. */
 const BOARDER_RETREAT_HP = 40;
+/** A party must be at least this strong relative to her whole crew before it boards. */
+const BOARD_ODDS = 0.6;
 /** Which systems boarders go for first. */
 const SABOTAGE_ORDER: SystemId[] = ['guns', 'helm', 'sails', 'pumps', 'surgeon'];
 
@@ -219,6 +221,9 @@ export class ShipAI {
       .sort((a, b) => b.hp - a.hp)
       .slice(0, size);
     if (party.length < size) return;
+    // Only board when the party can stand up to her whole crew rallying against it.
+    const strength = (cs: Crew[]) => cs.reduce((n, c) => n + c.melee * (c.hp / 100), 0);
+    if (strength(party) < BOARD_ODDS * strength(foe.own())) return;
     const target = SABOTAGE_ORDER.map((id) => foe.system(id)?.room).find((r) => r !== undefined);
     if (!target) return;
     if (actions.board(party, target)) this.boardCooldown = BOARDING_COOLDOWN;

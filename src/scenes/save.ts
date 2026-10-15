@@ -56,6 +56,36 @@ export function recordDiscovery(id: string): void {
   }
 }
 
+const PROFILE_KEY = 'slower-than-light.profile.v1';
+
+/** Lifetime record across voyages in this browser. */
+export interface Profile {
+  voyages: number;
+  wins: number;
+  captures: number;
+}
+
+export function profile(): Profile {
+  const fresh: Profile = { voyages: 0, wins: 0, captures: 0 };
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    const p = raw ? (JSON.parse(raw) as Partial<Profile>) : {};
+    return { voyages: Number(p.voyages) || 0, wins: Number(p.wins) || 0, captures: Number(p.captures) || 0 };
+  } catch {
+    return fresh;
+  }
+}
+
+export function bumpProfile(key: keyof Profile): void {
+  try {
+    const p = profile();
+    p[key]++;
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  } catch {
+    // The profile is a nicety; ignore storage failures.
+  }
+}
+
 /** The scene a voyage should resume in. */
 export function sceneFor(run: Run): string {
   switch (run.status) {

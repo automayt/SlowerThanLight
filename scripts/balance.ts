@@ -23,7 +23,7 @@ interface Captain {
 const CAPTAINS: Captain[] = [
   { label: 'spread' },
   { label: 'focus guns', focus: 'guns' },
-  { label: 'boarder', focus: 'sails', board: 2 },
+  { label: 'boarder', focus: 'guns', board: 2 },
 ];
 
 function fight(def: ShipDef, foe: EnemyDef, cap: Captain) {
@@ -62,7 +62,7 @@ for (const foe of ONLY === 'voyages' ? [] : ENEMY_LIST.filter((e) => !ONLY || ON
 const VOYAGES = Math.max(10, Math.round(RUNS / 4));
 if (!ONLY || ONLY === 'voyages') {
   console.log(`\n== Whole voyages (${VOYAGES} per ship) ==`);
-  for (const [label, focus] of [['spread', undefined], ['focus guns', 'guns']] as const) {
+  for (const { label, focus, board } of CAPTAINS) {
     for (const def of PLAYER_SHIPS) {
       let won = 0;
       let cols = 0;
@@ -71,7 +71,7 @@ if (!ONLY || ONLY === 'voyages') {
       let fights = 0;
       const killers: Record<string, number> = {};
       for (let seed = 1; seed <= VOYAGES; seed++) {
-        const { run, battles } = autoRun(new Run(def.id, seed), { focus });
+        const { run, battles } = autoRun(new Run(def.id, seed), { focus, boardWith: board });
         if (run.status === 'won') won++;
         cols += run.node.col;
         gold += run.plunderTaken;

@@ -1,17 +1,30 @@
 import Phaser from 'phaser';
-import { PLAYER_SHIPS } from '../data/ships';
+import { PLAYER_SHIPS, SHIP_UNLOCKS } from '../data/ships';
 import { weapon } from '../data/weapons';
+import { placeArt } from '../render/art';
+import { setRun } from '../render/RunBar';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea, drawPips } from '../render/ui';
-import { setRun } from '../render/RunBar';
 import { Run } from '../sim/Run';
 import { Ship } from '../sim/Ship';
-import { SYSTEM_NAMES, type SystemId } from '../sim/types';
+import { SYSTEM_NAMES, type ShipDef, type SystemId } from '../sim/types';
+import { bumpProfile, profile } from './save';
 
-const CARD_W = 396;
-const CARD_H = 520;
-const CARD_Y = 96;
+const GAP = 16;
+const MARGIN = 22;
+const CARD_W = Math.floor((SCREEN.w - 2 * MARGIN - (PLAYER_SHIPS.length - 1) * GAP) / PLAYER_SHIPS.length);
+const CARD_H = 540;
+const CARD_Y = 84;
+const SYSTEMS: SystemId[] = ['helm', 'sails', 'guns', 'pumps', 'surgeon'];
+
+/** Why a ship is still locked (with progress), or null if it can be sailed. */
+function lockReason(def: ShipDef): string | null {
+  const unlock = SHIP_UNLOCKS[def.id];
+  if (!unlock) return null;
+  const have = profile().captures;
+  return have >= unlock.captures ? null : `${unlock.text} (${have}/${unlock.captures})`;
+}
 
 export class ShipSelectScene extends Phaser.Scene {
   private sea!: Sea;
@@ -34,44 +47,59 @@ export class ShipSelectScene extends Phaser.Scene {
 
   create(): void {
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
-    this.add.text(SCREEN.w / 2, 46, 'Choose Your Ship', { fontFamily: TITLE_FONT, fontSize: '40px', color: COLORS.gold, stroke: '#000000', strokeThickness: 5 }).setOrigin(0.5);
+    this.add.text(SCREEN.w / 2, 40, 'Choose Your Ship', { fontFamily: TITLE_FONT, fontSize: '38px', color: COLORS.gold, stroke: '#000000', strokeThickness: 5 }).setOrigin(0.5);
     this.pips = this.add.graphics().setDepth(2);
 
     PLAYER_SHIPS.forEach((def, i) => {
-      const x = 22 + i * (CARD_W + 23);
+      const x = MARGIN + i * (CARD_W + GAP);
       const card = this.add.rectangle(x, CARD_Y, CARD_W, CARD_H, COLORS.panel, 0.93).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
       card.setInteractive({ useHandCursor: true }).on('pointerdown', () => (this.selected = i));
       this.cards.push(card);
 
-      this.add.text(x + 18, CARD_Y + 14, def.name, { fontFamily: TITLE_FONT, fontSize: '28px', color: COLORS.gold });
-      this.add.text(x + 18, CARD_Y + 50, def.className, textStyle(15, COLORS.textDim, { fontStyle: 'italic' }));
+      // A painted portrait across the top of the card, when there is one.
+      const portrait = placeArt(this, `ship-${def.id}`, x + 2, CARD_Y + 2, CARD_W - 4, 116, false);
+      if (portrait) this.add.rectangle(x + 2, CARD_Y + 70, CARD_W - 4, 48, 0x000000, 0.55).setOrigin(0);
+      const nameY = portrait ? CARD_Y + 72 : CARD_Y + 14;
+      this.add.text(x + 14, nameY, def.name, { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 3 });
+      this.add.text(x + 14, nameY + 28, def.className, textStyle(13, COLORS.text, { fontStyle: 'italic' }));
 
       // Layout preview, centred in a fixed box.
       const ship = new Ship(def, 'player');
-      const tile = 30;
-      const boxH = 170;
+      const boxY = CARD_Y + 126;
+      const boxH = 132;
+      const tile = Math.min(26, (CARD_W - 24) / (ship.width + 2.2), (boxH - 16) / ship.height);
       const widthPx = (ship.width + 2.2) * tile;
-      const view = new ShipView(this, ship, x + (CARD_W - widthPx) / 2 + 0.6 * tile, CARD_Y + 82 + (boxH - ship.height * tile) / 2, tile, false, false);
+      const view = new ShipView(this, ship, x + (CARD_W - widthPx) / 2 + 0.6 * tile, boxY + (boxH - ship.height * tile) / 2, tile, false, false);
       this.views.push(view);
 
-      this.add.text(x + 18, CARD_Y + 262, def.description, textStyle(14, COLORS.text, { wordWrap: { width: CARD_W - 36 }, lineSpacing: 3 }));
+      this.add.text(x + 14, CARD_Y + 266, def.description, textStyle(13, COLORS.text, { wordWrap: { width: CARD_W - 28 }, lineSpacing: 2 }));
 
       const guns = def.guns.map((g) => weapon(g.weapon).name).join(', ');
       const evasion = def.speedBonus > 0 ? `+${def.speedBonus}%` : def.speedBonus < 0 ? `${def.speedBonus}%` : '±0%';
-      const stats = [`Hull  ${def.hull}`, `Hands  ${def.hands}`, `Crew  ${def.crew.length}`, `Hull speed  ${evasion} evasion`, `Guns  ${guns}`];
-      this.add.text(x + 18, CARD_Y + 336, stats.join('\n'), textStyle(13, COLORS.text, { lineSpacing: 4, wordWrap: { width: CARD_W - 36 } }));
+      const melee = def.melee && def.melee !== 1 ? `   Boarders ×${def.melee}` : '';
+      const stats = [`Hull ${def.hull}   Hands ${def.hands}   Crew ${def.crew.length}${melee}`, `Hull speed ${evasion} evasion`, `Guns: ${guns}`];
+      this.add.text(x + 14, CARD_Y + 370, stats.join('\n'), textStyle(12, COLORS.text, { lineSpacing: 4, wordWrap: { width: CARD_W - 28 } }));
 
-      const systems: SystemId[] = ['helm', 'sails', 'guns', 'pumps', 'surgeon'];
-      systems.forEach((id, j) => {
-        const sx = x + 18 + (j % 3) * 124;
-        const sy = CARD_Y + 452 + Math.floor(j / 3) * 26;
-        this.add.text(sx, sy, SYSTEM_NAMES[id], textStyle(12, COLORS.textDim));
-        card.setData(`pip-${id}`, { x: sx, y: sy + 16, max: def.systems[id] ?? 0 });
+      SYSTEMS.forEach((id, j) => {
+        const sx = x + 14 + (j % 3) * Math.floor((CARD_W - 28) / 3);
+        const sy = CARD_Y + 464 + Math.floor(j / 3) * 30;
+        this.add.text(sx, sy, SYSTEM_NAMES[id], textStyle(11, COLORS.textDim));
+        card.setData(`pip-${id}`, { x: sx, y: sy + 15, max: def.systems[id] ?? 0 });
       });
+
+      const locked = lockReason(def);
+      if (locked) {
+        this.add.rectangle(x, CARD_Y, CARD_W, CARD_H, 0x05090d, 0.86).setOrigin(0).setDepth(3);
+        this.add.text(x + CARD_W / 2, CARD_Y + CARD_H / 2 - 30, 'LOCKED', { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.textWarn }).setOrigin(0.5).setDepth(4);
+        this.add
+          .text(x + CARD_W / 2, CARD_Y + CARD_H / 2 + 10, locked, textStyle(14, COLORS.text, { align: 'center', wordWrap: { width: CARD_W - 40 }, backgroundColor: '#05090d', padding: { x: 8, y: 4 } }))
+          .setOrigin(0.5, 0)
+          .setDepth(4);
+      }
     });
 
-    this.launch = new Button(this, SCREEN.w / 2 - 130, CARD_Y + CARD_H + 22, 260, 46, '', () => this.start(), { size: 20 });
-    new Button(this, 22, CARD_Y + CARD_H + 30, 100, 32, '← Back', () => this.scene.start('Title'), { size: 14 });
+    this.launch = new Button(this, SCREEN.w / 2 - 150, CARD_Y + CARD_H + 18, 300, 44, '', () => this.start(), { size: 19 });
+    new Button(this, MARGIN, CARD_Y + CARD_H + 24, 100, 32, '← Back', () => this.scene.start('Title'), { size: 14 });
 
     const kb = this.input.keyboard!;
     kb.on('keydown-LEFT', () => (this.selected = (this.selected + PLAYER_SHIPS.length - 1) % PLAYER_SHIPS.length));
@@ -80,7 +108,11 @@ export class ShipSelectScene extends Phaser.Scene {
   }
 
   private start(): void {
-    setRun(this, new Run(PLAYER_SHIPS[this.selected].id));
+    const def = PLAYER_SHIPS[this.selected];
+    if (lockReason(def)) return;
+    bumpProfile('voyages');
+    this.registry.set('counted-win', false);
+    setRun(this, new Run(def.id));
     this.registry.set('chart-note', '');
     this.scene.start('SeaMap');
   }
@@ -91,11 +123,13 @@ export class ShipSelectScene extends Phaser.Scene {
     this.views.forEach((v) => v.draw(time));
     this.pips.clear();
     this.cards.forEach((c) => {
-      for (const id of ['helm', 'sails', 'guns', 'pumps', 'surgeon']) {
+      for (const id of SYSTEMS) {
         const p = c.getData(`pip-${id}`) as { x: number; y: number; max: number };
-        drawPips(this.pips, p.x, p.y - 2, p.max, p.max, 0, 9, 2);
+        drawPips(this.pips, p.x, p.y - 2, p.max, p.max, 0, 8, 2);
       }
     });
-    this.launch.setText(`Set Sail in ${PLAYER_SHIPS[this.selected].name} →`);
+    const def = PLAYER_SHIPS[this.selected];
+    const locked = lockReason(def);
+    this.launch.setEnabled(!locked).setText(locked ? `${def.name} is locked` : `Set Sail in ${def.name} →`);
   }
 }

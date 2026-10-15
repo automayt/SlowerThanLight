@@ -3,7 +3,7 @@ import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea } from '../render/ui';
-import { clearSave } from './save';
+import { bumpProfile, clearSave } from './save';
 
 /** The end of a voyage: escape to the open ocean, or a summary of how far you got. */
 export class RunEndScene extends Phaser.Scene {
@@ -16,6 +16,8 @@ export class RunEndScene extends Phaser.Scene {
   create(): void {
     const run = currentRun(this);
     clearSave();
+    if (run.status === 'won' && !this.registry.get('counted-win')) bumpProfile('wins');
+    this.registry.set('counted-win', true);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     const cx = SCREEN.w / 2;
     const won = run.status === 'won';
