@@ -31,6 +31,10 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - **Ports** have a harbour (hull repairs, new crew, or rest and refit at the cost of time), a shipwright (oak planking for more hull, extra deckhands, more bars on any system) and an armoury that stocks two guns, heavier ones later in the voyage. You have four gun ports; sell a gun back for half its price.
 - **Events:** nearly a hundred of them. "Unknown" nodes bring encounters (castaways, convoys, smugglers, the Spanish coastguard); crossing open sea often brings an incident aboard (fever, scurvy, falls from the rigging, brawls, duels, storms, waterspouts). Events name your actual crew, and can wound or kill them. Some are rare or legendary and happen at most once a voyage: Blackbeard's invitation to supper, a ship out of time, something huge below the keel, a three-part treasure map, and the King's Pardon, which offers a different way to end the voyage. Earlier choices echo later: shoot the albatross and the ship is cursed; spare a Navy captain and he may repay you.
 - **Logbook:** every event you discover is kept in a lifetime logbook on the title screen, by rarity.
+- **Spoils:** a captured ship offers one of her guns (into a free gun port, or sold for scrap); a ship that struck her colours also offers a survivor for your crew. One pick.
+- **Crew experience:** your people get better at what they do. Gunners learn by firing, helmsmen by steering under fire, carpenters by repairs, brawlers by boarding fights. Veteran and Expert ranks (stars in the crew list) mean faster reloads, more evasion, quicker repairs and harder blows, and they carry through the voyage.
+- **Difficulty:** Easy, Normal or Hard on the ship select screen changes how fast the Navy closes in, starting gold, and how tough and quick-firing enemies are.
+- **Unlockable ship:** capture two prizes by boarding (across any voyages) to unlock the Sea Wolf, a corsair xebec with a crew of cutthroats built for boarding.
 - **Saving:** the voyage is saved in your browser as you play. *Continue Voyage* on the title screen picks it up again; a battle in progress restarts from its first broadside.
 - **The blockade:** HMS Relentless, a Navy frigate. There is no running from her. Sink her to win.
 
@@ -41,6 +45,7 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - **Hands:** your deckhands are the ship's power. Use the **+ / −** buttons to put hands on Sails, Pumps and the Surgeon. Guns take hands when you power them.
 - **Guns:** man a gun with its ⏻ button, choose a shot type, then click the gun card and click an enemy room to aim. Number keys 1–4 select guns.
 - **Boarding:** select crew and click a room on the enemy ship to send them across (4 seconds on the ropes). You can only grapple a ship that is no faster than you (working sails plus hull speed) or whose helm is unmanned, so chain shot her rigging first. Boarders fight any defenders in the room (defenders have the edge on their own deck; merchant hands fight poorly, marines well) and wreck the system in an undefended room. Kill her whole crew to take her as a prize for her full hold and more. While anyone is aboard the other ship, neither ship can escape. Click one of your own rooms to call boarders home. Privateers, the Spanish and the Navy's marines will board you too.
+- **Sound:** press M in battle (or use the title screen toggle) to mute.
 - **Shot types:** Round (hull + systems), Chain (wrecks systems and sails, no hull damage), Grape (shreds crew), Hot (sets fires).
 - **Escape:** once *Make Sail* is fully charged you can flee the fight.
 

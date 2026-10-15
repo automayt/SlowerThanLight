@@ -1014,6 +1014,107 @@
         "seed": 6081,
         "prompt": "Pirates around a bonfire on a beach at night, ship at anchor, rum and turtles, people shown as small or mid-distance figures"
       }
+    ],
+    "ship-wren": [
+      {
+        "stem": "ship-wren",
+        "seed": 7101,
+        "prompt": "A small nimble pirate sloop with a single raked mast, one large fore-and-aft gaff mainsail and a jib on a long bowsprit, heeling hard and racing fast through a fresh breeze, white spray at her bow, small low wooden hull, the whole ship visible broadside in the centre of the picture, open sea and bright windy sky, no people in close-up"
+      },
+      {
+        "stem": "ship-wren_r1",
+        "seed": 7201,
+        "prompt": "A tiny single-masted gaff-rigged pirate sloop, only ONE mast, raked aft, carrying one big fore-and-aft gaff mainsail and one triangular jib on a long bowsprit, no square sails and no yards, small low open-decked hull with a few small guns, heeling hard over and racing through a fresh breeze, spray flying from the bow, a lone small boat alone on the open sea, side view"
+      },
+      {
+        "stem": "ship-wren_r2",
+        "seed": 7202,
+        "prompt": "A small fast pirate sloop with a single tall raked mast, like a Jamaica sloop or Bermuda sloop, one huge gaff mainsail with a long boom and a triangular jib, no square sails, low narrow dark hull, heeling steeply in a stiff breeze and cutting through whitecaps, alone on a sparkling sea, side view"
+      }
+    ],
+    "ship-gull": [
+      {
+        "stem": "ship-gull",
+        "seed": 7102,
+        "prompt": "A sturdy black-hulled two-masted brigantine pirate ship under full sail, square sails on the foremast and a gaff mainsail on the mainmast, a plain black flag, pitch-black hull with a row of gunports, rolling sea, the whole ship visible in three-quarter view in the centre of the picture"
+      },
+      {
+        "stem": "ship-gull_r1",
+        "seed": 7203,
+        "prompt": "A pirate brigantine with exactly two masts, square sails on the foremast and a large fore-and-aft gaff mainsail on the mainmast, sturdy pitch-black hull with a row of gunports, a plain black flag without symbols, under full sail on a rolling sea, the whole ship in three-quarter view, no other ships"
+      },
+      {
+        "stem": "ship-gull_r2",
+        "seed": 7301,
+        "prompt": "A small two-masted pirate brigantine seen from the side, only two masts: the foremast square-rigged with three square sails, the taller mainmast carrying one big fore-and-aft gaff sail and a gaff topsail, sturdy pitch-black hull with a row of gunports, a plain black flag, under full sail on a rolling blue-green sea, no other ships"
+      }
+    ],
+    "ship-maw": [
+      {
+        "stem": "ship-maw",
+        "seed": 7103,
+        "prompt": "A captured heavy three-masted frigate refitted as a pirate ship, dark tarred hull with long rows of open gunports and black iron cannon run out, patched dark sails, slow and menacing, ploughing through grey swell under a brooding stormy sky, the whole ship visible in three-quarter bow view"
+      }
+    ],
+    "enemy-cutter": [
+      {
+        "stem": "enemy-cutter",
+        "seed": 7104,
+        "prompt": "A small Royal Navy revenue cutter with a single tall mast, large gaff mainsail and jibs on a long bowsprit, beating hard to windward close-hauled, plain white naval ensign with a red cross at the stern, neat black and yellow hull, spray over the bow, choppy blue sea, the whole ship visible in the centre of the picture"
+      },
+      {
+        "stem": "enemy-cutter_r1",
+        "seed": 7204,
+        "prompt": "A small Royal Navy revenue cutter with only ONE mast, a huge gaff mainsail with a long boom, a triangular jib and staysail on a very long bowsprit, no square sails, close-hauled and beating to windward heeling hard, a white naval ensign with a red cross flying from the gaff, low black hull with a yellow stripe, spray over the bow, a lone small vessel on a choppy sea, side view"
+      },
+      {
+        "stem": "enemy-cutter_r2",
+        "seed": 7205,
+        "prompt": "An 18th century single-masted English cutter, one mast carrying one big gaff mainsail and two triangular headsails, fore-and-aft rig only, plain white ensign with a red cross at the stern, small fast hull heeled over beating into a stiff breeze, a lone small boat on a grey-green choppy sea, side view"
+      }
+    ],
+    "enemy-merchant": [
+      {
+        "stem": "enemy-merchant",
+        "seed": 7105,
+        "prompt": "A deep-laden two-masted merchant brig wallowing low in the water, bluff rounded bows pushing up foam, square sails, heavy tubby wooden hull painted in plain ochre and brown, barrels lashed on deck, slow and heavy on a long swell, hazy afternoon light, the whole ship visible broadside"
+      }
+    ],
+    "enemy-privateer": [
+      {
+        "stem": "enemy-privateer",
+        "seed": 7106,
+        "prompt": "A rakish two-masted privateer schooner, low sleek dark hull with a sharp clipper bow, two steeply raked masts with fore-and-aft gaff sails, long bowsprit, knifing fast through the waves with spray flying, a few small guns, predatory and fast, the whole ship visible in three-quarter view"
+      },
+      {
+        "stem": "enemy-privateer_r1",
+        "seed": 7206,
+        "prompt": "A rakish two-masted fore-and-aft rigged privateer schooner like a Baltimore clipper, two steeply raked masts carrying only gaff sails and triangular jibs, no square sails and no yards, low sleek dark hull with a sharp bow, knifing fast through the waves with spray flying, alone on the open sea, side view"
+      },
+      {
+        "stem": "enemy-privateer_r2",
+        "seed": 7207,
+        "prompt": "A low fast black schooner with two tall raked masts and fore-and-aft gaff sails only, long bowsprit with two jibs, sharp narrow bow slicing through blue swells, a few small guns along the rail, a predatory privateer hunting pirates, a lone ship under a bright windy sky, three-quarter bow view"
+      }
+    ],
+    "enemy-guarda": [
+      {
+        "stem": "enemy-guarda",
+        "seed": 7107,
+        "prompt": "A Spanish coastguard schooner with two masts flying red and gold Spanish colours, a large red and yellow striped flag, firing a cannon to leeward with a burst of white gunsmoke and orange flash from her side, dark wooden hull with red trim, tropical Caribbean sea and a distant green island, the whole ship visible broadside"
+      },
+      {
+        "stem": "enemy-guarda_r1",
+        "seed": 7208,
+        "prompt": "A Spanish guarda costa schooner with two masts and fore-and-aft gaff sails, dark hull with red trim, a large red and gold Spanish naval flag streaming from the stern, she fires a single cannon to leeward from her side with a big cloud of white gunsmoke and a flash, tropical turquoise sea and a distant green island, side view"
+      }
+    ],
+    "enemy-galleon": [
+      {
+        "stem": "enemy-galleon",
+        "seed": 7108,
+        "prompt": "A huge ornate Spanish treasure galleon with a towering carved and gilded stern castle, high sides, three masts with square sails and a lateen mizzen, red and gold decorations, many gunports, massive and majestic on a calm blue sea under golden light, the whole ship visible in three-quarter stern view"
+      }
     ]
   }
 }
