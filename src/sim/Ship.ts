@@ -67,6 +67,8 @@ export interface Crew {
   slot: Vec;
   waypoints: Waypoint[];
   task: CrewTask;
+  /** Hand-to-hand fighting strength, from the ship they signed on with. */
+  melee: number;
 }
 
 /** A crew member as remembered between battles. */
@@ -144,6 +146,7 @@ export class Ship {
         slot,
         waypoints: [],
         task: 'idle',
+        melee: def.melee ?? 1,
       });
     }
 

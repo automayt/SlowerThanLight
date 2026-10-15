@@ -46,6 +46,7 @@ export class TitleScene extends Phaser.Scene {
       'Click crew, then a room — move them. Shift-click selects several.',
       'Click a gun card, then an enemy room — aim. Right-click a card — hold fire.',
       'Hands are your power: put them on Sails, Pumps, the Surgeon and the guns.',
+      'Select crew, then click an enemy room to BOARD her (if you are as fast as she is).',
     ];
     this.add
       .text(cx, 470, help.join('\n'), textStyle(15, COLORS.text, { align: 'center', lineSpacing: 8, backgroundColor: '#0b1622bb', padding: { x: 16, y: 10 } }))

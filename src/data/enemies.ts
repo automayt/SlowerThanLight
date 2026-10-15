@@ -8,6 +8,7 @@ export const NAVY_CUTTER: ShipDef = {
   hull: 24,
   hands: 8,
   speedBonus: 5,
+  melee: 1.1,
   systems: { helm: 1, sails: 3, guns: 4, pumps: 1, surgeon: 1 },
   rooms: [
     { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
@@ -36,6 +37,7 @@ export const MERCHANT_BRIG: ShipDef = {
   hull: 22,
   hands: 6,
   speedBonus: -5,
+  melee: 0.6,
   systems: { helm: 1, sails: 4, guns: 2, pumps: 2, surgeon: 1 },
   rooms: [
     { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
@@ -92,6 +94,7 @@ export const NAVY_FRIGATE: ShipDef = {
   hull: 34,
   hands: 12,
   speedBonus: -5,
+  melee: 1.2,
   systems: { helm: 2, sails: 3, guns: 7, pumps: 3, surgeon: 2 },
   rooms: [
     { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 3, system: 'helm' },
@@ -129,6 +132,7 @@ export const GALLEON: ShipDef = {
   hull: 30,
   hands: 10,
   speedBonus: -10,
+  melee: 1.2,
   systems: { helm: 1, sails: 3, guns: 6, pumps: 3, surgeon: 1 },
   rooms: [
     { id: 'helm', name: 'Stern Castle', x: 0, y: 1, w: 2, h: 3, system: 'helm' },

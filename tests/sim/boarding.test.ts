@@ -65,13 +65,13 @@ describe('boarding', () => {
   });
 
   it('boarders and defenders fight hand to hand: numbers win, and defenders have the edge', () => {
-    const fight = (boarders: number, defenders: number) => {
-      const ship = new Ship(MERCHANT_BRIG, 'enemy');
+    const fight = (boarders: number, defenders: number, def = NAVY_CUTTER, room = 'guns') => {
+      const ship = new Ship(def, 'enemy');
       const mine = ship.crew.slice(0, defenders);
       ship.crew = mine;
-      for (const c of mine) land(ship, ship.crew.splice(ship.crew.indexOf(c), 1)[0], 'hold');
+      for (const c of mine) land(ship, ship.crew.splice(ship.crew.indexOf(c), 1)[0], room);
       const raiders = new Ship(playerShip('maw'), 'player').crew.slice(0, boarders);
-      for (const c of raiders) land(ship, c, 'hold');
+      for (const c of raiders) land(ship, c, room);
       for (let t = 0; t < 60 && ship.own().some((c) => c.hp > 0) && raiders.some((c) => c.hp > 0); t += 0.05) {
         updateBoarding(ship, 0.05, []);
         ship.crew = ship.crew.filter((c) => c.hp > 0);
@@ -80,8 +80,9 @@ describe('boarding', () => {
     };
     expect(fight(3, 1).defendersLeft).toBe(0);
     expect(fight(1, 2).boardersLeft).toBe(0);
-    // One against one, the defender wins.
+    // One against one, a Navy defender wins; a merchant hand does not.
     expect(fight(1, 1).defendersLeft).toBe(1);
+    expect(fight(1, 1, MERCHANT_BRIG, 'hold').boardersLeft).toBe(1);
   });
 
   it('unopposed boarders wreck the system in the room', () => {

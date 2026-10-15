@@ -6,6 +6,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
 import type { Battle } from '../sim/Battle';
 import type { BattleReport, Run } from '../sim/Run';
+import { BOARD_TIME, grappleSpeed } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
 import { SYSTEM_NAMES, type Side } from '../sim/types';
@@ -100,7 +101,8 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const crew = this.playerView.crewAt(ptr.x, ptr.y);
+    // Your crew can be picked out on either ship (boarders stand on the enemy's deck).
+    const crew = [this.playerView.crewAt(ptr.x, ptr.y), this.enemyView.crewAt(ptr.x, ptr.y)].find((c) => c?.side === 'player');
     if (crew) {
       if (!ptr.event.shiftKey) this.selected.clear();
       this.selected.add(crew.id);
@@ -109,7 +111,12 @@ export class BattleScene extends Phaser.Scene {
 
     const room = this.playerView.roomAt(ptr.x, ptr.y);
     if (room && this.selected.size) {
-      for (const id of this.selected) b.moveCrew(id, room);
+      b.orderCrew(this.selected, room, 'player');
+      return;
+    }
+    if (enemyRoom && this.selected.size) {
+      const sent = b.orderCrew(this.selected, enemyRoom, 'enemy');
+      if (!sent && !b.canBoard()) this.hud.addLog('She is too fast to grapple. Cripple her sails or helm first.', COLORS.textWarn);
       return;
     }
 
@@ -123,7 +130,8 @@ export class BattleScene extends Phaser.Scene {
     for (const ev of b.drainEvents()) this.onEvent(ev);
 
     // Drop selections of crew who died.
-    for (const id of this.selected) if (!b.player.crew.some((c) => c.id === id)) this.selected.delete(id);
+    const alive = new Set(b.crewOf('player').map((c) => c.id));
+    for (const id of this.selected) if (!alive.has(id)) this.selected.delete(id);
 
     const ptr = this.input.activePointer;
     const hoverEnemy = this.enemyView.roomAt(ptr.x, ptr.y);
@@ -137,7 +145,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.sea.draw(time);
     this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer });
-    this.enemyView.draw(time, { hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null });
+    this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null });
     this.drawProjectiles();
 
     this.hud.refresh({
@@ -155,7 +163,7 @@ export class BattleScene extends Phaser.Scene {
     const id = enemyRoom ?? playerRoom;
     if (!side || !id) {
       if (this.aimingGun !== null) return `Aiming gun ${this.aimingGun + 1}: click an enemy room (right-click to cancel)`;
-      if (this.selected.size) return 'Click one of your rooms to send the selected crew there';
+      if (this.selected.size) return b.canBoard() ? 'Click a room on either ship: yours to move, hers to board' : 'Click one of your rooms to send the selected crew there';
       return '';
     }
     const room = side.room(id);
@@ -167,6 +175,11 @@ export class BattleScene extends Phaser.Scene {
     if (room.water > 5) parts.push(`water ${Math.round(room.water)}%`);
     if (enemyRoom && this.aimingGun !== null) parts.push('click to aim');
     if (playerRoom && this.selected.size) parts.push('click to send crew');
+    if (enemyRoom && this.selected.size && this.aimingGun === null) {
+      parts.push(b.canBoard() ? 'click to BOARD' : `too fast to grapple (her speed ${grappleSpeed(b.enemy).toFixed(0)}, yours ${grappleSpeed(b.player).toFixed(0)})`);
+    }
+    const fighting = side.crew.filter((c) => c.room === id && c.side !== side.side).length;
+    if (fighting) parts.push(`${fighting} BOARDER${fighting > 1 ? 'S' : ''}`);
     return parts.join(' · ');
   }
 
@@ -178,6 +191,20 @@ export class BattleScene extends Phaser.Scene {
     const g = this.fx;
     g.clear();
     if (this.battle.outcome) return;
+    // Boarders swinging across on lines between the ships.
+    for (const tr of this.battle.transit) {
+      const fromView = this.viewFor(tr.to === 'player' ? 'enemy' : 'player');
+      const toView = this.viewFor(tr.to);
+      const fromRoom = tr.to === 'player' ? fromView.ship.system('guns')?.room ?? tr.room : tr.crew.home;
+      const a = fromView.roomCenter(fromView.ship.rooms.has(fromRoom) ? fromRoom : [...fromView.ship.rooms.keys()][0]);
+      const b = toView.roomCenter(tr.room);
+      const k = 1 - Math.max(0, tr.t) / BOARD_TIME;
+      const x = a.x + (b.x - a.x) * k;
+      const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 50;
+      g.lineStyle(1, 0xd8c8a0, 0.5).lineBetween(a.x, a.y - 60, x, y);
+      g.fillStyle(tr.crew.side === 'player' ? COLORS.playerCrew : COLORS.enemyCrew, 1).fillCircle(x, y, 7);
+      g.lineStyle(2, 0x1a1208, 1).strokeCircle(x, y, 7);
+    }
     for (const p of this.battle.projectiles) {
       if (p.t < p.delay) continue;
       const k = Math.min(1, (p.t - p.delay) / TRAVEL_TIME);
@@ -243,6 +270,12 @@ export class BattleScene extends Phaser.Scene {
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y + 10, 'HOLED!', '#7fc4ff');
         if (ours) this.hud.addLog(`We're holed in the ${view.ship.room(ev.room).def.name}, she's taking water!`);
+        break;
+      }
+      case 'board': {
+        const target = this.viewFor(ev.side === 'player' ? 'enemy' : 'player').ship.room(ev.room).def.name;
+        if (ev.side === 'player') this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
+        else this.hud.addLog(`BOARDERS! ${ev.count} of them coming over the side for our ${target}!`, COLORS.textWarn);
         break;
       }
       case 'death':

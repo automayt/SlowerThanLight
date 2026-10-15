@@ -196,6 +196,21 @@ export class Battle {
     return this.recall('player', c, roomId);
   }
 
+  /** Order several of your crew at once; those boarding from your deck cross together as one party. */
+  orderCrew(crewIds: Iterable<number>, roomId: string, onShip: Side = 'player'): number {
+    const mine = this.crewOf('player');
+    const party: Crew[] = [];
+    let moved = 0;
+    for (const id of crewIds) {
+      const c = mine.find((x) => x.id === id);
+      if (!c) continue;
+      if (onShip === 'enemy' && this.shipOf(c) === this.player) party.push(c);
+      else if (this.moveCrew(id, roomId, onShip)) moved++;
+    }
+    if (party.length && this.canBoard() && this.enemy.rooms.has(roomId) && !this.outcome) moved += this.board('player', party, roomId);
+    return moved;
+  }
+
   /** Whether your crew can board the enemy right now. */
   canBoard(): boolean {
     return !this.outcome && canGrapple(this.player, this.enemy);

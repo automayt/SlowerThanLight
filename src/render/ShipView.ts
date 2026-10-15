@@ -222,9 +222,10 @@ export class ShipView {
     const p = this.toScreen(c.pos);
     const r = T * 0.22;
     if (selected) g.lineStyle(3, COLORS.select, 1).strokeCircle(p.x, p.y, r + 4);
-    g.fillStyle(this.ship.side === 'player' ? COLORS.playerCrew : COLORS.enemyCrew, 1).fillCircle(p.x, p.y, r);
+    g.fillStyle(c.side === 'player' ? COLORS.playerCrew : COLORS.enemyCrew, 1).fillCircle(p.x, p.y, r);
     g.lineStyle(2, 0x1a1208, 1).strokeCircle(p.x, p.y, r);
-    if (this.ship.side === 'player') {
+    if (c.task === 'fight') g.lineStyle(2, 0xff4040, 0.9).strokeCircle(p.x, p.y, r + 2);
+    if (c.side === 'player') {
       // Red bandana.
       g.fillStyle(0xb8322a, 1).fillRect(p.x - r * 0.8, p.y - r * 0.55, r * 1.6, r * 0.4);
     } else {

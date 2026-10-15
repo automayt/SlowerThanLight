@@ -5,9 +5,9 @@ import type { Side } from './types';
 /** Seconds to swing or row across to the other ship. */
 export const BOARD_TIME = 4;
 /** HP per second one fighter deals in hand-to-hand fighting. */
-export const MELEE_DPS = 9;
+export const MELEE_DPS = 4;
 /** Defenders fight harder on their own deck: they know every ladder and have the cover. */
-export const DEFENDER_BONUS = 1.5;
+export const DEFENDER_BONUS = 1.25;
 /** Sabotage progress per second per unopposed boarder (100 = one point of system damage). */
 export const SABOTAGE_RATE = 10;
 
@@ -55,7 +55,8 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): v
         [boarders, own, 1],
       ] as const) {
         const target = foes.reduce((a, b) => (b.hp < a.hp ? b : a));
-        hits.set(target, (hits.get(target) ?? 0) + attackers.length * MELEE_DPS * bonus * dt);
+        const strength = attackers.reduce((sum, c) => sum + c.melee, 0);
+        hits.set(target, (hits.get(target) ?? 0) + strength * MELEE_DPS * bonus * dt);
       }
       for (const [c, dmg] of hits) c.hp -= dmg;
       for (const c of [...own, ...boarders]) c.task = 'fight';

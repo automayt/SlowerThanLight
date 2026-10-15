@@ -161,9 +161,11 @@ export class Hud {
 
     // Top bars.
     this.drawHull(player, 64, 14);
-    this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%   Flooding ${floodPct(player)}`);
+    this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%   Flooding ${floodPct(player)}   ${battle.canBoard() ? 'Can board' : 'Too slow to board'}`);
+    this.playerStats.setColor(battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
-    this.escapeBtn.setEnabled(battle.canEscape()).setText(!battle.allowEscape ? 'No escape' : battle.canEscape() ? 'Escape!' : 'Make Sail…');
+    const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : 'Make Sail…';
+    this.escapeBtn.setEnabled(battle.canEscape()).setText(escapeLabel);
 
     this.drawHull(enemy, SCREEN.w - 414, 14);
     this.enemyTitle.setText('HULL');
@@ -171,10 +173,11 @@ export class Hud {
     this.enemyStats.setText(`${enemy.def.className}   Evasion ${Math.round(enemy.evasion())}%   Flooding ${floodPct(enemy)}${fleeing}`);
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
-    // Crew list.
+    // Crew list: your people wherever they are, aboard, crossing, or on her deck.
+    const mine = battle.crewOf('player');
     this.crewRows.forEach((row) => {
       const id = row.bg.getData('crewId') as number;
-      const c = player.crew.find((x) => x.id === id);
+      const c = mine.find((x) => x.id === id);
       if (!c) {
         row.bg.setAlpha(0.35).disableInteractive();
         row.name.setAlpha(0.4);
@@ -182,7 +185,9 @@ export class Hud {
         return;
       }
       row.bg.setStrokeStyle(state.selectedCrew.has(id) ? 2 : 1, state.selectedCrew.has(id) ? COLORS.select : COLORS.panelEdge);
-      row.task.setText(`${taskLabel(c.task)} · ${player.room(c.room).def.name}`);
+      const aboard = battle.shipOf(c);
+      row.task.setText(!aboard ? 'Crossing over…' : aboard === player ? `${taskLabel(c.task)} · ${player.room(c.room).def.name}` : `${taskLabel(c.task)} · HER ${aboard.room(c.room).def.name}`);
+      row.task.setColor(aboard && aboard !== player ? COLORS.gold : COLORS.textDim);
       const frac = c.hp / c.maxHp;
       drawBar(g, row.bg.x + 5, row.bg.y + 31, 140, 3, frac, frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f);
     });
@@ -248,7 +253,7 @@ function floodPct(ship: Ship): string {
 }
 
 function taskLabel(task: string): string {
-  return { moving: 'Moving', fire: 'Firefighting', breach: 'Patching leak', repair: 'Repairing', man: 'Manning', idle: 'Standing by' }[task] ?? task;
+  return { moving: 'Moving', fire: 'Firefighting', breach: 'Patching leak', repair: 'Repairing', man: 'Manning', fight: 'Fighting!', sabotage: 'Sabotaging', idle: 'Standing by' }[task] ?? task;
 }
 
 function systemStatus(ship: Ship, id: SystemId): string {

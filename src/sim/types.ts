@@ -68,6 +68,8 @@ export interface ShipDef {
   hands: number;
   /** Flat evasion modifier in percent from hull shape. */
   speedBonus: number;
+  /** How well her people fight hand to hand (1 = ordinary sailors; marines and soldiers more, merchant hands less). */
+  melee?: number;
   systems: Partial<Record<SystemId, number>>;
   rooms: RoomDef[];
   guns: GunMount[];

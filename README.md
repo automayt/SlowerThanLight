@@ -40,6 +40,7 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - **Crew:** click a crew member (or their name on the left), then click a room to send them there. Crew automatically fight fires, patch leaks, repair damage and man stations in the room they are in.
 - **Hands:** your deckhands are the ship's power. Use the **+ / −** buttons to put hands on Sails, Pumps and the Surgeon. Guns take hands when you power them.
 - **Guns:** man a gun with its ⏻ button, choose a shot type, then click the gun card and click an enemy room to aim. Number keys 1–4 select guns.
+- **Boarding:** select crew and click a room on the enemy ship to send them across (4 seconds on the ropes). You can only grapple a ship that is no faster than you (working sails plus hull speed) or whose helm is unmanned, so chain shot her rigging first. Boarders fight any defenders in the room (defenders have the edge on their own deck; merchant hands fight poorly, marines well) and wreck the system in an undefended room. Kill her whole crew to take her as a prize for her full hold and more. While anyone is aboard the other ship, neither ship can escape. Click one of your own rooms to call boarders home. Privateers, the Spanish and the Navy's marines will board you too.
 - **Shot types:** Round (hull + systems), Chain (wrecks systems and sails, no hull damage), Grape (shreds crew), Hot (sets fires).
 - **Escape:** once *Make Sail* is fully charged you can flee the fight.
 
