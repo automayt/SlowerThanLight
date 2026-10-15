@@ -1,0 +1,1019 @@
+{
+  "note": "Every prompt tried for each image (Flux + style suffix in gen.py). The kept attempt was chosen by eye; later attempts are retries.",
+  "images": {
+    "title": [
+      {
+        "stem": "title",
+        "seed": 1000,
+        "prompt": "A black-hulled pirate brigantine with two masts under full sail at dusk, golden sunset light behind dark storm clouds, rolling sea, the ship in the lower half of the picture, two or three very tiny distant white sails of Royal Navy warships on the far horizon, open calm sky in the upper centre, no people visible"
+      },
+      {
+        "stem": "title_r1",
+        "seed": 2000,
+        "prompt": "A pirate brigantine with a pitch-black hull and a black flag with two masts under full sail at dusk, golden sunset light behind dark storm clouds, rolling sea, the ship in the lower half of the picture, two or three very tiny distant white sails of Royal Navy warships on the far horizon, open calm sky in the upper centre, no people visible"
+      }
+    ],
+    "port": [
+      {
+        "stem": "port",
+        "seed": 1001,
+        "prompt": "A bustling Caribbean free port harbour like old Nassau, wooden sailing ships at anchor in a turquoise bay, rowboats, palm trees, whitewashed taverns and timber warehouses along the waterfront, crowds of tiny figures on the quay, warm afternoon light"
+      }
+    ],
+    "blockade": [
+      {
+        "stem": "blockade",
+        "seed": 1002,
+        "prompt": "A massive Royal Navy frigate seen broadside-on, blocking a narrow channel mouth between two rocky headlands, all gunports open with cannon muzzles run out, sails reefed, red ensign, ominous grey sky, viewed from low on the water"
+      },
+      {
+        "stem": "blockade_r1",
+        "seed": 3001,
+        "prompt": "A huge three-masted Royal Navy man-of-war frigate seen exactly side-on in full broadside profile, filling the width of a narrow channel between two rocky headlands, a long row of open square gunports along her black and ochre hull with cannon muzzles run out, sails reefed, red ensign at the stern, ominous grey sky, viewed from low on the water"
+      },
+      {
+        "stem": "blockade_r2",
+        "seed": 3002,
+        "prompt": "Broadside profile view of a massive Royal Navy warship anchored across the mouth of a narrow rocky channel, two gun decks with every gunport open and dark cannon barrels pointing toward the viewer's side, sails furled, red ensign, stormy grey light, menacing"
+      }
+    ],
+    "victory": [
+      {
+        "stem": "victory",
+        "seed": 1003,
+        "prompt": "A lone pirate sailing ship under full sail heading away toward a radiant golden sunrise over an endless open ocean, calm glittering sea, warm hopeful light, wide sky, sense of freedom"
+      }
+    ],
+    "defeat": [
+      {
+        "stem": "defeat",
+        "seed": 1004,
+        "prompt": "The broken mast and shattered spars of a wrecked sailing ship sinking into grey stormy water, torn sails and tangled rigging floating, heavy rain, dark brooding sky, no survivors visible"
+      },
+      {
+        "stem": "defeat",
+        "seed": 1004,
+        "prompt": "The broken mast and shattered spars of a wrecked sailing ship sinking into grey stormy water, torn sails and tangled rigging floating, heavy rain, dark brooding sky, no survivors visible"
+      },
+      {
+        "stem": "defeat_r1",
+        "seed": 4001,
+        "prompt": "Aftermath of a shipwreck: only a single broken wooden mast with a snapped yardarm and shreds of torn sail jutting up out of heaving grey storm water, the rest of the ship already sunk below the surface, floating splintered spars and planks, driving rain, dark brooding sky, no people, desolate and lonely"
+      },
+      {
+        "stem": "defeat_r2",
+        "seed": 4002,
+        "prompt": "A sinking sailing ship almost completely swallowed by a cold grey stormy sea, only the tops of her shattered masts and broken spars still above the waves, tangled rigging, torn canvas, heavy rain squall, gloomy desaturated sky, empty sea, no people"
+      }
+    ],
+    "event-castaway": [
+      {
+        "stem": "event-castaway",
+        "seed": 1005,
+        "prompt": "A ragged bearded castaway standing on a tiny sandbar in the open sea, waving a tattered white shirt tied to a stick, a single palm stump, bright tropical sky"
+      },
+      {
+        "stem": "event-castaway",
+        "seed": 1005,
+        "prompt": "A ragged bearded castaway standing on a tiny sandbar in the open sea, waving a tattered white shirt tied to a stick, a single palm stump, bright tropical sky"
+      }
+    ],
+    "event-wreck": [
+      {
+        "stem": "event-wreck",
+        "seed": 1006,
+        "prompt": "A half-sunk merchant sailing ship wreck listing in shallow turquoise water, broken masts, floating wooden barrels, crates and spars drifting around it, gulls overhead"
+      },
+      {
+        "stem": "event-wreck",
+        "seed": 1006,
+        "prompt": "A half-sunk merchant sailing ship wreck listing in shallow turquoise water, broken masts, floating wooden barrels, crates and spars drifting around it, gulls overhead"
+      }
+    ],
+    "event-becalmed": [
+      {
+        "stem": "event-becalmed",
+        "seed": 1007,
+        "prompt": "A three-masted sailing ship becalmed on a glassy perfectly flat sea, slack hanging sails, mirror reflections in the water, harsh white blazing tropical sun, heat haze"
+      },
+      {
+        "stem": "event-becalmed",
+        "seed": 1007,
+        "prompt": "A three-masted sailing ship becalmed on a glassy perfectly flat sea, slack hanging sails, mirror reflections in the water, harsh white blazing tropical sun, heat haze"
+      },
+      {
+        "stem": "event-becalmed_r1",
+        "seed": 4003,
+        "prompt": "A three-masted sailing ship becalmed on a glassy perfectly flat sea, her sails hanging limp and slack with no wind, drooping canvas, perfect mirror reflection in the motionless water, harsh white blazing tropical sun high overhead, shimmering heat haze, oppressive stillness"
+      }
+    ],
+    "event-storm": [
+      {
+        "stem": "event-storm",
+        "seed": 1008,
+        "prompt": "A black squall line of towering storm clouds and rain racing across the sea toward a small sailing ship, whitecaps, lightning, dark menacing sky"
+      },
+      {
+        "stem": "event-storm",
+        "seed": 1008,
+        "prompt": "A black squall line of towering storm clouds and rain racing across the sea toward a small sailing ship, whitecaps, lightning, dark menacing sky"
+      }
+    ],
+    "event-village": [
+      {
+        "stem": "event-village",
+        "seed": 1009,
+        "prompt": "A small tropical fishing village in a sheltered cove, palm-thatched huts, wooden fishing boats drawn up on the sand beach, thin cooking smoke rising, green hills"
+      },
+      {
+        "stem": "event-village",
+        "seed": 1009,
+        "prompt": "A small tropical fishing village in a sheltered cove, palm-thatched huts, wooden fishing boats drawn up on the sand beach, thin cooking smoke rising, green hills"
+      },
+      {
+        "stem": "event-village_r1",
+        "seed": 5001,
+        "prompt": "A small tropical fishing village in a sheltered cove, palm-thatched huts among palm trees, small wooden rowing and fishing boats drawn up on the sand beach, thin wisps of cooking-fire smoke rising from between the huts, green hills behind, calm bay with no other vessels"
+      }
+    ],
+    "event-smugglers": [
+      {
+        "stem": "event-smugglers",
+        "seed": 1010,
+        "prompt": "A smugglers cove at night, a single glowing lantern on a rocky shore, a rowboat pulled onto the beach loaded with wooden crates and barrels, moonlight on the water, cave entrance"
+      },
+      {
+        "stem": "event-smugglers",
+        "seed": 1010,
+        "prompt": "A smugglers cove at night, a single glowing lantern on a rocky shore, a rowboat pulled onto the beach loaded with wooden crates and barrels, moonlight on the water, cave entrance"
+      }
+    ],
+    "event-distress": [
+      {
+        "stem": "event-distress",
+        "seed": 1011,
+        "prompt": "A merchant sailing ship lying still on the sea, its flag flown upside down from the mast as a distress signal, sails loosely furled, eerie quiet, no crew visible"
+      },
+      {
+        "stem": "event-distress",
+        "seed": 1011,
+        "prompt": "A merchant sailing ship lying still on the sea, its flag flown upside down from the mast as a distress signal, sails loosely furled, eerie quiet, no crew visible"
+      },
+      {
+        "stem": "event-distress_r1",
+        "seed": 5002,
+        "prompt": "A lone merchant sailing ship drifting motionless on a calm sea, a plain red ensign flag hanging upside down from her stern as a distress signal, sails loose and in disarray, no crew visible on deck, eerie quiet hazy light"
+      }
+    ],
+    "event-bottle": [
+      {
+        "stem": "event-bottle",
+        "seed": 1012,
+        "prompt": "A green glass bottle with a rolled parchment map inside, bobbing in the sea beside the dark wooden hull of a ship, close-up view, sunlight on the water"
+      },
+      {
+        "stem": "event-bottle",
+        "seed": 1012,
+        "prompt": "A green glass bottle with a rolled parchment map inside, bobbing in the sea beside the dark wooden hull of a ship, close-up view, sunlight on the water"
+      },
+      {
+        "stem": "event-bottle_r1",
+        "seed": 5003,
+        "prompt": "Close-up of a green glass bottle sealed with a cork, a rolled parchment map visible inside, bobbing in the blue-green sea right beside the dark weathered wooden planks of a ship's hull, sunlight sparkling on the water"
+      }
+    ],
+    "event-deserter": [
+      {
+        "stem": "event-deserter",
+        "seed": 1013,
+        "prompt": "An exhausted lone sailor slumped in a small wooden jolly boat adrift on the open sea, oars shipped, vast empty ocean around him"
+      },
+      {
+        "stem": "event-deserter",
+        "seed": 1013,
+        "prompt": "An exhausted lone sailor slumped in a small wooden jolly boat adrift on the open sea, oars shipped, vast empty ocean around him"
+      }
+    ],
+    "event-fever": [
+      {
+        "stem": "event-fever",
+        "seed": 1014,
+        "prompt": "The dim lantern-lit lower deck of an old sailing ship, sick feverish sailors lying in canvas hammocks between heavy wooden beams, deep shadows, a single swinging lantern"
+      },
+      {
+        "stem": "event-fever",
+        "seed": 1014,
+        "prompt": "The dim lantern-lit lower deck of an old sailing ship, sick feverish sailors lying in canvas hammocks between heavy wooden beams, deep shadows, a single swinging lantern"
+      }
+    ],
+    "event-picket": [
+      {
+        "stem": "event-picket",
+        "seed": 1015,
+        "prompt": "A small single-masted naval cutter far away on the horizon, half hidden in sea haze, shadowing, seen from the deck of another ship across a wide stretch of grey water"
+      },
+      {
+        "stem": "event-picket",
+        "seed": 1015,
+        "prompt": "A small single-masted naval cutter far away on the horizon, half hidden in sea haze, shadowing, seen from the deck of another ship across a wide stretch of grey water"
+      }
+    ],
+    "event-battery": [
+      {
+        "stem": "event-battery",
+        "seed": 1016,
+        "prompt": "An abandoned stone gun battery on a jungle-covered headland, an old iron cannon on a rotting wooden carriage overlooking the sea, vines growing over the crumbling walls"
+      },
+      {
+        "stem": "event-battery",
+        "seed": 1016,
+        "prompt": "An abandoned stone gun battery on a jungle-covered headland, an old iron cannon on a rotting wooden carriage overlooking the sea, vines growing over the crumbling walls"
+      }
+    ],
+    "event-rivals": [
+      {
+        "stem": "event-rivals",
+        "seed": 1017,
+        "prompt": "Two pirate sailing ships hove-to side by side on a calm sea, both flying plain black flags, a small rowboat crossing between them"
+      },
+      {
+        "stem": "event-rivals",
+        "seed": 1017,
+        "prompt": "Two pirate sailing ships hove-to side by side on a calm sea, both flying plain black flags, a small rowboat crossing between them"
+      }
+    ],
+    "event-mutiny": [
+      {
+        "stem": "event-mutiny",
+        "seed": 1018,
+        "prompt": "Sullen sailors gathered on a ship's deck at dusk, muttering in a tight group, a lone captain in a long coat facing them, tense atmosphere, lantern light"
+      },
+      {
+        "stem": "event-mutiny",
+        "seed": 1018,
+        "prompt": "Sullen sailors gathered on a ship's deck at dusk, muttering in a tight group, a lone captain in a long coat facing them, tense atmosphere, lantern light"
+      }
+    ],
+    "event-galleon": [
+      {
+        "stem": "event-galleon",
+        "seed": 1019,
+        "prompt": "A lumbering Spanish treasure galleon with an ornate carved stern castle, alone and straggling on an empty sea, heavy and low in the water"
+      },
+      {
+        "stem": "event-galleon",
+        "seed": 1019,
+        "prompt": "A lumbering Spanish treasure galleon with an ornate carved stern castle, alone and straggling on an empty sea, heavy and low in the water"
+      }
+    ],
+    "event-scurvy": [
+      {
+        "stem": "event-scurvy",
+        "seed": 6000,
+        "prompt": "Gaunt sailor examining his bleeding gums by lantern light, sick crewmates in hammocks behind, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-scurvy_r1",
+        "seed": 7000,
+        "prompt": "A gaunt pale sailor sitting in a dim lower deck, touching his sore bleeding gums, lit by a single lantern, sick crewmates lying in canvas hammocks in the shadows behind him, sombre mood"
+      }
+    ],
+    "event-fall": [
+      {
+        "stem": "event-fall",
+        "seed": 6001,
+        "prompt": "Sailors rushing to a man lying on the deck beneath towering rigging and sails, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-cook": [
+      {
+        "stem": "event-cook",
+        "seed": 6002,
+        "prompt": "Ship's galley, cauldron of chowder, sailors pulling disgusted faces, smoky lamplight, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-barber": [
+      {
+        "stem": "event-barber",
+        "seed": 6003,
+        "prompt": "Sailor stitching a shipmate's arm wound on a sea chest below decks, lantern light, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-brawl": [
+      {
+        "stem": "event-brawl",
+        "seed": 6004,
+        "prompt": "Two sailors fist-fighting in a cramped forecastle, ring of cheering crew, playing cards scattered, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-duel": [
+      {
+        "stem": "event-duel",
+        "seed": 6005,
+        "prompt": "Two figures with flintlock pistols facing off on a beach at dawn, ship anchored behind, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-stowaway": [
+      {
+        "stem": "event-stowaway",
+        "seed": 6006,
+        "prompt": "Thin frightened youngster dragged out from among coiled anchor cables below decks, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-dice": [
+      {
+        "stem": "event-dice",
+        "seed": 6007,
+        "prompt": "Sailors gambling with dice on a drumhead below decks, coins piled, candlelight, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-rumstore": [
+      {
+        "stem": "event-rumstore",
+        "seed": 6008,
+        "prompt": "Broken lock on a spirit-room door, a staved rum cask, a grinning sailor in shadow, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-rumstore_r1",
+        "seed": 7001,
+        "prompt": "Below decks in a ship's dark spirit room, a heavy wooden door hanging open with its broken iron padlock, a staved-in rum cask leaking onto the planks, a grinning sailor half hidden in the shadows, lantern light"
+      }
+    ],
+    "event-asleep": [
+      {
+        "stem": "event-asleep",
+        "seed": 6009,
+        "prompt": "Sailor asleep against the ship's wheel binnacle at night under stars, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-asleep_r1",
+        "seed": 7002,
+        "prompt": "A sailor asleep sitting slumped against the ship's wheel and binnacle on the quarterdeck at night, a dark starry sky and moonlit sea beyond, no flags"
+      }
+    ],
+    "event-overboard": [
+      {
+        "stem": "event-overboard",
+        "seed": 6010,
+        "prompt": "Sailor in the water in a heavy sea beside a ship, a rope thrown from the rail, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-overboard_r1",
+        "seed": 7003,
+        "prompt": "A sailor's head and arms above the water, swimming desperately in a heavy grey sea beside the tall dark hull of a sailing ship, shipmates at the rail throwing him a coiled rope"
+      }
+    ],
+    "event-birthday": [
+      {
+        "stem": "event-birthday",
+        "seed": 6011,
+        "prompt": "Sailors dancing a hornpipe on deck with a fiddler, lanterns, merry night, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-shanty": [
+      {
+        "stem": "event-shanty",
+        "seed": 6012,
+        "prompt": "Sailors heaving at a capstan, singing, sunlit deck, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-kittens": [
+      {
+        "stem": "event-kittens",
+        "seed": 6013,
+        "prompt": "Tabby cat with kittens nestled in a pile of old sailcloth, warm light, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-rats": [
+      {
+        "stem": "event-rats",
+        "seed": 6014,
+        "prompt": "Rats among sacks and barrels in a ship's bread room, weevily biscuit, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-luckycoin": [
+      {
+        "stem": "event-luckycoin",
+        "seed": 6015,
+        "prompt": "A gold Spanish doubloon gleaming in the hand of a sailor over a gutted fish, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-luckycoin_r1",
+        "seed": 7004,
+        "prompt": "Close-up of a sailor's weathered hand holding up a gleaming gold Spanish doubloon coin, over a fish split open on a wooden deck, plain clothing, no belt, no writing"
+      }
+    ],
+    "event-albatross": [
+      {
+        "stem": "event-albatross",
+        "seed": 6016,
+        "prompt": "A huge albatross gliding above a ship's mainmast over the open ocean, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-omens": [
+      {
+        "stem": "event-omens",
+        "seed": 6017,
+        "prompt": "Dark brooding ship at dusk, crew huddled together, ominous sky, black birds circling the masts, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-galleyfire": [
+      {
+        "stem": "event-galleyfire",
+        "seed": 6018,
+        "prompt": "Smoke and flames pouring from a ship's galley hatch, sailors with buckets, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-damppowder": [
+      {
+        "stem": "event-damppowder",
+        "seed": 6019,
+        "prompt": "Gunpowder spread out on sailcloth on a ship's deck to dry in the sun, nervous gunners, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-sprungmast": [
+      {
+        "stem": "event-sprungmast",
+        "seed": 6020,
+        "prompt": "Cracked splintering topmast high in the rigging, sailors climbing to it, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-pumpjam": [
+      {
+        "stem": "event-pumpjam",
+        "seed": 6021,
+        "prompt": "Sailors laboring at a ship's chain pump below decks, water sloshing, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-pumpjam_r1",
+        "seed": 7005,
+        "prompt": "In the dim cramped hold of a sailing ship, sailors straining at the long wooden handles of a ship's pump, ankle-deep water sloshing over the planks, lantern light, heavy wooden beams"
+      }
+    ],
+    "event-rot": [
+      {
+        "stem": "event-rot",
+        "seed": 6022,
+        "prompt": "Carpenter pushing a spike into rotten soft ship timbers below decks, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-barnacles": [
+      {
+        "stem": "event-barnacles",
+        "seed": 6023,
+        "prompt": "Ship heeled over on a beach (careened), sailors scraping weed and barnacles from her hull, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-tradewind": [
+      {
+        "stem": "event-tradewind",
+        "seed": 6024,
+        "prompt": "Ship under full sail racing across sparkling blue sea, white clouds, strong wind, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-tradewind_r1",
+        "seed": 7006,
+        "prompt": "A sailing ship under full billowing sail racing across a sparkling deep blue sea, white puffy trade-wind clouds, strong wind, spray at the bow, a plain red pennant at the masthead"
+      }
+    ],
+    "event-fog": [
+      {
+        "stem": "event-fog",
+        "seed": 6025,
+        "prompt": "Ship's bow emerging from thick fog, a lookout with a lead line, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-waterspout": [
+      {
+        "stem": "event-waterspout",
+        "seed": 6026,
+        "prompt": "Towering waterspout twisting from sea to sky near a sailing ship, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-waterspout_r1",
+        "seed": 7007,
+        "prompt": "A towering dark waterspout twisting from the sea up into storm clouds, close to a small sailing ship heeling away from it, no people visible, dramatic light"
+      }
+    ],
+    "event-lightning": [
+      {
+        "stem": "event-lightning",
+        "seed": 6027,
+        "prompt": "Lightning bolt striking a ship's mainmast at night in a storm, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-lightning_r1",
+        "seed": 7008,
+        "prompt": "At night in a violent storm, a jagged bolt of lightning striking the top of a sailing ship's mainmast, sparks, black sky, heavy rain, raging dark waves"
+      }
+    ],
+    "event-stelmo": [
+      {
+        "stem": "event-stelmo",
+        "seed": 6028,
+        "prompt": "Eerie blue glowing St. Elmo's fire on a ship's yards and mastheads at night, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-stelmo_r1",
+        "seed": 7009,
+        "prompt": "At night on a calm dark sea, eerie pale blue glowing flames of St. Elmo's fire flickering on the tips of a sailing ship's yardarms and mastheads, no fire on deck, dark sky, awed silhouettes of sailors"
+      },
+      {
+        "stem": "stelmo_a",
+        "seed": 7101,
+        "prompt": "a sailing ship at night on a calm dark sea, eerie electric blue-violet glowing flames of St. Elmo's fire flickering on the tips of every yardarm and masthead, faint blue light reflected on the wet sails, awed sailors looking up from the deck, no smoke, no cannon fire, starless stormy night sky"
+      },
+      {
+        "stem": "stelmo_b",
+        "seed": 7102,
+        "prompt": "close view of a ship's mainmast and yards at night, ghostly cold blue plasma glow crackling along the spars and rigging like blue fire, sailors on the yard staring in wonder, dark clouds, quiet sea, no smoke"
+      }
+    ],
+    "event-eclipse": [
+      {
+        "stem": "event-eclipse",
+        "seed": 6029,
+        "prompt": "Total solar eclipse over the ocean, dark sky, stars, a ship silhouetted, awed crew, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-hurricane": [
+      {
+        "stem": "event-hurricane",
+        "seed": 6030,
+        "prompt": "Ship heeled over in a monstrous hurricane sea, torn sails, coppery sky, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-whales": [
+      {
+        "stem": "event-whales",
+        "seed": 6031,
+        "prompt": "Pod of whales surfacing beside a sailing ship, spouts, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-mermaids": [
+      {
+        "stem": "event-mermaids",
+        "seed": 6032,
+        "prompt": "Manatees in clear turquoise shallows beside a ship, sailors leaning over the rail, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-glowsea": [
+      {
+        "stem": "event-glowsea",
+        "seed": 6033,
+        "prompt": "Bioluminescent glowing sea at night, ship's wake shining green-white, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-glowsea_r1",
+        "seed": 7010,
+        "prompt": "At night under a dark starry sky, a sailing ship gliding through a bioluminescent sea, the bow wave and long wake glowing bright green-white, magical light in black water"
+      }
+    ],
+    "event-flotsam": [
+      {
+        "stem": "event-flotsam",
+        "seed": 6034,
+        "prompt": "Floating barrels, crates and a broken spar drifting on a calm sea, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-flotsam_r1",
+        "seed": 7011,
+        "prompt": "Floating wooden barrels, broken crates and a snapped spar drifting alone on a calm empty sea, no people, wreckage after a storm, gentle swell"
+      }
+    ],
+    "event-weed": [
+      {
+        "stem": "event-weed",
+        "seed": 6035,
+        "prompt": "Sailing ship in a sea of golden sargassum weed stretching to the horizon, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-badwater": [
+      {
+        "stem": "event-badwater",
+        "seed": 6036,
+        "prompt": "Sailor grimacing at a green slimy water cask on deck, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-fishermen": [
+      {
+        "stem": "event-fishermen",
+        "seed": 6037,
+        "prompt": "Small fishing boat foundering in rough sea, fishermen bailing, a ship approaching, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-mutineers": [
+      {
+        "stem": "event-mutineers",
+        "seed": 6038,
+        "prompt": "Longboat crowded with sunburnt sailors rowing toward a ship, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-mutineers_r1",
+        "seed": 7012,
+        "prompt": "A longboat crowded with sunburnt ragged sailors rowing hard across the sea toward a sailing ship, plain unpainted boat"
+      }
+    ],
+    "event-plagueboat": [
+      {
+        "stem": "event-plagueboat",
+        "seed": 6039,
+        "prompt": "Eerie drifting sloop with tattered sails, motionless shapes on deck, grey sky, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-plagueboat_r1",
+        "seed": 7013,
+        "prompt": "An eerie ghostly drifting sloop with tattered grey sails, motionless shapes slumped on her deck, a pall of mist, grey overcast sky, still pale sea, silent and sinister"
+      }
+    ],
+    "event-pearls": [
+      {
+        "stem": "event-pearls",
+        "seed": 6040,
+        "prompt": "Turquoise lagoon with pearl divers and baskets of oysters, canoes, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-shallowwreck": [
+      {
+        "stem": "event-shallowwreck",
+        "seed": 6041,
+        "prompt": "Ancient galleon wreck skeleton on coral in clear shallow turquoise water, seen from above, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-shallowwreck_r1",
+        "seed": 7014,
+        "prompt": "Viewed from above, the wooden ribs and keel timbers of an ancient sunken sailing ship lying on white sand and coral in clear shallow turquoise water, fish swimming"
+      },
+      {
+        "stem": "shallowwreck_a",
+        "seed": 7201,
+        "prompt": "seen from a small boat looking down through crystal clear turquoise shallow water: the broken skeleton of an ancient sunken Spanish galleon on white sand, curved blackened wooden ribs overgrown with coral and sea fans, scattered ballast stones and a few glinting silver coins, tropical fish, a diver swimming down"
+      },
+      {
+        "stem": "shallowwreck_b",
+        "seed": 7202,
+        "prompt": "underwater view in clear shallow tropical sea of an old shipwreck: rows of exposed curved hull ribs and a broken keel half buried in sand, encrusted with coral, a bronze cannon lying among ballast stones, shafts of sunlight, fish"
+      }
+    ],
+    "event-cove": [
+      {
+        "stem": "event-cove",
+        "seed": 6042,
+        "prompt": "Hidden tropical cove with sloping beach and a stream, a ship at anchor, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-turtles": [
+      {
+        "stem": "event-turtles",
+        "seed": 6043,
+        "prompt": "Green sea turtles on a moonlit beach, sailors with lanterns, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-volcano": [
+      {
+        "stem": "event-volcano",
+        "seed": 6044,
+        "prompt": "Smoking volcanic island glowing red at night, a ship standing off, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-hermit": [
+      {
+        "stem": "event-hermit",
+        "seed": 6045,
+        "prompt": "White-bearded old man in goatskins waving from a tiny sandy cay, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-hermit_r1",
+        "seed": 7015,
+        "prompt": "A wild white-bearded old hermit dressed in ragged goatskins waving his arms from a tiny sandy cay with a single palm tree, alone, a sailing ship far offshore"
+      }
+    ],
+    "event-convoy": [
+      {
+        "stem": "event-convoy",
+        "seed": 6046,
+        "prompt": "Line of merchant ships in convoy with a small navy escort on the horizon, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-dispatch": [
+      {
+        "stem": "event-dispatch",
+        "seed": 6047,
+        "prompt": "Fast little schooner flying a long pennant racing across the sea, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-guarda": [
+      {
+        "stem": "event-guarda",
+        "seed": 6048,
+        "prompt": "Spanish coastguard schooner firing a warning gun, smoke, red and gold flag, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-pressgang": [
+      {
+        "stem": "event-pressgang",
+        "seed": 6049,
+        "prompt": "Navy tender at anchor at night, a hold full of captive sailors, guards with lanterns, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-pressgang_r1",
+        "seed": 7016,
+        "prompt": "At night, a navy tender anchored in a dark harbour, below deck a crowded hold full of captive sailors behind a grating, guards holding lanterns, plain hull"
+      }
+    ],
+    "event-aground": [
+      {
+        "stem": "event-aground",
+        "seed": 6050,
+        "prompt": "Navy sloop stranded on a reef, crew throwing cannons overboard, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-aground_r1",
+        "seed": 7017,
+        "prompt": "A small navy sloop stranded and heeled over on a coral reef, her crew heaving heavy iron cannons over the side into the surf to lighten her, splashes"
+      }
+    ],
+    "event-trader": [
+      {
+        "stem": "event-trader",
+        "seed": 6051,
+        "prompt": "Fat Dutch fluyt merchant ship under sail, broad hull, calm sea, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-missionary": [
+      {
+        "stem": "event-missionary",
+        "seed": 6052,
+        "prompt": "Small brig with passengers in dark clothes singing on deck, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-missionary_r1",
+        "seed": 7018,
+        "prompt": "A small brig sailing on a calm sea, passengers in plain dark clothing gathered on the deck singing hymns, a plain red pennant"
+      }
+    ],
+    "event-news": [
+      {
+        "stem": "event-news",
+        "seed": 6053,
+        "prompt": "Small sloop alongside, a sailor passing a bundle of letters across, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-news_r1",
+        "seed": 7019,
+        "prompt": "A small sloop alongside a larger sailing ship on a calm sea, a sailor leaning across the gap passing a tied bundle of letters, plain red pennants"
+      }
+    ],
+    "event-wreckers": [
+      {
+        "stem": "event-wreckers",
+        "seed": 6054,
+        "prompt": "Lanterns on a dark rocky shore at night, waves breaking on a reef, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-pardon": [
+      {
+        "stem": "event-pardon",
+        "seed": 6055,
+        "prompt": "Royal proclamation scroll with a wax seal held up on a ship's deck, white flag of truce sloop beside, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-pardon_r1",
+        "seed": 7020,
+        "prompt": "On a ship's deck a naval officer holds up a large rolled parchment with a dangling red wax seal, seen from behind, beside a small sloop flying a plain white flag of truce"
+      }
+    ],
+    "event-blackbeard": [
+      {
+        "stem": "event-blackbeard",
+        "seed": 6056,
+        "prompt": "Huge black pirate ship with forty guns flying a black flag, menacing, stormy light, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-blackbeard_r1",
+        "seed": 7021,
+        "prompt": "A huge black-hulled pirate warship with rows of gunports flying a black flag, menacing under stormy light, plain unmarked stern"
+      }
+    ],
+    "event-blackbeard-supper": [
+      {
+        "stem": "event-blackbeard-supper",
+        "seed": 6057,
+        "prompt": "Pirate captain with smoking slow-match in a braided black beard at a candlelit cabin table, pistols, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-blackbeard-supper_r1",
+        "seed": 7022,
+        "prompt": "A fearsome pirate captain with a braided black beard and smoking slow-match fuses tucked under his hat, seated at a candlelit cabin table, antique flintlock pistols on the table"
+      }
+    ],
+    "event-calico": [
+      {
+        "stem": "event-calico",
+        "seed": 6058,
+        "prompt": "Pirate sloop at anchor, drunken crew sprawled on deck, two women pirates standing with cutlasses, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-dutchman": [
+      {
+        "stem": "event-dutchman",
+        "seed": 6059,
+        "prompt": "Ghostly glowing 17th-century ship under full sail on a flat calm sea at midnight, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-dutchman-hail": [
+      {
+        "stem": "event-dutchman-hail",
+        "seed": 6060,
+        "prompt": "Spectral ship's captain holding out a packet of letters, pale light, mist, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-dutchman-hail_r1",
+        "seed": 7100,
+        "prompt": "A pale spectral ghost captain with a translucent glowing body, standing at the rail of a phantom ship in drifting mist at midnight, holding out a packet of letters, eerie cold blue-green light"
+      }
+    ],
+    "event-kraken": [
+      {
+        "stem": "event-kraken",
+        "seed": 6061,
+        "prompt": "Giant squid tentacles coiling over a ship's rail, sailors with axes, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-kraken_r1",
+        "seed": 7101,
+        "prompt": "Enormous dark slimy giant squid tentacles rising from a stormy sea and coiling over a sailing ship's rail, sailors swinging axes at them, dark green menacing light, spray"
+      }
+    ],
+    "event-governor": [
+      {
+        "stem": "event-governor",
+        "seed": 6062,
+        "prompt": "Elegant lady with a parasol on a drifting pleasure barge, calm water, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-governor-wish": [
+      {
+        "stem": "event-governor-wish",
+        "seed": 6063,
+        "prompt": "Elegant young woman in a ship's cabin poring over navigation charts with dividers, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-marque": [
+      {
+        "stem": "event-marque",
+        "seed": 6064,
+        "prompt": "Frenchman in a lace cravat presenting a sealed commission in a ship's cabin, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-marque_r1",
+        "seed": 7102,
+        "prompt": "In a candlelit ship's cabin, an elegant French gentleman in a powdered wig and lace cravat hands over a folded sealed document with a red wax seal to a pirate captain, stern windows behind"
+      }
+    ],
+    "event-midshipman": [
+      {
+        "stem": "event-midshipman",
+        "seed": 6065,
+        "prompt": "Young boy in a navy midshipman's uniform clinging to a floating spar, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-midshipman_r1",
+        "seed": 7103,
+        "prompt": "A young boy in a blue navy midshipman's coat clinging to a floating broken wooden spar in the open sea, waves around him, a sailing ship in the far distance, plain unmarked hull"
+      }
+    ],
+    "event-torn-map": [
+      {
+        "stem": "event-torn-map",
+        "seed": 6066,
+        "prompt": "Half of a torn treasure map clutched in a hand in a drifting jolly boat, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-torn-map_r1",
+        "seed": 7104,
+        "prompt": "Inside a small drifting wooden jolly boat, a dead sailor's hand clutching a torn half of an old parchment treasure map showing only a coastline drawing and a dotted path, open sea around"
+      }
+    ],
+    "event-cartographer": [
+      {
+        "stem": "event-cartographer",
+        "seed": 6067,
+        "prompt": "Half-blind old map maker in a palm hut surrounded by charts, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-cartographer_r1",
+        "seed": 7105,
+        "prompt": "A half-blind old white-haired map maker peering closely through a magnifying lens at a hand-drawn coastline chart inside a palm-thatched hut, rolled charts and instruments around him, warm light"
+      }
+    ],
+    "event-treasure-island": [
+      {
+        "stem": "event-treasure-island",
+        "seed": 6068,
+        "prompt": "Tropical island with a split rock and three palm trees, anchorage, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-treasure-dig": [
+      {
+        "stem": "event-treasure-dig",
+        "seed": 6069,
+        "prompt": "Sailors digging in sand, an iron-bound treasure chest unearthed, a skeleton beside it, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-gallant-debt": [
+      {
+        "stem": "event-gallant-debt",
+        "seed": 6070,
+        "prompt": "Navy cutter under a white flag alongside a pirate ship, an officer saluting across the water, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-gallant-debt_r1",
+        "seed": 7106,
+        "prompt": "A small navy cutter flying a plain white flag of truce lying alongside a dark pirate ship on a calm sea, a navy officer on the cutter's deck raising his hat in salute across the water"
+      }
+    ],
+    "event-marque-frigate": [
+      {
+        "stem": "event-marque-frigate",
+        "seed": 6071,
+        "prompt": "French frigate dipping her white ensign in salute beside a smaller ship, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-blackbeard-diversion": [
+      {
+        "stem": "event-blackbeard-diversion",
+        "seed": 6072,
+        "prompt": "Fishing boat beside a ship, distant smoke over a colonial harbour town on the horizon, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-blackbeard-diversion_r1",
+        "seed": 7107,
+        "prompt": "A small fishing boat beside a dark sailing ship at sea, on the far horizon a pall of black smoke rising over a distant colonial harbour town, plain unmarked hulls"
+      }
+    ],
+    "event-dutchman-fog": [
+      {
+        "stem": "event-dutchman-fog",
+        "seed": 6073,
+        "prompt": "Cold white fog rising off a calm sea around a ship, distant sails vanishing, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-drowned": [
+      {
+        "stem": "event-drowned",
+        "seed": 6074,
+        "prompt": "Dim lantern-lit lower deck at night, a dripping ghostly figure at the foot of a hammock, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-coin-lost": [
+      {
+        "stem": "event-coin-lost",
+        "seed": 6075,
+        "prompt": "A gold coin rolling across a wet heaving deck toward a scupper, a sailor diving, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-treasure-rumour": [
+      {
+        "stem": "event-treasure-rumour",
+        "seed": 6076,
+        "prompt": "Pirate brig closing alongside, captain shouting through a speaking trumpet, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-gangrene": [
+      {
+        "stem": "event-gangrene",
+        "seed": 6077,
+        "prompt": "Ship's surgeon with a bone saw by lantern light, assistants holding a patient, non-graphic, focus on the surgeon, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-talent": [
+      {
+        "stem": "event-talent",
+        "seed": 6078,
+        "prompt": "A sailor at a carpenter's bench on deck shaping timber, tools laid out, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-homesick": [
+      {
+        "stem": "event-homesick",
+        "seed": 6079,
+        "prompt": "Sailor standing at the rail looking toward a distant island town at sunset, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-brother": [
+      {
+        "stem": "event-brother",
+        "seed": 6080,
+        "prompt": "Two sailors embracing at the rail between two ships hove-to side by side, people shown as small or mid-distance figures"
+      }
+    ],
+    "event-lastlandfall": [
+      {
+        "stem": "event-lastlandfall",
+        "seed": 6081,
+        "prompt": "Pirates around a bonfire on a beach at night, ship at anchor, rum and turtles, people shown as small or mid-distance figures"
+      }
+    ]
+  }
+}
