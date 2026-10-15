@@ -1,0 +1,22 @@
+{
+  "name": "slower-than-light",
+  "private": true,
+  "version": "0.1.0",
+  "description": "FTL-style pirate ship combat on the high seas",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
