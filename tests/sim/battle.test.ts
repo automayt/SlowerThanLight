@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAVY_CUTTER } from '../../src/data/enemies';
+import { ENEMY_LIST, NAVY_CUTTER } from '../../src/data/enemies';
 import { PLAYER_SHIPS, playerShip } from '../../src/data/ships';
 import { Battle } from '../../src/sim/Battle';
 
@@ -43,4 +43,26 @@ describe('battle', () => {
     battle.update(0.2);
     expect(battle.time).toBeGreaterThan(0);
   });
+
+  it('cannot escape a fight that allows no escape', () => {
+    const battle = new Battle(playerShip('wren'), NAVY_CUTTER, { seed: 5, allowEscape: false });
+    for (let i = 0; i < 2400 && !battle.outcome; i++) battle.step(0.05);
+    expect(battle.player.escape).toBe(0);
+    expect(battle.escape()).toBe(false);
+  });
+
+  it('starts with the damage the player brought in', () => {
+    const def = playerShip('gull');
+    const battle = new Battle(def, NAVY_CUTTER, { seed: 1, playerCondition: { hull: 9, crew: [{ name: 'Lone Wolf', hp: 50, home: 'helm' }], damage: { guns: 1 } } });
+    expect(battle.player.hull).toBe(9);
+    expect(battle.player.crew.map((c) => c.name)).toEqual(['Lone Wolf']);
+    expect(battle.player.system('guns')!.damage).toBe(1);
+  });
+
+  for (const foe of ENEMY_LIST) {
+    it(`${foe.id}: fights to an end against an AI-captained brigantine`, () => {
+      const battle = new Battle(playerShip('gull'), foe.ship, { seed: 11, autoPlayer: true, enemyAI: foe.ai });
+      expect(battle.runToEnd(900)).not.toBeNull();
+    });
+  }
 });

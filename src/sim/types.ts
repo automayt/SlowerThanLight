@@ -71,3 +71,18 @@ export interface ShipDef {
   guns: GunMount[];
   crew: CrewDef[];
 }
+
+export type Faction = 'navy' | 'merchant' | 'privateer';
+
+/** An opponent: its ship, how its captain behaves and what it carries. */
+export interface EnemyDef {
+  id: string;
+  ship: ShipDef;
+  faction: Faction;
+  /** Captain temperament, passed to the AI (see AIOptions). */
+  ai: { fleeAt: number; surrenderChance: number; surrenderAt: number };
+  /** Gold in her hold, as [min, max]. */
+  plunder: [number, number];
+  /** Line shown when she is sighted. */
+  sighting: string;
+}

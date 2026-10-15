@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { NAVY_CUTTER } from '../../src/data/enemies';
+import { ENEMY_LIST } from '../../src/data/enemies';
 import { PLAYER_SHIPS, playerShip } from '../../src/data/ships';
 import { buildDoors, findRoute } from '../../src/sim/pathfinding';
 import { Ship } from '../../src/sim/Ship';
 
 describe('ship data', () => {
-  for (const def of [...PLAYER_SHIPS, NAVY_CUTTER]) {
+  for (const def of [...PLAYER_SHIPS, ...ENEMY_LIST.map((e) => e.ship)]) {
     it(`${def.id}: every room is reachable from the helm`, () => {
       const doors = buildDoors(def.rooms);
       for (const r of def.rooms) expect(findRoute(doors, 'helm', r.id), r.id).not.toBeNull();
@@ -85,5 +85,41 @@ describe('repairs', () => {
     ship.system('guns')!.damage = 0;
     ship.restoreWanted();
     expect(ship.guns[0].powered).toBe(false);
+  });
+});
+
+describe('condition', () => {
+  it('a fresh ship reports full hull, full crew and no damage', () => {
+    const def = playerShip('gull');
+    const c = new Ship(def, 'player').condition();
+    expect(c.hull).toBe(def.hull);
+    expect(c.crew.map((x) => x.name)).toEqual(def.crew.map((x) => x.name));
+    expect(c.crew.every((x) => x.hp === 100)).toBe(true);
+    expect(c.damage).toEqual({});
+  });
+
+  it('carries hull, wounds, losses and system damage into a new ship', () => {
+    const def = playerShip('gull');
+    const a = new Ship(def, 'player');
+    a.hull = 11;
+    a.crew[1].hp = 40;
+    a.crew.pop();
+    a.damageSystem('sails', 2);
+
+    const b = new Ship(def, 'player', a.condition());
+    expect(b.hull).toBe(11);
+    expect(b.crew).toHaveLength(def.crew.length - 1);
+    expect(b.crew[1].hp).toBe(40);
+    expect(b.system('sails')!.damage).toBe(2);
+    expect(b.allocated('sails')).toBeLessThanOrEqual(b.capacity('sails'));
+  });
+
+  it('finds a bunk for hired crew whose station is unknown', () => {
+    const def = playerShip('wren');
+    const cond = new Ship(def, 'player').condition();
+    cond.crew.push({ name: 'New Hand', hp: 100, home: 'nowhere' });
+    const ship = new Ship(def, 'player', cond);
+    const hired = ship.crew.find((c) => c.name === 'New Hand')!;
+    expect(ship.rooms.has(hired.room)).toBe(true);
   });
 });

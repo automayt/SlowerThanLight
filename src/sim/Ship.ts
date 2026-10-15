@@ -67,6 +67,21 @@ export interface Crew {
   task: CrewTask;
 }
 
+/** A crew member as remembered between battles. */
+export interface CrewRecord {
+  name: string;
+  hp: number;
+  home: string;
+}
+
+/** Wear and tear a ship carries from one encounter to the next. */
+export interface ShipCondition {
+  hull: number;
+  crew: CrewRecord[];
+  /** Damage points per system. */
+  damage: Partial<Record<SystemId, number>>;
+}
+
 let nextCrewId = 1;
 
 export class Ship {
@@ -84,10 +99,10 @@ export class Ship {
   readonly width: number;
   readonly height: number;
 
-  constructor(def: ShipDef, side: Side) {
+  constructor(def: ShipDef, side: Side, condition?: ShipCondition) {
     this.def = def;
     this.side = side;
-    this.hull = def.hull;
+    this.hull = condition ? Math.max(1, Math.min(def.hull, condition.hull)) : def.hull;
     this.doors = buildDoors(def.rooms);
     this.width = Math.max(...def.rooms.map((r) => r.x + r.w));
     this.height = Math.max(...def.rooms.map((r) => r.y + r.h));
@@ -109,17 +124,20 @@ export class Ship {
       shot: g.shot ?? 'round',
     }));
 
-    for (const c of def.crew) {
-      const slot = this.freeSlot(c.room);
-      if (!slot) throw new Error(`No room for ${c.name} in ${def.id}/${c.room}`);
+    const roster: CrewRecord[] = condition?.crew ?? def.crew.map((c) => ({ name: c.name, hp: 100, home: c.room }));
+    for (const c of roster) {
+      // Hired hands without a known station bunk wherever there is space.
+      const room = this.rooms.has(c.home) && this.freeSlot(c.home) ? c.home : [...this.rooms.keys()].find((id) => this.freeSlot(id));
+      const slot = room && this.freeSlot(room);
+      if (!room || !slot) throw new Error(`No room for ${c.name} in ${def.id}/${c.home}`);
       this.crew.push({
         id: nextCrewId++,
         name: c.name,
         side,
-        hp: 100,
+        hp: Math.max(1, Math.min(100, c.hp)),
         maxHp: 100,
-        room: c.room,
-        home: c.room,
+        room,
+        home: room,
         pos: { x: slot.x + 0.5, y: slot.y + 0.5 },
         slot,
         waypoints: [],
@@ -127,7 +145,25 @@ export class Ship {
       });
     }
 
+    if (condition) {
+      for (const [id, dmg] of Object.entries(condition.damage) as [SystemId, number][]) {
+        const sys = this.systems.get(id);
+        if (sys) sys.damage = Math.max(0, Math.min(sys.max, dmg));
+      }
+    }
+
     this.autoAssignHands();
+  }
+
+  /** Snapshot of hull, surviving crew and system damage to carry into the next encounter. */
+  condition(): ShipCondition {
+    const damage: Partial<Record<SystemId, number>> = {};
+    for (const s of this.systems.values()) if (s.damage > 0) damage[s.id] = s.damage;
+    return {
+      hull: Math.max(0, this.hull),
+      crew: this.crew.filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home })),
+      damage,
+    };
   }
 
   /** Starting allocation: power guns in order, then fill sails, then pumps. */

@@ -163,7 +163,7 @@ export class Hud {
     this.drawHull(player, 64, 14);
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%   Flooding ${floodPct(player)}`);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
-    this.escapeBtn.setEnabled(battle.canEscape()).setText(battle.canEscape() ? 'Escape!' : 'Make Sail…');
+    this.escapeBtn.setEnabled(battle.canEscape()).setText(!battle.allowEscape ? 'No escape' : battle.canEscape() ? 'Escape!' : 'Make Sail…');
 
     this.drawHull(enemy, SCREEN.w - 414, 14);
     this.enemyTitle.setText('HULL');

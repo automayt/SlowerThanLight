@@ -4,7 +4,7 @@ import { ShipAI, type AIOptions } from './EnemyAI';
 import type { BattleEvent } from './events';
 import { isSinking, updateHazards } from './Hazards';
 import { Rng } from './rng';
-import { Ship } from './Ship';
+import { Ship, type ShipCondition } from './Ship';
 import type { ShipDef, ShotType, Side, SystemId } from './types';
 
 export type OutcomeKind = 'victory' | 'surrender' | 'enemySunk' | 'captured' | 'escaped' | 'enemyEscaped' | 'defeat' | 'sunk' | 'crewLost';
@@ -25,6 +25,10 @@ export interface BattleOptions {
   autoPlayer?: boolean;
   /** With autoPlayer: focus all guns on one enemy system. */
   playerFocus?: SystemId;
+  /** Hull, crew and damage the player's ship brings into the fight (fresh from the yard when omitted). */
+  playerCondition?: ShipCondition;
+  /** False when there is no running from this fight. */
+  allowEscape?: boolean;
 }
 
 /** Fixed simulation step in seconds. */
@@ -35,6 +39,7 @@ export class Battle {
   readonly enemy: Ship;
   readonly rng: Rng;
   readonly seed: number;
+  readonly allowEscape: boolean;
   time = 0;
   paused = false;
   outcome: Outcome | null = null;
@@ -51,7 +56,8 @@ export class Battle {
   constructor(playerDef: ShipDef, enemyDef: ShipDef, opts: BattleOptions = {}) {
     this.seed = opts.seed ?? Math.floor(Math.random() * 2 ** 31);
     this.rng = new Rng(this.seed);
-    this.player = new Ship(playerDef, 'player');
+    this.allowEscape = opts.allowEscape ?? true;
+    this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
     this.enemyAI = new ShipAI(this.enemy, this.player, this.rng, {
       fleeAt: 0.3,
@@ -96,7 +102,7 @@ export class Battle {
       updateCrew(ship, dt);
       updateHazards(ship, dt, this.rng, this.events);
       // The enemy only starts making sail once it decides to run.
-      if (ship === this.player || this.enemyAI.fleeing) ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
+      if ((ship === this.player && this.allowEscape) || (ship === this.enemy && this.enemyAI.fleeing)) ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
       updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
@@ -158,7 +164,7 @@ export class Battle {
   }
 
   canEscape(): boolean {
-    return this.player.escape >= 100 && !this.outcome;
+    return this.allowEscape && this.player.escape >= 100 && !this.outcome;
   }
 
   escape(): boolean {
@@ -174,9 +180,9 @@ export class Battle {
       enemySunk: [true, 'Victory!', `${enemy} takes on too much water and founders.`],
       captured: [true, 'Prize Taken!', `Not a soul left standing aboard ${enemy}. She's yours.`],
       surrender: [true, 'They Strike Their Colours!', `${enemy} hauls down her flag and surrenders.`],
-      escaped: [false, 'Escaped', 'You crowd on every scrap of canvas and leave the Navy in your wake.'],
+      escaped: [false, 'Escaped', `You crowd on every scrap of canvas and leave ${enemy} in your wake.`],
       enemyEscaped: [false, 'She Got Away', `${enemy} catches the wind and flees beyond the horizon.`],
-      defeat: [false, 'Defeat', 'Your hull splinters under the Navy guns. The sea takes her.'],
+      defeat: [false, 'Defeat', `Your hull splinters under the guns of ${enemy}. The sea takes her.`],
       sunk: [false, 'Sunk', 'The water rises faster than the pumps can bail. Your ship goes down.'],
       crewLost: [false, 'All Hands Lost', 'There is no one left to sail her.'],
     };
