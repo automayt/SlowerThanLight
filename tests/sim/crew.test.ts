@@ -24,11 +24,10 @@ describe('crew', () => {
 
   it('refuses to move into a full room', () => {
     const ship = new Ship(playerShip('wren'), 'player');
-    // The forecastle has 2 tiles.
-    const [a, b, c] = ship.crew;
+    // The forecastle has 2 tiles, and Jem Sparrow already stands in one.
+    const [a, b] = ship.crew;
     expect(orderMove(ship, a, 'fore')).toBe(true);
-    expect(orderMove(ship, b, 'fore')).toBe(true);
-    expect(orderMove(ship, c, 'fore')).toBe(false);
+    expect(orderMove(ship, b, 'fore')).toBe(false);
   });
 
   it('mans the helm, then puts out a fire before anything else', () => {

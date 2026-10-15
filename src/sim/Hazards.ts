@@ -101,7 +101,7 @@ function updateCrewHealth(ship: Ship, dt: number): void {
     const room = ship.room(c.room);
     if (room.fire > 0) c.hp -= room.fire * FIRE_CREW_DAMAGE * dt;
     if (room.water >= DROWN_LEVEL) c.hp -= DROWN_DAMAGE * dt;
-    if (heal && surgeon && c.room === surgeon.room && !c.waypoints.length) c.hp = Math.min(c.maxHp, c.hp + heal * dt);
+    if (heal && surgeon && c.side === ship.side && c.room === surgeon.room && !c.waypoints.length) c.hp = Math.min(c.maxHp, c.hp + heal * dt);
   }
 }
 

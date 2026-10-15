@@ -8,4 +8,6 @@ export type BattleEvent =
   | { t: 'fire'; side: Side; room: string }
   | { t: 'breach'; side: Side; room: string }
   | { t: 'death'; side: Side; name: string }
-  | { t: 'log'; side: Side; text: string };
+  | { t: 'log'; side: Side; text: string }
+  /** `side` is the side sending boarders. */
+  | { t: 'board'; side: Side; count: number; room: string };

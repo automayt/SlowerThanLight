@@ -82,7 +82,7 @@ export interface EnemyDef {
   ship: ShipDef;
   faction: Faction;
   /** Captain temperament, passed to the AI (see AIOptions). */
-  ai: { fleeAt: number; surrenderChance: number; surrenderAt: number };
+  ai: { fleeAt: number; surrenderChance: number; surrenderAt: number; boardWith?: number };
   /** Gold in her hold, as [min, max]. */
   plunder: [number, number];
   /** Names she might sail under; one is picked per encounter. */

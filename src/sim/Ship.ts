@@ -16,6 +16,8 @@ export interface RoomState {
   water: number;
   breach: boolean;
   breachProgress: number;
+  /** Progress (0..100) of unopposed boarders wrecking this room's system. */
+  sabotage: number;
 }
 
 export interface SystemState {
@@ -42,7 +44,7 @@ export interface GunState {
   shot: ShotType;
 }
 
-export type CrewTask = 'moving' | 'fire' | 'breach' | 'repair' | 'man' | 'idle';
+export type CrewTask = 'moving' | 'fire' | 'breach' | 'repair' | 'man' | 'fight' | 'sabotage' | 'idle';
 
 export interface Waypoint extends Vec {
   /** Room the crew member is in once this waypoint is reached. */
@@ -108,7 +110,7 @@ export class Ship {
     this.height = Math.max(...def.rooms.map((r) => r.y + r.h));
 
     for (const r of def.rooms) {
-      this.rooms.set(r.id, { def: r, fire: 0, burn: 0, water: 0, breach: false, breachProgress: 0 });
+      this.rooms.set(r.id, { def: r, fire: 0, burn: 0, water: 0, breach: false, breachProgress: 0, sabotage: 0 });
       if (r.system) {
         const max = def.systems[r.system] ?? 1;
         this.systems.set(r.system, { id: r.system, room: r.id, max, damage: 0, hands: 0, wanted: 0, repair: 0 });
@@ -161,7 +163,7 @@ export class Ship {
     for (const s of this.systems.values()) if (s.damage > 0) damage[s.id] = s.damage;
     return {
       hull: Math.max(0, this.hull),
-      crew: this.crew.filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home })),
+      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home })),
       damage,
     };
   }
@@ -293,13 +295,24 @@ export class Ship {
     }
   }
 
+  /** This ship's own crew aboard her (not enemy boarders). */
+  own(): Crew[] {
+    return this.crew.filter((c) => c.side === this.side);
+  }
+
+  /** Enemy boarders aboard this ship. */
+  boarders(): Crew[] {
+    return this.crew.filter((c) => c.side !== this.side);
+  }
+
+  /** Own crew standing in a room. */
   crewInRoom(roomId: string): Crew[] {
-    return this.crew.filter((c) => c.room === roomId && c.waypoints.length === 0);
+    return this.crew.filter((c) => c.side === this.side && c.room === roomId && c.waypoints.length === 0);
   }
 
   isManned(id: SystemId): boolean {
     const s = this.systems.get(id);
-    return !!s && this.crew.some((c) => c.room === s.room && c.task === 'man');
+    return !!s && this.crew.some((c) => c.side === this.side && c.room === s.room && c.task === 'man');
   }
 
   /** Percent chance an incoming ball misses. */

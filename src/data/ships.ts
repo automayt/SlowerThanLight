@@ -25,6 +25,7 @@ export const PLAYER_SHIPS: ShipDef[] = [
       { name: 'Tobias Finch', room: 'guns' },
       { name: 'Mags Calloway', room: 'sails' },
       { name: 'Little Pim', room: 'pumps' },
+      { name: 'Jem Sparrow', room: 'fore' },
     ],
   },
   {

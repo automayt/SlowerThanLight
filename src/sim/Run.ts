@@ -107,7 +107,7 @@ export interface RunSave {
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
 export const PLUNDER_SHARE: Partial<Record<OutcomeKind, number>> = {
   surrender: 1,
-  captured: 1,
+  captured: 1.25,
   victory: 0.6,
   enemySunk: 0.4,
 };

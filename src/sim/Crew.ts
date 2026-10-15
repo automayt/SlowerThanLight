@@ -48,6 +48,8 @@ export function updateCrew(ship: Ship, dt: number): void {
   for (const room of ship.rooms.values()) {
     const workers = ship.crewInRoom(room.def.id);
     if (!workers.length) continue;
+    // Nobody repairs or fights fires with boarders in the room: that is a fight (see Boarding).
+    if (ship.crew.some((c) => c.side !== ship.side && c.room === room.def.id && !c.waypoints.length)) continue;
     const sys = ship.systemInRoom(room.def.id);
     let task: CrewTask;
     if (room.fire > 0) {
