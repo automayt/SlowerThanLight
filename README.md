@@ -27,8 +27,9 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - **The chart:** sail left to right, one node per jump, from Tortuga to the blockade. Nodes are battles (*Sail sighted*), events (*Unknown*), ports and open sea.
 - **The Navy fleet** (the red tide) gains a little on you every jump, and more when you dawdle: resting in port, raiding villages, letting a ship escape to raise the alarm. Nodes it overruns become Navy ambushes; a red ring warns you before you sail there. Sinking an ambusher pushes the fleet back.
 - **Your ship carries its wounds:** hull, crew wounds and losses, and system damage carry between nodes. Each jump the crew heal a little and mend one point of system damage.
-- **Plunder:** win a fight for gold. A surrender or a captured ship gives you her whole hold; a ship that breaks apart or founders takes most of it down with her. The merchant brig runs from the first shot, so cripple her sails or helm.
-- **Ports** sell hull repairs and new crew, or let you rest and refit (heal everyone, repair every system) at the cost of time.
+- **Plunder:** win a fight for gold. A surrender or a captured ship gives you her whole hold; a ship that breaks apart or founders takes most of it down with her. The merchant brig runs from the first shot, so cripple her sails or helm. A Spanish treasure galleon is the richest prize, if you can silence her 12-pounders.
+- **Ports** have a harbour (hull repairs, new crew, or rest and refit at the cost of time), a shipwright (oak planking for more hull, extra deckhands, more bars on any system) and an armoury that stocks two guns, heavier ones later in the voyage. You have four gun ports; sell a gun back for half its price.
+- **Saving:** the voyage is saved in your browser as you play. *Continue Voyage* on the title screen picks it up again; a battle in progress restarts from its first broadside.
 - **The blockade:** HMS Relentless, a Navy frigate. There is no running from her. Sink her to win.
 
 ### Battles
@@ -46,5 +47,6 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - `src/data/` — ships, weapons, enemies and voyage events as data
 - `src/render/` — Phaser drawing for ships and the HUD
 - `src/sim/Run.ts` — the voyage: chart, fleet, gold, events, ports (`SeaChart.ts` builds the chart, `autoRun.ts` plays voyages headless)
-- `src/scenes/` — Title, Ship Select, Sea Map, Event, Port, Battle, Result, Run End
+- `src/scenes/` — Preload, Title, Ship Select, Sea Map, Event, Port, Battle, Result, Run End
+- `public/art/` — painted illustrations made with ComfyUI, listed in `manifest.json`; the game runs without them
 - `scripts/balance.ts` — headless balance report
