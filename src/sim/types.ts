@@ -106,6 +106,8 @@ export interface EventEffect {
   repair?: boolean;
   /** Start a fight with this enemy. */
   battle?: string;
+  /** Mount this weapon in a free gun port (or sell it for scrap if there is none). */
+  gun?: string;
 }
 
 export interface EventChoice {

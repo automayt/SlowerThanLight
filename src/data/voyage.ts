@@ -156,6 +156,62 @@ export const SEA_EVENTS: SeaEventDef[] = [
       { label: 'Lose her in the night', outcomes: [{ weight: 1, effect: { text: 'You douse every lantern and slip away, but it costs you time.', navy: 0.5 } }] },
     ],
   },
+  {
+    id: 'battery',
+    title: 'Abandoned Battery',
+    text: 'On a jungle headland stands a ruined Spanish battery. One great gun still sits on its rotting carriage, staring out to sea.',
+    choices: [
+      {
+        label: 'Haul the gun down to the boats',
+        outcomes: [
+          { weight: 3, effect: { text: 'A day of sweat, block and tackle, and she is yours.', gun: 'pdr12', crewHp: -10 } },
+          { weight: 1, effect: { text: 'The carriage gives way halfway down the slope. The gun is lost in the surf, and men are hurt.', crewHp: -30 } },
+        ],
+      },
+      { label: 'Leave it to the jungle', outcomes: [{ weight: 1, effect: { text: 'The old gun keeps its lonely watch.' } }] },
+    ],
+  },
+  {
+    id: 'rivals',
+    title: 'Brethren of the Coast',
+    text: 'Another pirate sloop heaves to under the black flag and invites your officers across for rum.',
+    choices: [
+      { label: 'Trade rum for their charts', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Their charts mark every Navy patrol for fifty leagues.', navy: -1 } }] },
+      { label: 'Buy out a malcontent', cost: 20, outcomes: [{ weight: 1, effect: { text: 'One of their gunners fancies a change of captain.', recruit: 1 } }] },
+      { label: 'Exchange courtesies and part', outcomes: [{ weight: 1, effect: { text: 'Fair winds, brothers.' } }] },
+    ],
+  },
+  {
+    id: 'mutiny',
+    title: 'Grumbling Below',
+    text: 'The crew mutter that the voyage has made the captain rich and them sore. A deputation waits at the mainmast.',
+    choices: [
+      { label: 'Pay out a share now', cost: 20, outcomes: [{ weight: 1, effect: { text: 'Coin and a double tot of rum. Spirits soar.', crewHp: 25 } }] },
+      {
+        label: 'Flog the ringleader',
+        outcomes: [
+          { weight: 1, effect: { text: 'The muttering stops, but nobody meets your eye.', crewHp: -15 } },
+          { weight: 1, effect: { text: 'He jumps ship at the next landfall, and good riddance.', loseCrew: 1 } },
+        ],
+      },
+      {
+        label: 'Promise riches at voyage’s end',
+        outcomes: [
+          { weight: 1, effect: { text: 'They believe you. For now.' } },
+          { weight: 1, effect: { text: 'Fine words fill no bellies. The crew work sullenly.', crewHp: -20 } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'galleon',
+    title: 'Treasure Fleet Straggler',
+    text: 'A Spanish galleon, separated from the treasure fleet by the last storm, labours alone on the horizon.',
+    choices: [
+      { label: 'Give chase', outcomes: [{ weight: 1, effect: { text: 'You crowd on sail and close. She runs out her guns.', battle: 'galleon' } }] },
+      { label: 'Let her go', outcomes: [{ weight: 1, effect: { text: 'Too big a bite to chew. Probably.' } }] },
+    ],
+  },
 ];
 
 export function seaEvent(id: string): SeaEventDef {

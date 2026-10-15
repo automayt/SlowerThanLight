@@ -145,13 +145,14 @@ function stockArmoury(rng: Rng, armoury: string[], depth: number): string[] {
   return stock;
 }
 
-/** Merchants early, more Navy patrols as you near the blockade. */
+/** Merchants early, more Navy patrols (and the odd treasure galleon) as you near the blockade. */
 function pickEnemy(rng: Rng, depth: number): string {
   return rng.weighted(
     [
       ['merchant', 50 - depth * 25],
       ['privateer', 30],
       ['cutter', 15 + depth * 30],
+      ['galleon', depth * 10],
     ] as [string, number][],
     (e) => e[1],
   )[0];

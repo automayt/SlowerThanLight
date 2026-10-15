@@ -174,6 +174,18 @@ describe('events', () => {
     expect(run.gold).toBe(0);
   });
 
+  it('a salvaged gun goes in a free gun port, or is sold when there is none', () => {
+    const run = new Run('wren', 1);
+    const guns = run.fit.guns.length;
+    run.applyEffect({ text: '', gun: 'pdr12' });
+    expect(run.fit.guns).toHaveLength(guns + 1);
+    while (run.fit.guns.length < MAX_GUNS) run.fit.guns.push({ weapon: 'pdr6' });
+    const gold = run.gold;
+    run.applyEffect({ text: '', gun: 'pdr12' });
+    expect(run.fit.guns).toHaveLength(MAX_GUNS);
+    expect(run.gold).toBeGreaterThan(gold);
+  });
+
   it('a choice you cannot afford is refused', () => {
     const run = runAt('event');
     const ev = run.currentEvent();

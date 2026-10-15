@@ -370,6 +370,17 @@ export class Run {
       const name = this.recruit();
       out.push(name ? `${name} joins the crew` : 'No bunk to spare: they stay ashore');
     }
+    if (e.gun) {
+      const w = weapon(e.gun);
+      if (this.fit.guns.length < MAX_GUNS) {
+        this.fit.guns.push({ weapon: w.id });
+        out.push(`${w.name} mounted`);
+      } else {
+        const scrap = Math.floor(w.price / 2);
+        this.gold += scrap;
+        out.push(`No free gun port: the ${w.name} fetches ${scrap} gold`);
+      }
+    }
     if (e.navy) {
       this.navy += e.navy;
       out.push(e.navy > 0 ? 'The Navy gains on you' : 'You gain on the Navy');

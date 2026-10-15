@@ -120,6 +120,37 @@ export const NAVY_FRIGATE: ShipDef = {
   ],
 };
 
+/** A straggler from the Spanish treasure fleet: tough, slow, rich, and not keen to die for the King of Spain. */
+export const GALLEON: ShipDef = {
+  id: 'galleon',
+  name: 'Nuestra Señora del Rosario',
+  className: 'Spanish Galleon',
+  description: 'A lumbering treasure galleon that has lost her escort, her hold full of Potosí silver.',
+  hull: 30,
+  hands: 10,
+  speedBonus: -10,
+  systems: { helm: 1, sails: 3, guns: 6, pumps: 3, surgeon: 1 },
+  rooms: [
+    { id: 'helm', name: 'Stern Castle', x: 0, y: 1, w: 2, h: 3, system: 'helm' },
+    { id: 'surgeon', name: "Chaplain's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
+    { id: 'sails', name: 'Mainmast', x: 2, y: 1, w: 2, h: 3, system: 'sails' },
+    { id: 'quarters', name: 'Soldiers’ Quarters', x: 2, y: 4, w: 2, h: 1 },
+    { id: 'guns', name: 'Gun Deck', x: 4, y: 0, w: 3, h: 1, system: 'guns' },
+    { id: 'hold', name: 'Treasure Hold', x: 4, y: 1, w: 3, h: 3 },
+    { id: 'pumps', name: 'Bilge', x: 4, y: 4, w: 3, h: 1, system: 'pumps' },
+    { id: 'fore', name: 'Forecastle', x: 7, y: 1, w: 2, h: 3 },
+  ],
+  guns: [{ weapon: 'pdr12', shot: 'round' }, { weapon: 'pdr12', shot: 'round' }, { weapon: 'pdr9', shot: 'chain' }, { weapon: 'pdr9', shot: 'round' }],
+  crew: [
+    { name: 'Capitán Ybarra', room: 'helm' },
+    { name: 'Piloto Mendes', room: 'sails' },
+    { name: 'Artillero Ruiz', room: 'guns' },
+    { name: 'Soldado Vela', room: 'quarters' },
+    { name: 'Soldado Ortiz', room: 'fore' },
+    { name: 'Calafate Soto', room: 'pumps' },
+  ],
+};
+
 export const ENEMIES: Record<string, EnemyDef> = {
   cutter: {
     id: 'cutter',
@@ -147,6 +178,15 @@ export const ENEMIES: Record<string, EnemyDef> = {
     plunder: [30, 50],
     names: ['The Mistral', 'La Vipère', 'The Black Prince', 'The Revenge', 'Le Corbeau', 'The Lucky Strike', 'The Bounty Hunter'],
     sighting: 'A privateer schooner hoists her colours. Bounty hunters!',
+  },
+  galleon: {
+    id: 'galleon',
+    ship: GALLEON,
+    faction: 'merchant',
+    ai: { fleeAt: 0.5, surrenderChance: 0.55, surrenderAt: 0.35 },
+    plunder: [90, 130],
+    names: ['Nuestra Señora del Rosario', 'San José', 'Santa Ana', 'Nuestra Señora de Atocha', 'San Felipe'],
+    sighting: 'A Spanish galleon, wallowing under the weight of her silver, turns her broadside toward you.',
   },
   frigate: {
     id: 'frigate',
