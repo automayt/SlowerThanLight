@@ -86,3 +86,34 @@ export interface EnemyDef {
   /** Line shown when she is sighted. */
   sighting: string;
 }
+
+/** What happens when an event choice resolves. Every field is optional. */
+export interface EventEffect {
+  text: string;
+  gold?: number;
+  hull?: number;
+  /** HP added to (or taken from) every crew member. Events wound but never kill. */
+  crewHp?: number;
+  recruit?: number;
+  loseCrew?: number;
+  /** Columns the Navy fleet gains on you (negative: you gain on them). */
+  navy?: number;
+  /** Mend all system damage. */
+  repair?: boolean;
+  /** Start a fight with this enemy. */
+  battle?: string;
+}
+
+export interface EventChoice {
+  label: string;
+  /** Gold paid up front; the choice is unavailable without it. */
+  cost?: number;
+  outcomes: { weight: number; effect: EventEffect }[];
+}
+
+export interface SeaEventDef {
+  id: string;
+  title: string;
+  text: string;
+  choices: EventChoice[];
+}
