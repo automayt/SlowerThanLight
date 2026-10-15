@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
+import { setRun } from '../render/RunBar';
 import { Button, Sea } from '../render/ui';
+import { loadRun, sceneFor } from './save';
 
 export class TitleScene extends Phaser.Scene {
   private sea!: Sea;
@@ -18,7 +20,22 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.add.text(cx, 262, 'A pirate’s life, one broadside at a time', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.text, fontStyle: 'italic' }).setOrigin(0.5);
 
-    new Button(this, cx - 110, 340, 220, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22 });
+    const saved = loadRun();
+    const resume = () => {
+      if (!saved) return;
+      setRun(this, saved);
+      this.registry.set('chart-note', `You take up the voyage again aboard ${saved.def.name}.`);
+      this.scene.start(sceneFor(saved));
+    };
+    if (saved) {
+      new Button(this, cx - 230, 340, 220, 52, 'Continue Voyage', resume, { size: 22 });
+      new Button(this, cx + 10, 340, 220, 52, 'New Voyage', () => this.scene.start('ShipSelect'), { size: 22 });
+      this.add
+        .text(cx, 404, `${saved.def.name} · leg ${saved.node.col} of ${saved.chart.columns - 1} · ${saved.gold} gold`, textStyle(14, COLORS.textDim))
+        .setOrigin(0.5, 0);
+    } else {
+      new Button(this, cx - 110, 340, 220, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22 });
+    }
 
     const help = [
       'Space — pause (you can still give orders)',
@@ -28,7 +45,7 @@ export class TitleScene extends Phaser.Scene {
     ];
     this.add.text(cx, 470, help.join('\n'), textStyle(15, COLORS.textDim, { align: 'center', lineSpacing: 8 })).setOrigin(0.5, 0);
 
-    this.input.keyboard!.once('keydown-ENTER', () => this.scene.start('ShipSelect'));
+    this.input.keyboard!.once('keydown-ENTER', () => (saved ? resume() : this.scene.start('ShipSelect')));
   }
 
   update(time: number): void {

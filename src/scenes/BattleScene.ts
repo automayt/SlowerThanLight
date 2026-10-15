@@ -9,6 +9,7 @@ import type { BattleReport, Run } from '../sim/Run';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
 import { SYSTEM_NAMES, type Side } from '../sim/types';
+import { saveRun } from './save';
 
 const TILE = 42;
 const SHIP_CENTER_Y = 292;
@@ -42,6 +43,7 @@ export class BattleScene extends Phaser.Scene {
 
   create(): void {
     const run = (this.run = currentRun(this));
+    saveRun(run);
     const battle = (this.battle = run.startBattle());
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
 

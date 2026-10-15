@@ -3,6 +3,7 @@ import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
+import { saveRun } from './save';
 
 const W = 720;
 const H = 460;
@@ -22,6 +23,7 @@ export class EventScene extends Phaser.Scene {
 
   create(): void {
     const run = (this.run = currentRun(this));
+    saveRun(run);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     this.bar = new RunBar(this, run);
     this.choiceButtons = [];
@@ -46,6 +48,7 @@ export class EventScene extends Phaser.Scene {
     const run = this.run;
     if (!this.choiceButtons.length || !run.canChoose(index)) return;
     const result = run.chooseEvent(index);
+    saveRun(run);
     for (const b of this.choiceButtons) b.destroy();
     this.choiceButtons = [];
 

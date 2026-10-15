@@ -3,6 +3,7 @@ import { currentRun } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea } from '../render/ui';
 import type { ResultData } from './BattleScene';
+import { saveRun } from './save';
 
 export class ResultScene extends Phaser.Scene {
   private sea!: Sea;
@@ -15,6 +16,7 @@ export class ResultScene extends Phaser.Scene {
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     const { battle, report } = data;
     const run = currentRun(this);
+    saveRun(run);
     const o = battle.outcome!;
     const cx = SCREEN.w / 2;
 

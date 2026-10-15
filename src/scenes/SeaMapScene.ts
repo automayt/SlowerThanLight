@@ -4,6 +4,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { NAVY_SPEED, type Run } from '../sim/Run';
 import type { NodeKind, SeaNode } from '../sim/SeaChart';
+import { saveRun } from './save';
 
 const LEFT = 90;
 const RIGHT = SCREEN.w - 90;
@@ -41,6 +42,7 @@ export class SeaMapScene extends Phaser.Scene {
 
   create(): void {
     const run = (this.run = currentRun(this));
+    saveRun(run);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     this.g = this.add.graphics();
     this.bar = new RunBar(this, run);
@@ -96,12 +98,13 @@ export class SeaMapScene extends Phaser.Scene {
     const run = this.run;
     if (!run.reachable().some((n) => n.id === node.id)) return;
     const enc = run.jump(node.id);
+    saveRun(run);
     this.registry.set('chart-note', '');
     switch (enc.kind) {
       case 'battle': {
         const foe = run.currentEnemy();
         const title = enc.boss ? 'The Blockade' : enc.ambush ? 'Overrun!' : 'Sail Ho!';
-        this.showDialog(title, `${enc.text}\n\n${foe.ship.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]]);
+        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]]);
         break;
       }
       case 'event':

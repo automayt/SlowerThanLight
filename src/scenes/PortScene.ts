@@ -2,24 +2,31 @@ import Phaser from 'phaser';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
-import { CREW_PRICE, HULL_PRICE, type Run } from '../sim/Run';
+import { weapon } from '../data/weapons';
+import { CREW_PRICE, HULL_PRICE, MAX_GUNS, type Run } from '../sim/Run';
+import type { WeaponDef } from '../sim/types';
+import { saveRun } from './save';
 
-const W = 760;
-const H = 500;
-const X = (SCREEN.w - W) / 2;
-const Y = 100;
+const TOP = 84;
+const COL_Y = TOP + 104;
+const COLS = [
+  { x: 40, w: 370, title: 'Harbour' },
+  { x: 430, w: 400, title: 'Shipwright' },
+  { x: 850, w: 390, title: 'Armoury' },
+];
+const ROW = 50;
 
-/** A friendly port: buy hull repairs and crew, or rest and refit while the fleet closes in. */
+function gunStats(w: WeaponDef): string {
+  return `${w.shots}×${w.damage} dmg · ${w.loadTime}s · ${w.hands} hand${w.hands > 1 ? 's' : ''}`;
+}
+
+/** A friendly port: repairs and crew, shipwright upgrades, and an armoury, or rest while the fleet closes in. */
 export class PortScene extends Phaser.Scene {
   private run!: Run;
   private sea!: Sea;
   private bar!: RunBar;
-  private rest!: Button;
-  private patch!: Button;
-  private patchAll!: Button;
-  private hire!: Button;
+  private dyn: Phaser.GameObjects.GameObject[] = [];
   private note!: Phaser.GameObjects.Text;
-  private roster!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Port');
@@ -29,60 +36,124 @@ export class PortScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     this.bar = new RunBar(this, run);
+    this.dyn = [];
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
 
-    panel(this, X, Y, W, H);
-    this.add.text(SCREEN.w / 2, Y + 18, name, { fontFamily: TITLE_FONT, fontSize: '36px', color: COLORS.gold }).setOrigin(0.5, 0);
+    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12);
+    this.add.text(SCREEN.w / 2, TOP + 8, name, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
     this.add
-      .text(SCREEN.w / 2, Y + 66, 'A free port where no one asks where your cargo came from. Shipwrights, taverns full of idle sailors, and a harbourmaster who can be paid to forget.', textStyle(15, COLORS.textDim, { wordWrap: { width: W - 80 }, align: 'center' }))
+      .text(SCREEN.w / 2, TOP + 52, 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
+    for (const c of COLS) {
+      this.add.text(c.x, COL_Y - 30, c.title.toUpperCase(), textStyle(14, COLORS.gold, { fontStyle: 'bold' }));
+      this.add.rectangle(c.x, COL_Y - 8, c.w, 1, COLORS.panelEdge).setOrigin(0);
+    }
 
-    const bx = X + 40;
-    const bw = 330;
-    this.rest = new Button(this, bx, Y + 140, bw, 44, 'Rest & refit', () => this.act(run.rest(), 'The crew sleep ashore while the shipwrights mend every system.'), { size: 16 });
-    this.add.text(bx + bw + 16, Y + 146, 'Heal all crew and repair every system.\nThe Navy fleet gains half a jump.', textStyle(13, COLORS.textDim));
-    this.patch = new Button(this, bx, Y + 196, bw, 44, '', () => this.act(run.repairHull(1), 'Carpenters plank over the worst of the damage.'), { size: 16 });
-    this.patchAll = new Button(this, bx, Y + 252, bw, 44, '', () => this.act(run.repairHull(this.affordableHull()), 'The hull is made good.'), { size: 16 });
-    this.add.text(bx + bw + 16, Y + 210, `${HULL_PRICE} gold per point of hull.`, textStyle(13, COLORS.textDim));
-    this.hire = new Button(this, bx, Y + 308, bw, 44, '', () => this.hireOne(), { size: 16 });
-    this.add.text(bx + bw + 16, Y + 314, `Sign on a sailor from the taverns.\nYou have bunks for ${run.maxCrew}.`, textStyle(13, COLORS.textDim));
-
-    this.roster = this.add.text(bx, Y + 370, '', textStyle(13, COLORS.text, { wordWrap: { width: W - 80 }, lineSpacing: 3 }));
-    this.note = this.add.text(SCREEN.w / 2, Y + H - 90, '', textStyle(15, COLORS.textGood, { fontStyle: 'italic' })).setOrigin(0.5, 0);
-
+    this.note = this.add.text(SCREEN.w / 2, SCREEN.h - 92, '', textStyle(15, COLORS.textGood, { fontStyle: 'italic' })).setOrigin(0.5, 0);
     const leave = () => {
       run.leavePort();
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
       this.scene.start('SeaMap');
     };
-    new Button(this, SCREEN.w / 2 - 120, Y + H - 56, 240, 44, 'Weigh anchor →', leave, { size: 18 });
+    new Button(this, SCREEN.w / 2 - 120, SCREEN.h - 64, 240, 44, 'Weigh anchor →', leave, { size: 18 });
     this.input.keyboard!.once('keydown-ENTER', leave);
+    this.rebuild();
   }
 
-  private affordableHull(): number {
-    return Math.min(this.run.hullMissing(), Math.floor(this.run.gold / HULL_PRICE));
+  private say(text: string): void {
+    this.note.setText(text);
   }
 
-  private hireOne(): void {
-    const name = this.run.hireCrew();
-    if (name) this.note.setText(`${name} signs the articles.`).setColor(COLORS.textGood);
+  /** Redraw every button: prices, stock and gun list change after each purchase. */
+  private rebuild(): void {
+    for (const o of this.dyn) o.destroy();
+    this.dyn = [];
+    this.harbour();
+    this.shipwright();
+    this.armoury();
+    this.bar.refresh();
+    saveRun(this.run);
   }
 
-  private act(ok: boolean, text: string): void {
-    if (ok) this.note.setText(text).setColor(COLORS.textGood);
+  /** Rebuild after the current click has finished dispatching (the clicked button is about to be destroyed). */
+  private later(): void {
+    this.time.delayedCall(0, () => this.rebuild());
+  }
+
+  private button(x: number, y: number, w: number, label: string, enabled: boolean, fn: () => void, detail?: string): void {
+    const b = new Button(this, x, y, w, 40, label, () => {
+      fn();
+      this.later();
+    }, { size: 14 }).setEnabled(enabled);
+    b.label.setOrigin(0, 0.5).setX(12);
+    this.dyn.push(b);
+    if (detail) this.dyn.push(this.add.text(x + w + 10, y + 12, detail, textStyle(12, COLORS.textDim)));
+  }
+
+  private harbour(): void {
+    const run = this.run;
+    const { x } = COLS[0];
+    const w = 210;
+    let y = COL_Y;
+    this.button(x, y, w, run.canRest() ? 'Rest & refit' : 'Rested and refitted', run.canRest(), () => run.rest() && this.say('The crew sleep ashore while the shipwrights mend every system.'), 'Heal crew, mend systems.\nFleet gains ½ jump.');
+    y += ROW + 6;
+    const missing = run.hullMissing();
+    const n = Math.min(missing, Math.floor(run.gold / HULL_PRICE));
+    this.button(x, y, w, missing ? `Patch 1 hull (${HULL_PRICE}g)` : 'Hull is sound', run.canRepairHull(1), () => run.repairHull(1) && this.say('Carpenters plank over the worst of it.'), `${HULL_PRICE} gold a point`);
+    y += ROW;
+    this.button(x, y, w, n > 1 ? `Patch ${n} hull (${n * HULL_PRICE}g)` : 'Patch all you can', n > 1, () => run.repairHull(n) && this.say('The hull is made good.'));
+    y += ROW + 6;
+    const full = run.condition.crew.length >= run.maxCrew;
+    this.button(x, y, w, full ? 'No bunks to spare' : `Hire a sailor (${CREW_PRICE}g)`, run.canHire(), () => {
+      const who = run.hireCrew();
+      if (who) this.say(`${who} signs the articles.`);
+    }, `Bunks for ${run.maxCrew}`);
+    y += ROW + 4;
+    const roster = run.condition.crew.map((c) => `${c.name}  ${c.hp}%`).join('\n');
+    this.dyn.push(this.add.text(x, y, roster, textStyle(12, COLORS.text, { lineSpacing: 2 })));
+  }
+
+  private shipwright(): void {
+    const run = this.run;
+    const { x } = COLS[1];
+    run.upgradeOffers().forEach((o, i) => {
+      this.button(x, COL_Y + i * ROW, 230, o.maxed ? o.label : `${o.label} (${o.price}g)`, o.available, () => run.buyUpgrade(o.id) && this.say(`${o.label}: done.`), o.detail);
+    });
+  }
+
+  private armoury(): void {
+    const run = this.run;
+    const { x, w } = COLS[2];
+    let y = COL_Y;
+    const offers = run.gunOffers();
+    this.dyn.push(this.add.text(x, y, 'For sale', textStyle(13, COLORS.textDim, { fontStyle: 'bold' })));
+    y += 22;
+    if (!offers.length) {
+      this.dyn.push(this.add.text(x, y, 'Sold out.', textStyle(13, COLORS.textDim, { fontStyle: 'italic' })));
+      y += ROW;
+    }
+    for (const o of offers) {
+      this.button(x, y, 230, `${o.weapon.name} (${o.price}g)`, o.available, () => run.buyGun(o.weapon.id) && this.say(`A ${o.weapon.name} is hoisted aboard.`), gunStats(o.weapon));
+      y += ROW;
+    }
+    y += 8;
+    this.dyn.push(this.add.text(x, y, `Your guns (${run.fit.guns.length}/${MAX_GUNS} gun ports)`, textStyle(13, COLORS.textDim, { fontStyle: 'bold' })));
+    y += 22;
+    run.fit.guns.forEach((g, i) => {
+      const wdef = weapon(g.weapon);
+      this.dyn.push(this.add.text(x, y + 4, wdef.name, textStyle(13)));
+      this.dyn.push(this.add.text(x, y + 22, gunStats(wdef), textStyle(11, COLORS.textDim)));
+      const b = new Button(this, x + w - 110, y + 2, 110, 34, `Sell ${run.sellPrice(i)}g`, () => {
+        if (run.sellGun(i)) this.say(`The ${wdef.name} is sold.`);
+        this.later();
+      }, { size: 13 }).setEnabled(run.canSellGun(i));
+      this.dyn.push(b);
+      y += 44;
+    });
+    this.dyn.push(this.add.text(x, y + 4, `Gun Deck ${run.fit.systems.guns ?? 0}: that many hands can work guns at once.`, textStyle(11, COLORS.textDim, { wordWrap: { width: w } })));
   }
 
   update(time: number): void {
-    const run = this.run;
     this.sea.draw(time);
-    this.bar.refresh();
-    const missing = run.hullMissing();
-    const n = this.affordableHull();
-    this.rest.setEnabled(run.canRest()).setText(run.canRest() ? 'Rest & refit' : 'Rested and refitted');
-    this.patch.setEnabled(run.canRepairHull(1)).setText(missing ? `Patch 1 hull (${HULL_PRICE} gold)` : 'Hull is sound');
-    this.patchAll.setEnabled(n > 1).setText(n > 1 ? `Patch ${n} hull (${n * HULL_PRICE} gold)` : 'Patch all you can afford');
-    const full = run.condition.crew.length >= run.maxCrew;
-    this.hire.setEnabled(run.canHire()).setText(full ? 'No bunks to spare' : `Hire a sailor (${CREW_PRICE} gold)`);
-    this.roster.setText('Crew:  ' + run.condition.crew.map((c) => `${c.name} ${c.hp}%`).join(',  '));
   }
 }

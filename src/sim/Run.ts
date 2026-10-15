@@ -50,6 +50,8 @@ export interface UpgradeOffer {
   label: string;
   detail: string;
   price: number;
+  /** Already at its cap; can never be bought again. */
+  maxed: boolean;
   available: boolean;
 }
 
@@ -447,6 +449,7 @@ export class Run {
       label: 'Oak planking',
       detail: plating >= MAX_PLATING ? 'She can carry no more timber' : `Max hull ${f.hull} → ${f.hull + PLATING}`,
       price: 35 + 15 * plating,
+      maxed: plating >= MAX_PLATING,
       available: plating < MAX_PLATING,
     });
     const extra = f.hands - this.def.hands;
@@ -455,6 +458,7 @@ export class Run {
       label: 'Sign on deckhands',
       detail: extra >= EXTRA_HANDS ? 'No hammocks to spare' : `Hands ${f.hands} → ${f.hands + 1}`,
       price: 30 + 10 * extra,
+      maxed: extra >= EXTRA_HANDS,
       available: extra < EXTRA_HANDS,
     });
     for (const id of ['sails', 'guns', 'pumps', 'helm', 'surgeon'] as SystemId[]) {
@@ -465,6 +469,7 @@ export class Run {
         label: `Refit ${SYSTEM_NAMES[id]}`,
         detail: now >= SYSTEM_CAP[id] ? 'Fully fitted' : `${SYSTEM_NAMES[id]} ${now} → ${now + 1}`,
         price: 20 + 8 * now,
+        maxed: now >= SYSTEM_CAP[id],
         available: now < SYSTEM_CAP[id],
       });
     }
