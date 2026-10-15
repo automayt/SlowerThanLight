@@ -11,7 +11,7 @@ const X = 40;
 const Y = 88;
 const W = SCREEN.w - 80;
 const H = SCREEN.h - Y - 16;
-const ART = { x: X + 28, y: Y + 76, w: 560, h: 315 };
+const ART = { x: X + 28, y: Y + 76, w: 640, h: 360 };
 
 /** A text event: read the situation, make a choice, live with the result. */
 export class EventScene extends Phaser.Scene {

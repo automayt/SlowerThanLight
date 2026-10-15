@@ -41,7 +41,7 @@ export class PortScene extends Phaser.Scene {
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
 
     const painted = placeBackdrop(this, 'port', SCREEN.w, SCREEN.h, 0);
-    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.84 : 0.92);
+    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.9 : 0.92);
     this.add.text(SCREEN.w / 2, TOP + 8, name, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
     this.add
       .text(SCREEN.w / 2, TOP + 52, 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))

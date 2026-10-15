@@ -33,7 +33,7 @@ export class TitleScene extends Phaser.Scene {
       new Button(this, cx - 230, 340, 220, 52, 'Continue Voyage', resume, { size: 22 });
       new Button(this, cx + 10, 340, 220, 52, 'New Voyage', () => this.scene.start('ShipSelect'), { size: 22 });
       this.add
-        .text(cx, 404, `${saved.def.name} · leg ${saved.node.col} of ${saved.chart.columns - 1} · ${saved.gold} gold`, textStyle(14, COLORS.textDim))
+        .text(cx, 404, `${saved.def.name} · leg ${saved.node.col} of ${saved.chart.columns - 1} · ${saved.gold} gold`, textStyle(14, COLORS.text, { backgroundColor: '#0b1622bb', padding: { x: 10, y: 4 } }))
         .setOrigin(0.5, 0);
     } else {
       new Button(this, cx - 110, 340, 220, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22 });
