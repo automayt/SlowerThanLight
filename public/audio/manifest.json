@@ -1,0 +1,14 @@
+{
+  "model": "LTX-2.3 22B dev fp8 + distilled LoRA 0.5 (joint audio-video model; audio track only), ComfyUI, 8-step euler_ancestral_cfg_pp",
+  "files": [
+    "cannon-1.ogg",
+    "cannon-2.ogg",
+    "cannon-3.ogg",
+    "hit-wood.ogg",
+    "splash.ogg",
+    "fire.ogg",
+    "bell.ogg",
+    "waves.ogg",
+    "shanty.ogg"
+  ]
+}

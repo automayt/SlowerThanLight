@@ -267,7 +267,7 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'fire': {
-        playSfx(this, 'fire', 0.3);
+        playSfx(this, 'fire', 0.9);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y - 10, 'FIRE!', '#ffb050');
         if (ours) this.hud.addLog(`Fire in the ${view.ship.room(ev.room).def.name}!`);

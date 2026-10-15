@@ -1,0 +1,8 @@
+[
+ {"name":"cannon_e","seconds":3,"seed":105,"prompt":"A single heavy black iron cannon on the deck of an old wooden sailing ship fires once with a deep thunderous boom and a burst of white smoke, then the smoke drifts away in silence. Audio: one loud deep cannon shot with a booming low rumble echoing over the sea, nothing else."},
+ {"name":"cannon_f","seconds":3,"seed":106,"prompt":"At sea, the side of a wooden warship erupts as a single great gun fires, white smoke rolling over the water. Audio: one deep booming cannon shot with thunder-like low end, fading echo."},
+ {"name":"cannon_g","seconds":3,"seed":107,"prompt":"Quiet calm sea, then suddenly a single heavy ship's cannon fires with a huge flash and smoke. Audio: silence, then one massive deep cannon boom with a long low rumbling echo rolling across the water."},
+ {"name":"cannon_h","seconds":3,"seed":108,"prompt":"A wooden warship at sea; one of its big iron guns fires a single shot. Audio: one explosive deep cannon boom, heavy and bassy, with a rolling echo that fades away."},
+ {"name":"hitwood_c","seconds":2.5,"seed":203,"prompt":"Quiet ship deck, then suddenly a heavy iron cannonball crashes through the wooden bulwark, splinters exploding everywhere. Audio: silence, then one violent crash of smashing timber, cracking planks and splinters clattering on the deck."},
+ {"name":"splash_c","seconds":2.5,"seed":303,"prompt":"Calm sea surface, then a heavy cannonball plunges into the water and throws up a tall white column of spray. Audio: quiet, then one deep heavy plunging splash with spray raining back down."}
+]

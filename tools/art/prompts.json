@@ -1115,6 +1115,23 @@
         "seed": 7108,
         "prompt": "A huge ornate Spanish treasure galleon with a towering carved and gilded stern castle, high sides, three masts with square sails and a lateen mizzen, red and gold decorations, many gunports, massive and majestic on a calm blue sea under golden light, the whole ship visible in three-quarter stern view"
       }
+    ],
+    "ship-wolf": [
+      {
+        "stem": "ship-wolf",
+        "seed": 7401,
+        "prompt": "A Mediterranean xebec used as a corsair pirate ship, three masts carrying only big triangular lateen sails on long slanting yards, sleek low narrow hull with a long overhanging beak bow and an overhanging stern platform, her deck crowded with armed pirates brandishing cutlasses and muskets ready to board, racing across a turquoise Caribbean sea, the whole ship visible side view, no other ships"
+      },
+      {
+        "stem": "ship-wolf_r1",
+        "seed": 7402,
+        "prompt": "A Barbary corsair xebec, a long low narrow galley-like hull with a sharp overhanging beak at the bow and a long overhanging stern, three short masts each carrying one huge triangular lateen sail on a long diagonal yard, like an Arab dhow, no square sails, the deck packed with armed pirates with cutlasses and boarding axes, cutting fast through turquoise water, side view, a lone ship"
+      },
+      {
+        "stem": "ship-wolf_r2",
+        "seed": 7403,
+        "prompt": "Side view of a sleek three-masted lateen-rigged xebec, every sail a big triangle hanging from a long slanted yard, masts raked forward, very low slim hull painted red and black with oar ports, long pointed overhanging bow and overhanging stern, crowded with a boarding party of armed corsairs waving cutlasses, on a bright Caribbean sea, only this one ship"
+      }
     ]
   }
 }
