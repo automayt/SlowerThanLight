@@ -151,6 +151,9 @@ export const GALLEON: ShipDef = {
   ],
 };
 
+/** Spanish coastguard: a privateer-built schooner under the colours of Spain. */
+export const GUARDA_COSTA: ShipDef = { ...PRIVATEER, id: 'guarda', className: 'Guarda Costa', description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.' };
+
 export const ENEMIES: Record<string, EnemyDef> = {
   cutter: {
     id: 'cutter',
@@ -178,6 +181,15 @@ export const ENEMIES: Record<string, EnemyDef> = {
     plunder: [30, 50],
     names: ['The Mistral', 'La Vipère', 'The Black Prince', 'The Revenge', 'Le Corbeau', 'The Lucky Strike', 'The Bounty Hunter'],
     sighting: 'A privateer schooner hoists her colours. Bounty hunters!',
+  },
+  guarda: {
+    id: 'guarda',
+    ship: GUARDA_COSTA,
+    faction: 'privateer',
+    ai: { fleeAt: 0.3, surrenderChance: 0.3, surrenderAt: 0.25 },
+    plunder: [30, 45],
+    names: ['San Antonio', 'La Concepción', 'Santo Cristo', 'El Rayo', 'La Esperanza'],
+    sighting: 'A Spanish guarda costa runs up her colours and fires a gun to leeward: heave to and be searched.',
   },
   galleon: {
     id: 'galleon',

@@ -11,8 +11,6 @@ export interface SeaNode {
   kind: NodeKind;
   /** Enemy id for battle and boss nodes. */
   enemy?: string;
-  /** Event id for event nodes. */
-  event?: string;
   /** Display name for ports. */
   name?: string;
   /** Weapon ids a port's armoury has for sale. */
@@ -29,7 +27,6 @@ export interface SeaChart {
 export interface ChartOptions {
   /** Total columns including start and boss. */
   columns?: number;
-  events: string[];
   ports: string[];
   /** Weapon ids ports can stock, cheapest first. Heavier guns turn up later in the voyage. */
   armoury?: string[];
@@ -99,7 +96,6 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
   cols[last][0].kind = 'boss';
   cols[last][0].enemy = 'frigate';
 
-  const events = [...opts.events];
   const ports = [...opts.ports];
 
   // Deal kinds from a shuffled bag so every chart has a similar mix. No port right outside Tortuga.
@@ -120,10 +116,6 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
     }
     for (const node of cols[col]) {
       if (node.kind === 'battle') node.enemy = pickEnemy(rng, depth);
-      if (node.kind === 'event') {
-        if (!events.length) events.push(...opts.events);
-        node.event = events.splice(rng.int(events.length), 1)[0];
-      }
       if (node.kind === 'port') {
         if (!ports.length) ports.push(...opts.ports);
         node.name = ports.splice(rng.int(ports.length), 1)[0];

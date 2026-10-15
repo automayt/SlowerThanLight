@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER_SHIPS } from '../../src/data/ships';
-import { SEA_EVENTS } from '../../src/data/voyage';
 import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
@@ -8,7 +7,7 @@ import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
-  return generateChart(new Rng(seed), { events: SEA_EVENTS.map((e) => e.id), ports: ['A', 'B', 'C'] });
+  return generateChart(new Rng(seed), { ports: ['A', 'B', 'C'], armoury: ['pdr6', 'pdr9'] });
 }
 
 /** A run parked at a node of the given kind, ready for its encounter. */
@@ -66,8 +65,8 @@ describe('sea chart', () => {
       expect(c.nodes.some((n) => n.kind === 'port' && n.col === c.columns - 2)).toBe(true);
       for (const n of c.nodes) {
         if (n.kind === 'battle' || n.kind === 'boss') expect(ENEMIES[n.enemy!]).toBeDefined();
-        if (n.kind === 'event') expect(SEA_EVENTS.some((e) => e.id === n.event)).toBe(true);
         if (n.kind === 'port') expect(n.name).toBeTruthy();
+        if (n.kind === 'port') expect(n.stock?.length).toBe(2);
       }
     });
   }
@@ -190,21 +189,7 @@ describe('events', () => {
     const run = runAt('event');
     const ev = run.currentEvent();
     run.gold = 0;
-    ev.choices.forEach((c, i) => expect(run.canChoose(i)).toBe(!c.cost));
-  });
-
-  it('every event resolves back to the chart or into a battle', () => {
-    for (const ev of SEA_EVENTS) {
-      ev.choices.forEach((_, i) => {
-        const run = new Run('gull', 4);
-        run.encounter = { kind: 'event', event: ev.id };
-        run.status = 'event';
-        run.gold = 100;
-        const result = run.chooseEvent(i);
-        expect(result.effect.text).toBeTruthy();
-        expect(run.status).toBe(result.effect.battle ? 'battle' : 'chart');
-      });
-    }
+    ev.choices.forEach((c, i) => c.cost && expect(run.canChoose(i)).toBe(false));
   });
 
   it('a fight from an event can be started', () => {

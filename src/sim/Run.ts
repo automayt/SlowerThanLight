@@ -6,7 +6,7 @@ import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
 import { Rng } from './rng';
 import { generateChart, nodeById, type SeaChart, type SeaNode } from './SeaChart';
 import { Ship, type ShipCondition } from './Ship';
-import type { EnemyDef, EventEffect, GunMount, SeaEventDef, ShipDef, SystemId, WeaponDef } from './types';
+import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
 
 /** Where the Navy fleet starts, in chart columns (the player starts in column 0). */
@@ -43,7 +43,12 @@ export const ARMOURY = Object.values(WEAPONS)
   .sort((a, b) => a.price - b.price)
   .map((w) => w.id);
 
-export type UpgradeId = SystemId | 'hands' | 'hull';
+export type { UpgradeId };
+
+/** How often each rarity is drawn, relative to the others. */
+export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon: 5, rare: 2, legendary: 0.6 };
+/** Chance that crossing open sea brings an incident aboard. */
+export const INCIDENT_CHANCE = 0.6;
 
 export interface UpgradeOffer {
   id: UpgradeId;
@@ -89,6 +94,10 @@ export interface RunSave {
   plunderTaken: number;
   ending: string;
   usedNames: string[];
+  /** Added after the first saves; optional so older saves still load. */
+  endingTitle?: string;
+  flags?: string[];
+  seenEvents?: string[];
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -103,7 +112,7 @@ export type RunStatus = 'chart' | 'battle' | 'event' | 'port' | 'won' | 'lost';
 
 export type Encounter =
   | { kind: 'battle'; enemy: string; name: string; boss: boolean; ambush: boolean; text: string }
-  | { kind: 'event'; event: string }
+  | { kind: 'event'; event: string; actor?: string; actor2?: string }
   | { kind: 'port'; name: string; rested: boolean; stock: string[] }
   | { kind: 'empty'; text: string }
   | { kind: 'start' };
@@ -141,6 +150,12 @@ export class Run {
   plunderTaken = 0;
   /** Why the run ended, once it has. */
   ending = '';
+  /** Title for an unusual ending (set by events); empty for the usual ones. */
+  endingTitle = '';
+  /** Story flags set by events, for events that follow on from them. */
+  flags = new Set<string>();
+  /** Events met this voyage, in order. */
+  seenEvents: string[] = [];
   private usedNames = new Set<string>();
 
   constructor(shipId: string, seed?: number) {
@@ -150,7 +165,7 @@ export class Run {
     this.condition = new Ship(this.def, 'player').condition();
     for (const c of this.condition.crew) this.usedNames.add(c.name);
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
-    this.chart = generateChart(this.rng, { events: SEA_EVENTS.map((e) => e.id), ports: PORT_NAMES, armoury: ARMOURY });
+    this.chart = generateChart(this.rng, { ports: PORT_NAMES, armoury: ARMOURY });
   }
 
   /** The ship as currently fitted out. */
@@ -207,13 +222,18 @@ export class Run {
         const foe = enemy(node.enemy ?? 'cutter');
         return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: foe.sighting });
       }
-      case 'event':
-        return this.begin({ kind: 'event', event: node.event ?? SEA_EVENTS[0].id });
+      case 'event': {
+        const ev = this.drawEvent('encounter') ?? this.drawEvent('incident');
+        if (ev) return this.startEvent(ev);
+        break;
+      }
       case 'port':
         return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false, stock: [...(node.stock ?? [])] });
-      default:
-        return this.begin({ kind: 'empty', text: 'Open water and a fair wind. The crew make running repairs.' });
     }
+    // Open sea: often something happens aboard on the way.
+    const incident = this.rng.chance(INCIDENT_CHANCE) ? this.drawEvent('incident') : null;
+    if (incident) return this.startEvent(incident);
+    return this.begin({ kind: 'empty', text: 'Open water and a fair wind. The crew make running repairs.' });
   }
 
   /** A name for the ship you meet: one you have not fought before, if it can be helped. */
@@ -306,44 +326,145 @@ export class Run {
     this.end('lost', reason);
   }
 
-  private end(status: 'won' | 'lost', reason: string): void {
+  private end(status: 'won' | 'lost', reason: string, title = ''): void {
     this.status = status;
     this.ending = reason;
+    this.endingTitle = title;
   }
 
   // --- Events ---------------------------------------------------------------
+
+  /**
+   * Pick an event that fits the voyage right now: right pool, conditions met, not already seen this voyage
+   * if anything fresh is left, and never a unique one twice. Rarer events are drawn less often.
+   */
+  drawEvent(pool: EventPool): SeaEventDef | null {
+    const ok = SEA_EVENTS.filter(
+      (e) => (e.pool ?? 'encounter') === pool && this.unmet(e.needs) === null && !(e.unique && this.seenEvents.includes(e.id)),
+    );
+    const fresh = ok.filter((e) => !this.seenEvents.includes(e.id));
+    const list = fresh.length ? fresh : ok;
+    if (!list.length) return null;
+    return this.rng.weighted(list, (e) => RARITY_WEIGHT[e.rarity ?? 'common']);
+  }
+
+  /** Begin an event, casting two crew members as {crew} and {crew2}. */
+  startEvent(def: SeaEventDef, actors?: { actor?: string; actor2?: string }): Encounter {
+    const names = this.condition.crew.map((m) => m.name);
+    const actor = actors?.actor && names.includes(actors.actor) ? actors.actor : this.rng.pick(names);
+    const others = names.filter((n) => n !== actor);
+    const actor2 = actors?.actor2 && others.includes(actors.actor2) ? actors.actor2 : others.length ? this.rng.pick(others) : undefined;
+    if (!this.seenEvents.includes(def.id)) this.seenEvents.push(def.id);
+    return this.begin({ kind: 'event', event: def.id, actor, actor2 });
+  }
 
   currentEvent(): SeaEventDef {
     if (this.encounter.kind !== 'event') throw new Error('No event in progress');
     return seaEvent(this.encounter.event);
   }
 
-  canChoose(index: number): boolean {
+  /** Fill in {crew}, {crew2} and {ship} for the current event. */
+  fill(text: string): string {
+    const enc = this.encounter.kind === 'event' ? this.encounter : null;
+    return text
+      .replaceAll('{crew}', enc?.actor ?? 'a sailor')
+      .replaceAll('{crew2}', enc?.actor2 ?? 'another sailor')
+      .replaceAll('{ship}', this.def.name);
+  }
+
+  /** Why a set of conditions is not met, in a few words, or null if it is. */
+  unmet(n: EventNeeds | undefined): string | null {
+    if (!n) return null;
+    const c = this.condition;
+    const col = this.node.col;
+    if (n.crew && c.crew.length < n.crew) return `needs ${n.crew} crew`;
+    if (n.gold && this.gold < n.gold) return `needs ${n.gold} gold`;
+    if (n.hurt && !c.crew.some((m) => m.hp < 70)) return 'nobody is hurt';
+    if (n.damaged && !Object.keys(c.damage).length) return 'nothing is damaged';
+    if (n.battered && c.hull >= this.fit.hull / 2) return 'hull is sound';
+    if (n.flag && !this.flags.has(n.flag)) return 'you lack something';
+    if (n.noFlag && this.flags.has(n.noFlag)) return 'already done';
+    if (n.gunPort && this.fit.guns.length >= MAX_GUNS) return 'no free gun port';
+    if (n.minCol !== undefined && col < n.minCol) return 'too early';
+    if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
+    return null;
+  }
+
+  /** Why a choice cannot be taken, or null if it can. */
+  choiceBlocker(index: number): string | null {
     const choice = this.currentEvent().choices[index];
-    return !!choice && this.gold >= (choice.cost ?? 0);
+    if (!choice) return 'no such choice';
+    if (this.gold < (choice.cost ?? 0)) return `needs ${choice.cost} gold`;
+    return this.unmet(choice.needs);
+  }
+
+  canChoose(index: number): boolean {
+    return this.choiceBlocker(index) === null;
   }
 
   chooseEvent(index: number): EventResult {
-    if (this.status !== 'event') throw new Error('No event in progress');
+    if (this.status !== 'event' || this.encounter.kind !== 'event') throw new Error('No event in progress');
     if (!this.canChoose(index)) throw new Error(`Choice ${index} is not available`);
+    const { actor, actor2 } = this.encounter;
     const choice = this.currentEvent().choices[index];
     this.gold -= choice.cost ?? 0;
-    const effect = this.rng.weighted(choice.outcomes, (o) => o.weight).effect;
-    const changes = this.applyEffect(effect);
+    const picked = this.rng.weighted(choice.outcomes, (o) => o.weight).effect;
+    const effect = { ...picked, text: this.fill(picked.text) };
+    const changes = this.applyEffect(picked);
     if (choice.cost) changes.unshift(`−${choice.cost} gold`);
-    if (effect.battle) {
-      const foe = enemy(effect.battle);
+    if (picked.ending) {
+      this.end('won', effect.text, picked.ending);
+    } else if (picked.battle) {
+      const foe = enemy(picked.battle);
       this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: effect.text });
+    } else if (picked.next) {
+      this.startEvent(seaEvent(picked.next), { actor, actor2 });
     } else {
       this.status = 'chart';
     }
     return { effect, changes };
   }
 
-  /** Apply an event's effect and describe it. Events can hurt you but never end the voyage. */
+  /** Apply an event's effect and describe it. Events can hurt you but never sink you or take your last hand. */
   applyEffect(e: EventEffect): string[] {
     const out: string[] = [];
     const c = this.condition;
+    const enc = this.encounter.kind === 'event' ? this.encounter : null;
+    const actors: [string | undefined, number | undefined, boolean | undefined][] = [
+      [enc?.actor, e.actorHp, e.loseActor],
+      [enc?.actor2, e.actor2Hp, e.loseActor2],
+    ];
+    for (const [name, hp, lose] of actors) {
+      const m = c.crew.find((x) => x.name === name);
+      if (!m) continue;
+      if (lose && c.crew.length > 1) {
+        c.crew.splice(c.crew.indexOf(m), 1);
+        out.push(`${m.name} lost`);
+      } else if (hp) {
+        m.hp = Math.max(1, Math.min(100, m.hp + hp));
+        out.push(`${m.name} ${hp > 0 ? 'recovers' : 'wounded'}`);
+      }
+    }
+    if (e.damage) {
+      for (const [id, n] of Object.entries(e.damage) as [SystemId, number][]) {
+        const max = this.fit.systems[id];
+        if (!max || n <= 0) continue;
+        this.setDamage(id, Math.min(max, (c.damage[id] ?? 0) + n));
+        out.push(`${SYSTEM_NAMES[id]} damaged`);
+      }
+    }
+    if (e.upgrade) {
+      const offer = this.upgradeOffers().find((o) => o.id === e.upgrade);
+      if (offer && !offer.maxed) {
+        this.applyUpgrade(e.upgrade);
+        out.push(`${offer.label}: ${offer.detail}`);
+      } else {
+        this.gold += 20;
+        out.push('+20 gold');
+      }
+    }
+    if (e.flag) this.flags.add(e.flag);
+    if (e.clearFlag) this.flags.delete(e.clearFlag);
     if (e.gold) {
       const before = this.gold;
       this.gold = Math.max(0, this.gold + e.gold);
@@ -365,6 +486,10 @@ export class Run {
     for (let i = 0; i < (e.loseCrew ?? 0) && c.crew.length > 1; i++) {
       const lost = c.crew.splice(this.rng.int(c.crew.length), 1)[0];
       out.push(`${lost.name} lost`);
+    }
+    if (e.recruitName) {
+      const name = this.recruit(e.recruitName);
+      out.push(name ? `${name} joins the crew` : 'No bunk to spare: they stay ashore');
     }
     for (let i = 0; i < (e.recruit ?? 0); i++) {
       const name = this.recruit();
@@ -389,10 +514,10 @@ export class Run {
   }
 
   /** Sign on a new crew member if there is room. Returns their name, or null when the ship is full. */
-  private recruit(): string | null {
+  private recruit(named?: string): string | null {
     if (this.condition.crew.length >= this.maxCrew) return null;
     const free = RECRUIT_NAMES.filter((n) => !this.usedNames.has(n));
-    const name = free.length ? this.rng.pick(free) : `Hand #${this.usedNames.size + 1}`;
+    const name = named ?? (free.length ? this.rng.pick(free) : `Hand #${this.usedNames.size + 1}`);
     this.usedNames.add(name);
     this.condition.crew.push({ name, hp: 100, home: '' });
     return name;
@@ -492,6 +617,11 @@ export class Run {
     const offer = this.upgradeOffers().find((o) => o.id === id);
     if (!offer?.available) return false;
     this.gold -= offer.price;
+    this.applyUpgrade(id);
+    return true;
+  }
+
+  private applyUpgrade(id: UpgradeId): void {
     if (id === 'hull') {
       this.fit.hull += PLATING;
       this.condition.hull += PLATING;
@@ -500,7 +630,6 @@ export class Run {
     } else {
       this.fit.systems[id] = (this.fit.systems[id] ?? 0) + 1;
     }
-    return true;
   }
 
   /** Guns in this port's armoury. You need a free gun port to buy one. */
@@ -561,6 +690,9 @@ export class Run {
       plunderTaken: this.plunderTaken,
       ending: this.ending,
       usedNames: [...this.usedNames],
+      endingTitle: this.endingTitle,
+      flags: [...this.flags],
+      seenEvents: this.seenEvents,
     });
   }
 
@@ -583,6 +715,9 @@ export class Run {
     run.plunderTaken = s.plunderTaken;
     run.ending = s.ending;
     run.usedNames = new Set(s.usedNames);
+    run.endingTitle = s.endingTitle ?? '';
+    run.flags = new Set(s.flags ?? []);
+    run.seenEvents = s.seenEvents ?? [];
     return run;
   }
 }

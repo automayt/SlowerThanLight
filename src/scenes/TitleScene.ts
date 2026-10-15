@@ -39,6 +39,8 @@ export class TitleScene extends Phaser.Scene {
       new Button(this, cx - 110, 340, 220, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22 });
     }
 
+    new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 });
+
     const help = [
       'Space — pause (you can still give orders)',
       'Click crew, then a room — move them. Shift-click selects several.',

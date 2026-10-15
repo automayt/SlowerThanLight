@@ -4,7 +4,7 @@ import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
-import { saveRun } from './save';
+import { recordDiscovery, saveRun } from './save';
 
 const X = 40;
 const Y = 88;
@@ -34,21 +34,25 @@ export class EventScene extends Phaser.Scene {
     this.bar = new RunBar(this, run);
     this.choiceButtons = [];
     const ev = run.currentEvent();
+    recordDiscovery(ev.id);
 
     panel(this, X, Y, W, H);
     this.add.text(SCREEN.w / 2, Y + 18, ev.title, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
+    const rarity = ev.rarity === 'legendary' ? 'LEGENDARY' : ev.rarity === 'rare' ? 'RARE' : '';
+    if (rarity) this.add.text(X + W - 24, Y + 20, rarity, textStyle(12, ev.rarity === 'legendary' ? '#ffb347' : '#8fc7ff', { fontStyle: 'bold' })).setOrigin(1, 0);
     const art = placeArt(this, `event-${ev.id}`, ART.x, ART.y, ART.w, ART.h);
     this.tx = art ? ART.x + ART.w + 32 : X + 120;
     this.tw = art ? X + W - this.tx - 28 : W - 240;
 
-    const body = this.add.text(this.tx, ART.y, ev.text, textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
+    const body = this.add.text(this.tx, ART.y, run.fill(ev.text), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
     this.choicesY = body.y + body.height + 28;
 
     ev.choices.forEach((choice, i) => {
-      const label = `${i + 1}. ${choice.label}${choice.cost ? `  (${choice.cost} gold)` : ''}`;
+      const blocked = run.choiceBlocker(i);
+      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
       const b = new Button(this, this.tx, this.choicesY + i * 54, this.tw, 44, label, () => this.choose(i), { size: 16 });
       b.label.setOrigin(0, 0.5).setX(16);
-      b.setEnabled(run.canChoose(i));
+      b.setEnabled(!blocked);
       this.choiceButtons.push(b);
     });
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR'];
@@ -68,12 +72,14 @@ export class EventScene extends Phaser.Scene {
       this.add.text(this.tx, said.y + said.height + 18, result.changes.join('\n'), textStyle(15, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 4 }));
     }
 
-    const battle = run.status === 'battle';
+    const target = run.over ? 'RunEnd' : run.status === 'battle' ? 'Battle' : run.status === 'event' ? 'Event' : 'SeaMap';
     const next = () => {
       this.registry.set('chart-note', result.effect.text);
-      this.scene.start(battle ? 'Battle' : 'SeaMap');
+      if (target === 'Event') this.scene.restart();
+      else this.scene.start(target);
     };
-    new Button(this, SCREEN.w / 2 - 130, Y + H - 66, 260, 46, battle ? 'Beat to quarters!' : 'Continue', next, { size: 18 });
+    const label = { RunEnd: 'Voyage’s end →', Battle: 'Beat to quarters!', Event: 'Continue →', SeaMap: 'Continue' }[target];
+    new Button(this, SCREEN.w / 2 - 130, Y + H - 66, 260, 46, label, next, { size: 18 });
     this.input.keyboard!.once('keydown-ENTER', next);
   }
 

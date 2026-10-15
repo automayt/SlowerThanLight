@@ -31,6 +31,31 @@ export function clearSave(): void {
   }
 }
 
+const LOGBOOK_KEY = 'slower-than-light.logbook.v1';
+
+/** Event ids met on any voyage in this browser. */
+export function discovered(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOGBOOK_KEY);
+    const ids: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Write an event into the lifetime logbook. */
+export function recordDiscovery(id: string): void {
+  try {
+    const seen = discovered();
+    if (seen.has(id)) return;
+    seen.add(id);
+    localStorage.setItem(LOGBOOK_KEY, JSON.stringify([...seen]));
+  } catch {
+    // The logbook is a nicety; ignore storage failures.
+  }
+}
+
 /** The scene a voyage should resume in. */
 export function sceneFor(run: Run): string {
   switch (run.status) {

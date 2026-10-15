@@ -1,0 +1,204 @@
+import type { SeaEventDef } from '../../sim/types';
+
+/** Wind, weather and the sea itself. These turn up while crossing open sea. */
+export const WEATHER_EVENTS: SeaEventDef[] = [
+  {
+    id: 'becalmed',
+    title: 'Becalmed',
+    pool: 'incident',
+    text: 'The wind dies to nothing. The sails hang slack and the pitch bubbles in the deck seams.',
+    choices: [
+      { label: 'Wait for the wind', outcomes: [{ weight: 1, effect: { text: 'The crew rest in what shade they can find while the Navy closes the distance.', crewHp: 20, navy: 1 } }] },
+      { label: 'Man the sweeps and row', outcomes: [{ weight: 1, effect: { text: 'Hours at the oars under a brutal sun. Backs ache, but you keep your lead.', crewHp: -20 } }] },
+    ],
+  },
+  {
+    id: 'storm',
+    title: 'Squall Line',
+    pool: 'incident',
+    text: 'A wall of black cloud races across the water toward you.',
+    choices: [
+      { label: 'Reef sails and ride it out', outcomes: [{ weight: 1, effect: { text: 'The squall batters the hull, but she holds together.', hull: -2 } }] },
+      {
+        label: 'Run before the wind',
+        outcomes: [
+          { weight: 1, effect: { text: 'The gale hurls you far ahead of any pursuit.', navy: -1 } },
+          { weight: 1, effect: { text: 'A topmast cracks and green water sweeps the deck.', hull: -4, crewHp: -10 } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'tradewind',
+    title: 'Fair Trade Wind',
+    pool: 'incident',
+    text: 'A steady wind out of the east, warm and strong. The kind of wind sailors dream about.',
+    choices: [
+      { label: 'Crowd on every stitch of sail', outcomes: [{ weight: 1, effect: { text: 'She fairly flies. The Navy falls behind.', navy: -0.5 } }] },
+      { label: 'Ease off and rest the watch below', outcomes: [{ weight: 1, effect: { text: 'An easy day of sun and sleep.', crewHp: 20 } }] },
+    ],
+  },
+  {
+    id: 'fog',
+    title: 'Fog Bank',
+    pool: 'incident',
+    text: 'A fog bank rolls over the ship, so thick that {crew} at the bow cannot be seen from the helm.',
+    choices: [
+      { label: 'Creep through with the lead line', outcomes: [{ weight: 1, effect: { text: 'Slow and safe.', navy: 0.5 } }] },
+      {
+        label: 'Run blind under full sail',
+        outcomes: [
+          { weight: 2, effect: { text: 'You burst out of the fog leagues ahead, with no Navy lookout the wiser.', navy: -0.5 } },
+          { weight: 1, effect: { text: 'A grinding shudder: coral. You scrape free, leaking.', hull: -4 } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'waterspout',
+    title: 'Waterspout',
+    pool: 'incident',
+    rarity: 'uncommon',
+    text: 'A twisting grey column joins sea to sky, and it is walking straight toward you.',
+    choices: [
+      { label: 'Bear away hard', outcomes: [{ weight: 1, effect: { text: 'It passes a cable’s length astern, roaring. You have lost your heading, but nothing else.', navy: 0.5 } }] },
+      {
+        label: 'Hold your course and pray',
+        outcomes: [
+          { weight: 1, effect: { text: 'It veers away at the last moment. The crew cheer like madmen.', crewHp: 10 } },
+          { weight: 1, effect: { text: 'It brushes the bow and tears sails from their bolt-ropes.', hull: -3, damage: { sails: 2 } } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'lightning',
+    title: 'Lightning Strike',
+    pool: 'incident',
+    rarity: 'rare',
+    text: 'A white flash and a crack that knocks men off their feet. Lightning has struck the mainmast, and {crew} was standing at its foot.',
+    choices: [
+      { label: 'Fight the fire aloft', outcomes: [
+        { weight: 2, effect: { text: 'The mast is scorched and split, but stands. {crew} is badly burned.', damage: { sails: 2 }, actorHp: -40 } },
+        { weight: 1, effect: { text: '{crew} was killed where they stood. The mast still stands, blackened.', damage: { sails: 1 }, loseActor: true } },
+      ] },
+    ],
+  },
+  {
+    id: 'stelmo',
+    title: 'St. Elmo’s Fire',
+    pool: 'incident',
+    rarity: 'rare',
+    text: 'In the night watch, blue fire flickers along the yards and dances on the masthead. Nobody speaks.',
+    choices: [
+      { label: 'Declare it a blessing', outcomes: [{ weight: 1, effect: { text: 'St. Elmo watches over sailors. The crew believe it, and so, a little, do you.', crewHp: 20, clearFlag: 'cursed' } }] },
+      { label: 'Explain that it is only weather', outcomes: [{ weight: 1, effect: { text: 'Nobody believes you.' } }] },
+    ],
+  },
+  {
+    id: 'eclipse',
+    title: 'The Sun Goes Out',
+    pool: 'incident',
+    rarity: 'rare',
+    unique: true,
+    text: 'At noon the sky darkens. Stars come out. A black disc eats the sun while the birds fall silent and the crew drop to their knees.',
+    choices: [
+      { label: 'Tell them it is a sign of great fortune', outcomes: [
+        { weight: 1, effect: { text: 'When the sun returns, they believe you entirely.', crewHp: 25 } },
+        { weight: 1, effect: { text: 'They do not believe you. Two days of terrified muttering follow.', crewHp: -20 } },
+      ] },
+      { label: 'Pour a tot of rum for the sea', cost: 5, outcomes: [{ weight: 1, effect: { text: 'An old custom. The light returns and so does the crew’s nerve.', crewHp: 10 } }] },
+    ],
+  },
+  {
+    id: 'hurricane',
+    title: 'Hurricane',
+    pool: 'incident',
+    rarity: 'rare',
+    needs: { minCol: 3 },
+    text: 'The swell has been building for a day under a coppery sky. Now the barometer falls through the floor. A hurricane is coming.',
+    choices: [
+      { label: 'Run for the lee of the nearest island', outcomes: [{ weight: 1, effect: { text: 'You claw into shelter, battered but whole, and lose two days waiting it out.', hull: -3, navy: 1 } }] },
+      {
+        label: 'Ride it out at sea',
+        outcomes: [
+          { weight: 1, effect: { text: 'A night of horror. In the morning she is a wreck above decks, and alone on an empty sea.', hull: -8, damage: { sails: 2 }, crewHp: -15 } },
+          { weight: 1, effect: { text: 'You ride the edge of it, and the storm wipes out every trace of your wake.', hull: -4, navy: -1.5 } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'whales',
+    title: 'Whales',
+    pool: 'incident',
+    text: 'A pod of whales surfaces alongside, blowing and rolling, close enough to touch.',
+    choices: [
+      { label: 'Watch them pass', outcomes: [{ weight: 1, effect: { text: 'Even the hardest cutthroat aboard is grinning like a child.', crewHp: 10 } }] },
+      {
+        label: 'Try for one with a harpoon',
+        outcomes: [
+          { weight: 1, effect: { text: 'A day’s bloody work yields oil and a lump of ambergris worth its weight in silver.', gold: 30, navy: 0.5 } },
+          { weight: 1, effect: { text: 'The whale smashes the boat with its tail. {crew} is hauled out with broken ribs.', actorHp: -40 } },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'mermaids',
+    title: 'Mermaids!',
+    pool: 'incident',
+    rarity: 'rare',
+    text: '{crew} swears blind they have seen mermaids sporting in the shallows off the starboard bow. Half the crew rushes to the rail.',
+    choices: [
+      { label: 'Have a look', outcomes: [{ weight: 1, effect: { text: 'Sea cows: fat, whiskery, and placid. The crew are disappointed, then delighted.', crewHp: 10 } }] },
+      { label: 'Tell everyone back to work', outcomes: [{ weight: 1, effect: { text: '{crew} will tell this story in taverns for the rest of their life regardless.' } }] },
+    ],
+  },
+  {
+    id: 'glowsea',
+    title: 'The Burning Sea',
+    pool: 'incident',
+    rarity: 'uncommon',
+    text: 'At night the bow wave glows green-white, and every fish leaves a trail of fire. The ship sails through a sea of stars.',
+    choices: [{ label: 'Let the watch below come up and see', outcomes: [{ weight: 1, effect: { text: 'Nobody sleeps. Nobody minds.', crewHp: 10 } }] }],
+  },
+  {
+    id: 'flotsam',
+    title: 'Flotsam',
+    pool: 'incident',
+    text: 'Barrels, crates and a broken spar drift past: the leavings of some other ship’s bad luck.',
+    choices: [
+      {
+        label: 'Fish them out',
+        outcomes: [
+          { weight: 2, effect: { text: 'A crate of good Bristol pewter. Saleable.', gold: 12 } },
+          { weight: 1, effect: { text: 'A cask of Barbados rum, still sealed. The crew are in heaven.', crewHp: 15 } },
+          { weight: 1, effect: { text: 'Salt water and rot. Nothing worth keeping.' } },
+        ],
+      },
+      { label: 'Sail on', outcomes: [{ weight: 1, effect: { text: 'Other people’s bad luck can stay theirs.' } }] },
+    ],
+  },
+  {
+    id: 'weed',
+    title: 'The Weed Sea',
+    pool: 'incident',
+    rarity: 'uncommon',
+    text: 'Golden weed spreads to the horizon, thick enough to slow the ship to a crawl and foul the rudder.',
+    choices: [
+      { label: 'Go around it', outcomes: [{ weight: 1, effect: { text: 'A long detour.', navy: 0.5 } }] },
+      { label: 'Kedge her through with the boats', outcomes: [{ weight: 1, effect: { text: 'A day of rowing anchors ahead and hauling. Exhausting, but quick.', crewHp: -15 } }] },
+    ],
+  },
+  {
+    id: 'badwater',
+    title: 'Foul Water',
+    pool: 'incident',
+    text: 'The last water casks have gone green and stinking. {crew} retches after a single mouthful.',
+    choices: [
+      { label: 'Put in for fresh water', outcomes: [{ weight: 1, effect: { text: 'A spring above a beach, and full casks. It costs a day.', navy: 0.5 } }] },
+      { label: 'Ration the rum instead', outcomes: [{ weight: 1, effect: { text: 'The crew drink grog thin as tea and get thinner themselves.', crewHp: -15 } }] },
+    ],
+  },
+];

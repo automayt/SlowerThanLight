@@ -233,7 +233,7 @@ export class SeaMapScene extends Phaser.Scene {
     if (n.kind === 'battle') lines.push('A ship. Prize or predator?');
     if (n.kind === 'event') lines.push('Something unusual on the horizon.');
     if (n.kind === 'port') lines.push('Repair the hull, hire crew, rest and refit.');
-    if (n.kind === 'empty') lines.push('Nothing but sea. Time to make repairs.');
+    if (n.kind === 'empty') lines.push('Open sea. Time for repairs, if nothing happens aboard.');
     if (n.kind === 'boss') lines.push('HMS Relentless guards the channel to the open ocean. No running from this one.');
     const reachable = run.reachable().some((m) => m.id === n.id);
     if (reachable && run.willBeOverrun(n)) lines.push('⚠ The fleet will overrun this before you get there: a Navy ambush.');
