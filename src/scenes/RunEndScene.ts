@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea } from '../render/ui';
@@ -18,6 +19,7 @@ export class RunEndScene extends Phaser.Scene {
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     const cx = SCREEN.w / 2;
     const won = run.status === 'won';
+    placeBackdrop(this, won ? 'victory' : 'defeat', SCREEN.w, SCREEN.h, 0.25);
 
     this.add.rectangle(cx - 340, 100, 680, 480, COLORS.panel, 0.93).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
     this.add

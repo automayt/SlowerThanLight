@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { placeArt } from '../render/art';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
@@ -104,7 +105,7 @@ export class SeaMapScene extends Phaser.Scene {
       case 'battle': {
         const foe = run.currentEnemy();
         const title = enc.boss ? 'The Blockade' : enc.ambush ? 'Overrun!' : 'Sail Ho!';
-        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]]);
+        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]], enc.boss ? 'blockade' : undefined);
         break;
       }
       case 'event':
@@ -120,16 +121,22 @@ export class SeaMapScene extends Phaser.Scene {
     }
   }
 
-  private showDialog(title: string, text: string, buttons: [string, () => void][]): void {
+  private showDialog(title: string, text: string, buttons: [string, () => void][], art?: string): void {
+    const pic = art && this.textures.exists(`art:${art}`) ? { w: 480, h: 270 } : null;
     const w = 520;
-    const h = 250;
+    const h = 250 + (pic ? pic.h + 12 : 0);
     const x = (SCREEN.w - w) / 2;
     const y = (SCREEN.h - h) / 2;
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(30).setInteractive();
     const box = panel(this, x, y, w, h).setDepth(31);
     const t = this.add.text(SCREEN.w / 2, y + 18, title, { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(32);
-    const body = this.add.text(x + 26, y + 66, text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
-    this.dialog = [shade, box, t, body];
+    this.dialog = [shade, box, t];
+    if (pic && art) {
+      const img = placeArt(this, art, x + (w - pic.w) / 2, y + 62, pic.w, pic.h, false);
+      if (img) this.dialog.push(img.setDepth(32));
+    }
+    const body = this.add.text(x + 26, y + 66 + (pic ? pic.h + 12 : 0), text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
+    this.dialog.push(body);
     buttons.forEach(([label, fn], i) => {
       const bw = 220;
       const bx = SCREEN.w / 2 - (buttons.length * (bw + 12) - 12) / 2 + i * (bw + 12);

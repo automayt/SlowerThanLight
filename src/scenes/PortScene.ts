@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { placeBackdrop } from '../render/art';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
@@ -39,7 +40,8 @@ export class PortScene extends Phaser.Scene {
     this.dyn = [];
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
 
-    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12);
+    const painted = placeBackdrop(this, 'port', SCREEN.w, SCREEN.h, 0);
+    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.84 : 0.92);
     this.add.text(SCREEN.w / 2, TOP + 8, name, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
     this.add
       .text(SCREEN.w / 2, TOP + 52, 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))

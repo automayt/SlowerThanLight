@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
+import { placeBackdrop } from '../render/art';
 import { setRun } from '../render/RunBar';
 import { Button, Sea } from '../render/ui';
 import { loadRun, sceneFor } from './save';
@@ -13,6 +14,7 @@ export class TitleScene extends Phaser.Scene {
 
   create(): void {
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
+    placeBackdrop(this, 'title', SCREEN.w, SCREEN.h, 0.3);
     const cx = SCREEN.w / 2;
 
     this.add
@@ -43,7 +45,9 @@ export class TitleScene extends Phaser.Scene {
       'Click a gun card, then an enemy room — aim. Right-click a card — hold fire.',
       'Hands are your power: put them on Sails, Pumps, the Surgeon and the guns.',
     ];
-    this.add.text(cx, 470, help.join('\n'), textStyle(15, COLORS.textDim, { align: 'center', lineSpacing: 8 })).setOrigin(0.5, 0);
+    this.add
+      .text(cx, 470, help.join('\n'), textStyle(15, COLORS.text, { align: 'center', lineSpacing: 8, backgroundColor: '#0b1622bb', padding: { x: 16, y: 10 } }))
+      .setOrigin(0.5, 0);
 
     this.input.keyboard!.once('keydown-ENTER', () => (saved ? resume() : this.scene.start('ShipSelect')));
   }

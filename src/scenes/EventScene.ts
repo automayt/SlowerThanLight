@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
+import { placeArt } from '../render/art';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
 import { saveRun } from './save';
 
-const W = 720;
-const H = 460;
-const X = (SCREEN.w - W) / 2;
-const Y = 110;
+const X = 40;
+const Y = 88;
+const W = SCREEN.w - 80;
+const H = SCREEN.h - Y - 16;
+const ART = { x: X + 28, y: Y + 76, w: 560, h: 315 };
 
 /** A text event: read the situation, make a choice, live with the result. */
 export class EventScene extends Phaser.Scene {
@@ -16,6 +18,10 @@ export class EventScene extends Phaser.Scene {
   private sea!: Sea;
   private bar!: RunBar;
   private choiceButtons: Button[] = [];
+  /** Text column, beside the illustration when there is one. */
+  private tx = 0;
+  private tw = 0;
+  private choicesY = 0;
 
   constructor() {
     super('Event');
@@ -30,12 +36,17 @@ export class EventScene extends Phaser.Scene {
     const ev = run.currentEvent();
 
     panel(this, X, Y, W, H);
-    this.add.text(SCREEN.w / 2, Y + 20, ev.title, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
-    this.add.text(X + 34, Y + 80, ev.text, textStyle(17, COLORS.text, { wordWrap: { width: W - 68 }, lineSpacing: 5 }));
+    this.add.text(SCREEN.w / 2, Y + 18, ev.title, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
+    const art = placeArt(this, `event-${ev.id}`, ART.x, ART.y, ART.w, ART.h);
+    this.tx = art ? ART.x + ART.w + 32 : X + 120;
+    this.tw = art ? X + W - this.tx - 28 : W - 240;
+
+    const body = this.add.text(this.tx, ART.y, ev.text, textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
+    this.choicesY = body.y + body.height + 28;
 
     ev.choices.forEach((choice, i) => {
       const label = `${i + 1}. ${choice.label}${choice.cost ? `  (${choice.cost} gold)` : ''}`;
-      const b = new Button(this, X + 34, Y + 220 + i * 54, W - 68, 44, label, () => this.choose(i), { size: 16 });
+      const b = new Button(this, this.tx, this.choicesY + i * 54, this.tw, 44, label, () => this.choose(i), { size: 16 });
       b.label.setOrigin(0, 0.5).setX(16);
       b.setEnabled(run.canChoose(i));
       this.choiceButtons.push(b);
@@ -52,8 +63,10 @@ export class EventScene extends Phaser.Scene {
     for (const b of this.choiceButtons) b.destroy();
     this.choiceButtons = [];
 
-    this.add.text(X + 34, Y + 220, result.effect.text, textStyle(17, COLORS.gold, { wordWrap: { width: W - 68 }, lineSpacing: 5, fontStyle: 'italic' }));
-    if (result.changes.length) this.add.text(X + 34, Y + 300, result.changes.join('   ·   '), textStyle(15, COLORS.text, { wordWrap: { width: W - 68 } }));
+    const said = this.add.text(this.tx, this.choicesY, result.effect.text, textStyle(17, COLORS.gold, { wordWrap: { width: this.tw }, lineSpacing: 5, fontStyle: 'italic' }));
+    if (result.changes.length) {
+      this.add.text(this.tx, said.y + said.height + 18, result.changes.join('\n'), textStyle(15, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 4 }));
+    }
 
     const battle = run.status === 'battle';
     const next = () => {
