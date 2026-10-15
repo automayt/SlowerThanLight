@@ -11,6 +11,8 @@ export interface AIOptions {
   /** Chance of striking colours the first time hull drops to `surrenderAt`. */
   surrenderChance: number;
   surrenderAt: number;
+  /** Aim every gun at this system instead of spreading fire (models a focused human player). */
+  focus?: SystemId;
 }
 
 export type AIDecision = 'none' | 'escape' | 'surrender';
@@ -104,7 +106,12 @@ export class ShipAI {
 
   private manageGuns(): void {
     const rooms = [...this.opponent.rooms.values()];
+    const focusRoom = this.opts.focus && this.opponent.system(this.opts.focus)?.room;
     for (const g of this.ship.guns) {
+      if (focusRoom) {
+        g.target = focusRoom;
+        continue;
+      }
       if (g.target && this.opponent.rooms.has(g.target)) continue;
       g.target = this.rng.weighted(rooms, (r) => (r.def.system ? (TARGET_WEIGHT[r.def.system] ?? 0.5) : 0.5)).def.id;
     }

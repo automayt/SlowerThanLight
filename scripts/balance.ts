@@ -5,13 +5,16 @@ import { Battle } from '../src/sim/Battle';
 
 const RUNS = Number(process.argv[2] ?? 200);
 
+for (const [label, focus] of [['spread fire', undefined], ['focus guns', 'guns']] as const) {
+console.log(`
+== Player AI: ${label} ==`);
 for (const def of PLAYER_SHIPS) {
   const kinds: Record<string, number> = {};
   let won = 0;
   let time = 0;
   let hullLeft = 0;
   for (let seed = 1; seed <= RUNS; seed++) {
-    const b = new Battle(def, NAVY_CUTTER, { seed, autoPlayer: true });
+    const b = new Battle(def, NAVY_CUTTER, { seed, autoPlayer: true, playerFocus: focus });
     const o = b.runToEnd(900);
     const k = o?.kind ?? 'timeout';
     kinds[k] = (kinds[k] ?? 0) + 1;
@@ -26,4 +29,5 @@ for (const def of PLAYER_SHIPS) {
       .map(([k, n]) => `${k}:${n}`)
       .join(' '),
   );
+}
 }

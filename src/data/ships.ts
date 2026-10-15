@@ -7,8 +7,8 @@ export const PLAYER_SHIPS: ShipDef[] = [
     name: 'The Wren',
     className: 'Sloop',
     description: 'A nimble sloop that dances out of the way of broadsides. Light guns, light hull, quick to slip away.',
-    hull: 18,
-    hands: 7,
+    hull: 20,
+    hands: 8,
     speedBonus: 10,
     systems: { helm: 2, sails: 4, guns: 3, pumps: 2, surgeon: 1 },
     rooms: [
@@ -19,7 +19,7 @@ export const PLAYER_SHIPS: ShipDef[] = [
       { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 2, h: 2, system: 'guns' },
       { id: 'fore', name: 'Forecastle', x: 6, y: 1, w: 1, h: 2 },
     ],
-    guns: [{ weapon: 'pdr6' }, { weapon: 'pdr9' }],
+    guns: [{ weapon: 'pdr9' }, { weapon: 'pdr9' }, { weapon: 'pdr6' }],
     crew: [
       { name: 'Anne Rook', room: 'helm' },
       { name: 'Tobias Finch', room: 'guns' },

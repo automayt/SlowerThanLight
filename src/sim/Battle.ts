@@ -23,6 +23,8 @@ export interface BattleOptions {
   enemyAI?: Partial<AIOptions>;
   /** Let an AI captain run the player's ship too (headless tests and balancing). */
   autoPlayer?: boolean;
+  /** With autoPlayer: focus all guns on one enemy system. */
+  playerFocus?: SystemId;
 }
 
 /** Fixed simulation step in seconds. */
@@ -57,7 +59,11 @@ export class Battle {
       surrenderAt: 0.25,
       ...opts.enemyAI,
     });
-    this.playerAI = opts.autoPlayer ? new ShipAI(this.player, this.enemy, this.rng, { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 }) : null;
+    this.playerAI = opts.autoPlayer ? new ShipAI(this.player, this.enemy, this.rng, { fleeAt: 0, surrenderChance: 0, surrenderAt: 0, focus: opts.playerFocus }) : null;
+  }
+
+  get enemyFleeing(): boolean {
+    return this.enemyAI.fleeing;
   }
 
   get ships(): Record<Side, Ship> {
@@ -89,7 +95,8 @@ export class Battle {
     ] as const) {
       updateCrew(ship, dt);
       updateHazards(ship, dt, this.rng, this.events);
-      ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
+      // The enemy only starts making sail once it decides to run.
+      if (ship === this.player || this.enemyAI.fleeing) ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
       updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
