@@ -49,6 +49,8 @@ export type { UpgradeId };
 export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon: 5, rare: 2, legendary: 0.6 };
 /** How a missing story flag is described on a locked choice. */
 const FLAG_LACKING: Record<string, string> = { cat: 'no ship’s cat', 'map-half': 'no map', 'map-whole': 'no map', cursed: 'not cursed' };
+/** Weight multiplier for events that follow on from a story flag. */
+export const STORY_BOOST = 2;
 /** Chance that crossing open sea brings an incident aboard. */
 export const INCIDENT_CHANCE = 0.6;
 
@@ -347,7 +349,8 @@ export class Run {
     const fresh = ok.filter((e) => !this.seenEvents.includes(e.id));
     const list = fresh.length ? fresh : ok;
     if (!list.length) return null;
-    return this.rng.weighted(list, (e) => RARITY_WEIGHT[e.rarity ?? 'common']);
+    // Follow-ups to the voyage's own story come round more readily.
+    return this.rng.weighted(list, (e) => RARITY_WEIGHT[e.rarity ?? 'common'] * (e.needs?.flag ? STORY_BOOST : 1));
   }
 
   /** Begin an event, casting two crew members as {crew} and {crew2}. */
