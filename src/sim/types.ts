@@ -173,6 +173,8 @@ export interface SeaEventDef {
   id: string;
   title: string;
   text: string;
+  /** Other ways the same situation can be told; one of text/variants is picked each time. */
+  variants?: string[];
   /** Defaults to 'encounter'. */
   pool?: EventPool;
   /** Defaults to 'common'. */

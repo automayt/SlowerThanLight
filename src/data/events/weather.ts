@@ -7,6 +7,10 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Becalmed',
     pool: 'incident',
     text: 'The wind dies to nothing. The sails hang slack and the pitch bubbles in the deck seams.',
+    variants: [
+      'Not a breath of wind for a day and a night. The sea is a sheet of glass and the ship turns slowly on her own reflection.',
+      'The trade wind fails without warning. Sails slat against the masts and the tar runs soft in the heat.',
+    ],
     choices: [
       { label: 'Wait for the wind', outcomes: [{ weight: 1, effect: { text: 'The crew rest in what shade they can find while the Navy closes the distance.', crewHp: 20, navy: 1 } }] },
       { label: 'Man the sweeps and row', outcomes: [{ weight: 1, effect: { text: 'Hours at the oars under a brutal sun. Backs ache, but you keep your lead.', crewHp: -20 } }] },
@@ -17,6 +21,10 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Squall Line',
     pool: 'incident',
     text: 'A wall of black cloud races across the water toward you.',
+    variants: [
+      'The sky to windward turns the colour of a bruise. {crew} at the masthead calls down that a squall is coming, and fast.',
+      'Lightning flickers on the horizon and the swell lengthens. A squall is racing down on you.',
+    ],
     choices: [
       { label: 'Reef sails and ride it out', outcomes: [{ weight: 1, effect: { text: 'The squall batters the hull, but she holds together.', hull: -2 } }] },
       {
@@ -33,6 +41,9 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Fair Trade Wind',
     pool: 'incident',
     text: 'A steady wind out of the east, warm and strong. The kind of wind sailors dream about.',
+    variants: [
+      'The trade wind comes back strong and true, and the ship heels to it like a horse let off the rein.',
+    ],
     choices: [
       { label: 'Crowd on every stitch of sail', outcomes: [{ weight: 1, effect: { text: 'She fairly flies. The Navy falls behind.', navy: -0.5 } }] },
       { label: 'Ease off and rest the watch below', outcomes: [{ weight: 1, effect: { text: 'An easy day of sun and sleep.', crewHp: 20 } }] },
@@ -43,6 +54,10 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Fog Bank',
     pool: 'incident',
     text: 'A fog bank rolls over the ship, so thick that {crew} at the bow cannot be seen from the helm.',
+    variants: [
+      'A white wall of fog swallows the ship. You can hear the sea breaking somewhere, but not where.',
+      'Dawn brings fog so thick that the bowsprit vanishes into it. {crew} is sent forward with the lead line.',
+    ],
     choices: [
       { label: 'Creep through with the lead line', outcomes: [{ weight: 1, effect: { text: 'Slow and safe.', navy: 0.5 } }] },
       {
@@ -133,6 +148,9 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Whales',
     pool: 'incident',
     text: 'A pod of whales surfaces alongside, blowing and rolling, close enough to touch.',
+    variants: [
+      'A great grey back breaks the surface beside the ship, then another, and another. Whales, dozens of them.',
+    ],
     choices: [
       { label: 'Watch them pass', outcomes: [{ weight: 1, effect: { text: 'Even the hardest cutthroat aboard is grinning like a child.', crewHp: 10 } }] },
       {
@@ -168,6 +186,10 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Flotsam',
     pool: 'incident',
     text: 'Barrels, crates and a broken spar drift past: the leavings of some other ship’s bad luck.',
+    variants: [
+      'The lookout spots a raft of wreckage: casks, a hatch cover, and a seaman’s chest bobbing in the swell.',
+      'Debris from some unlucky ship litters the water for a mile: barrels, planks and a floating crate.',
+    ],
     choices: [
       {
         label: 'Fish them out',
@@ -196,6 +218,9 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     title: 'Foul Water',
     pool: 'incident',
     text: 'The last water casks have gone green and stinking. {crew} retches after a single mouthful.',
+    variants: [
+      'The water in the scuttlebutt has turned. It is thick, green and alive, and {crew} will not touch it.',
+    ],
     choices: [
       { label: 'Put in for fresh water', outcomes: [{ weight: 1, effect: { text: 'A spring above a beach, and full casks. It costs a day.', navy: 0.5 } }] },
       { label: 'Ration the rum instead', outcomes: [{ weight: 1, effect: { text: 'The crew drink grog thin as tea and get thinner themselves.', crewHp: -15 } }] },

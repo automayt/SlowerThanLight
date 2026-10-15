@@ -116,7 +116,7 @@ export type RunStatus = 'chart' | 'battle' | 'event' | 'port' | 'won' | 'lost';
 
 export type Encounter =
   | { kind: 'battle'; enemy: string; name: string; boss: boolean; ambush: boolean; text: string }
-  | { kind: 'event'; event: string; actor?: string; actor2?: string }
+  | { kind: 'event'; event: string; actor?: string; actor2?: string; variant?: number }
   | { kind: 'port'; name: string; rested: boolean; stock: string[] }
   | { kind: 'empty'; text: string }
   | { kind: 'start' };
@@ -360,12 +360,20 @@ export class Run {
     const others = names.filter((n) => n !== actor);
     const actor2 = actors?.actor2 && others.includes(actors.actor2) ? actors.actor2 : others.length ? this.rng.pick(others) : undefined;
     if (!this.seenEvents.includes(def.id)) this.seenEvents.push(def.id);
-    return this.begin({ kind: 'event', event: def.id, actor, actor2 });
+    const variant = def.variants?.length ? this.rng.int(def.variants.length + 1) : 0;
+    return this.begin({ kind: 'event', event: def.id, actor, actor2, variant });
   }
 
   currentEvent(): SeaEventDef {
     if (this.encounter.kind !== 'event') throw new Error('No event in progress');
     return seaEvent(this.encounter.event);
+  }
+
+  /** The current event's opening text, in whichever telling was picked, with names filled in. */
+  eventText(): string {
+    const def = this.currentEvent();
+    const v = this.encounter.kind === 'event' ? (this.encounter.variant ?? 0) : 0;
+    return this.fill(v > 0 && def.variants?.[v - 1] ? def.variants[v - 1] : def.text);
   }
 
   /** Fill in {crew}, {crew2} and {ship} for the current event. */

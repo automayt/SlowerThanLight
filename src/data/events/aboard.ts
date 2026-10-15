@@ -39,6 +39,10 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'Fall from the Rigging',
     pool: 'incident',
     text: 'A cry from aloft. {crew} has slipped from the topsail yard and lies crumpled on the deck.',
+    variants: [
+      'A block parts high on the mainmast and {crew} comes down with it, hitting the deck like a sack of shot.',
+      'A sudden lurch in a cross-sea throws {crew} off the yard. They land hard among the guns.',
+    ],
     choices: [
       {
         label: 'Carry them below to the surgeon',
@@ -55,6 +59,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'The Cook’s Chowder',
     pool: 'incident',
     text: 'Something was wrong with the fish in the chowder. Half the crew are hanging over the rail, and they blame {crew}, who made it.',
+    variants: [
+      '{crew}’s salt-pork stew has disagreed with everyone who ate it, which is everyone.',
+    ],
     choices: [
       { label: 'Make {crew} eat a bowl of it', outcomes: [{ weight: 1, effect: { text: 'Justice is served, along with the rest of the chowder.', actorHp: -30, crewHp: -5 } }] },
       { label: 'Throw the pot overboard', outcomes: [{ weight: 1, effect: { text: 'The fish get their revenge. The crew are sick for a day.', crewHp: -15 } }] },
@@ -85,6 +92,10 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     pool: 'incident',
     needs: { crew: 3 },
     text: '{crew} and {crew2} have come to blows over a game of cards. A ring of sailors is cheering them on.',
+    variants: [
+      'Shouts from the forecastle: {crew} has accused {crew2} of stealing their tobacco, and fists are flying.',
+      '{crew2} has made a joke about {crew}’s mother. It was not a good joke. Blood is being spilled.',
+    ],
     choices: [
       { label: 'Let them fight it out', outcomes: [{ weight: 1, effect: { text: 'Black eyes and loosened teeth, then they share a bottle. Sailors.', actorHp: -25, actor2Hp: -25 } }] },
       { label: 'Flog them both', outcomes: [{ weight: 1, effect: { text: 'A dozen lashes each. Order is kept, and nobody plays cards for a while.', actorHp: -20, actor2Hp: -20 } }] },
@@ -116,6 +127,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'Stowaway',
     pool: 'incident',
     text: 'A thin, frightened youngster is dragged up from the cable tier, where they have been living on stolen biscuit since Tortuga.',
+    variants: [
+      '{crew} hauls a skinny figure out of a water cask in the hold, coughing and blinking. A stowaway.',
+    ],
     choices: [
       { label: 'Sign them on', outcomes: [{ weight: 1, effect: { text: 'They swear on the articles, wide-eyed. Another pair of hands.', recruit: 1 } }] },
       { label: 'Put them ashore at the next island', outcomes: [{ weight: 1, effect: { text: 'You leave them on a beach with a knife and a cask of water.' } }] },
@@ -127,6 +141,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     pool: 'incident',
     needs: { crew: 3 },
     text: '{crew} has won the whole crew’s share of the last prize at dice. The losers are muttering about loaded bones.',
+    variants: [
+      'A dice game in the cable tier has got out of hand. {crew} has won everything, including other men’s boots.',
+    ],
     choices: [
       { label: 'Order the winnings shared out', outcomes: [{ weight: 1, effect: { text: 'Peace returns. {crew} sulks.', actorHp: -5, crewHp: 5 } }] },
       { label: 'Confiscate the winnings for the ship', outcomes: [{ weight: 1, effect: { text: 'Into the ship’s chest it goes. Nobody is happy, but nobody is cheated.', gold: 12, crewHp: -10 } }] },
@@ -141,6 +158,10 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'The Rum Store Broken Into',
     pool: 'incident',
     text: 'Someone has prised the lock off the spirit room. A cask is missing and half the watch is giggling.',
+    variants: [
+      'The purser reports a cask of rum gone from the spirit room, and the middle watch can barely stand.',
+      'Someone has bored a hole in the rum cask and been drinking from it with a straw. Half the crew smell of it.',
+    ],
     choices: [
       { label: 'Find the culprit', outcomes: [{ weight: 1, effect: { text: 'It was {crew}, of course. Twenty lashes.', actorHp: -25 } }] },
       { label: 'Let it pass', outcomes: [{ weight: 1, effect: { text: 'A ship full of sore heads the next morning.', crewHp: -10 } }] },
@@ -152,6 +173,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'Asleep on Watch',
     pool: 'incident',
     text: 'You find {crew} snoring against the binnacle in the middle watch, with the ship drifting off course.',
+    variants: [
+      'The ship yaws off course in the dark. At the wheel you find {crew}, chin on chest, snoring.',
+    ],
     choices: [
       { label: 'Flog them', outcomes: [{ weight: 1, effect: { text: 'Fair punishment by any articles. Nobody sleeps on watch for a while.', actorHp: -20 } }] },
       { label: 'Let them off with a warning', outcomes: [
@@ -213,6 +237,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'A Sailor’s Birthday',
     pool: 'incident',
     text: '{crew} turns forty today, which in this trade makes them something of a marvel.',
+    variants: [
+      'The crew have discovered it is {crew}’s birthday, and are dropping heavy hints about the rum.',
+    ],
     choices: [
       { label: 'Double rum ration for all', cost: 5, outcomes: [{ weight: 1, effect: { text: 'Songs, a hornpipe, and a very happy {crew}.', crewHp: 15 } }] },
       { label: 'A song and a slap on the back', outcomes: [{ weight: 1, effect: { text: '{crew} pretends not to be disappointed.', crewHp: 5 } }] },
@@ -223,6 +250,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'A New Shanty',
     pool: 'incident',
     text: '{crew} has made up a shanty about the voyage. It is rude about the Navy, ruder about you, and the whole crew knows it by nightfall.',
+    variants: [
+      '{crew} has a fine voice and a new song about the Navy’s commodore. It does not flatter him.',
+    ],
     choices: [
       { label: 'Join in the chorus', outcomes: [{ weight: 1, effect: { text: 'The capstan has never turned so fast.', crewHp: 10 } }] },
       { label: 'Ban the verse about you', outcomes: [{ weight: 1, effect: { text: 'Now they only hum that verse, loudly, whenever you pass.' } }] },
@@ -245,6 +275,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'Rats in the Bread Room',
     pool: 'incident',
     text: 'The biscuit is crawling with weevils and the rats have eaten through two sacks of peas.',
+    variants: [
+      'A rat the size of a cat runs across the captain’s table at supper. The bread room, it turns out, is theirs now.',
+    ],
     choices: [
       {
         label: 'Set the cats on them',
@@ -337,6 +370,9 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     title: 'The Pumps Choke',
     pool: 'incident',
     text: 'The chain pump has jammed solid with gravel ballast, and water is rising in the well.',
+    variants: [
+      'The pumps clank, cough and stop. The carpenter sounds the well: two feet of water, and rising.',
+    ],
     choices: [
       { label: 'Send {crew} down into the bilge to clear it', outcomes: [
         { weight: 2, effect: { text: '{crew} comes up black with filth, holding a fistful of stones. The pumps clank back to life.', actorHp: -10 } },

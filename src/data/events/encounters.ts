@@ -7,6 +7,10 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'castaway',
     title: 'Castaway',
     text: 'A ragged figure on a sandbar waves a shirt on a stick. Your lookout swears there is no one else on the island.',
+    variants: [
+      'Smoke rises from a palm-fringed islet no bigger than a ship’s deck. Someone is keeping a signal fire alight.',
+      'A half-naked figure is waving both arms from a rock in the middle of nowhere.',
+    ],
     choices: [
       {
         label: 'Send a boat',
@@ -22,6 +26,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'deserter',
     title: 'Navy Deserter',
     text: 'A jolly boat with one exhausted sailor in Navy slops. He begs to join you.',
+    variants: [
+      'A man in a tarred Navy jacket is rowing a stolen boat with blistered hands. He waves frantically at your colours.',
+    ],
     choices: [
       { label: 'Take him aboard', outcomes: [{ weight: 1, effect: { text: 'He knows the squadron’s orders, and you alter course to slip past them.', recruit: 1, navy: -0.5 } }] },
       { label: 'Leave him adrift', outcomes: [{ weight: 1, effect: { text: 'His curses follow you over the water.' } }] },
@@ -31,6 +38,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'fishermen',
     title: 'Fishermen in Distress',
     text: 'A fishing smack is foundering in a short sea, her crew bailing with their hats.',
+    variants: [
+      'A fishing canoe has capsized in the swell, and its crew are clinging to the hull, shouting for help.',
+    ],
     choices: [
       {
         label: 'Take them off',
@@ -75,6 +85,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'wreck',
     title: 'Drifting Wreck',
     text: 'Spars and barrels bob around a half-sunk merchantman. Her stern cabin is still above water.',
+    variants: [
+      'A merchant brig lies on her beam ends, half under water, with her boats gone. Her cargo hatches are still battened.',
+    ],
     choices: [
       {
         label: 'Salvage what you can',
@@ -164,6 +177,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'village',
     title: 'Fishing Village',
     text: 'Smoke rises from a little cove where fishing boats are drawn up on the beach.',
+    variants: [
+      'A cluster of palm-thatched huts above a beach. Canoes, nets drying, and children running to see your sails.',
+    ],
     choices: [
       { label: 'Trade for fresh food', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Fresh water, fruit and turtle stew. The crew are new men.', crewHp: 100 } }] },
       { label: 'Raid the village', outcomes: [{ weight: 1, effect: { text: 'Easy pickings, but word of the raid will reach the Navy before nightfall.', gold: 30, navy: 1, crewHp: -5 } }] },
@@ -174,6 +190,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'smugglers',
     title: 'Smugglers’ Cove',
     text: 'A lantern blinks three times from the shore. Smugglers, and they have goods to sell.',
+    variants: [
+      'In a mangrove creek you find a schooner with no name on her stern and a crew who reach for their pistols, then relax.',
+    ],
     choices: [
       { label: 'Buy forged Navy papers', cost: 25, outcomes: [{ weight: 1, effect: { text: 'Dispatches send the squadron chasing your shadow up the wrong coast.', navy: -1 } }] },
       { label: 'Buy timber and pitch', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Your carpenter patches the worst of the damage.', hull: 6, repair: true } }] },
@@ -184,6 +203,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'cove',
     title: 'Hidden Cove',
     text: 'A deep, hidden cove with a sloping beach and a freshwater stream: a pirate’s dream of a careening ground.',
+    variants: [
+      'Behind a narrow reef entrance lies a perfect anchorage: deep water, a steep beach, and no one for miles.',
+    ],
     choices: [
       { label: 'Careen her and scrape her clean', outcomes: [{ weight: 1, effect: { text: 'Two days’ hard work. She comes off the beach tight and fast.', hull: 6, repair: true, navy: 1 } }] },
       { label: 'Fill the water casks and go', outcomes: [{ weight: 1, effect: { text: 'Sweet water, and an afternoon swim for the watch below.', crewHp: 15 } }] },
@@ -193,6 +215,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'turtles',
     title: 'Turtle Beach',
     text: 'The beach is crawling with green turtles come ashore to lay. Fresh meat that keeps alive in the hold for weeks.',
+    variants: [
+      'At dusk the beach comes alive with turtles, hauling themselves out of the surf by the hundred.',
+    ],
     choices: [
       { label: 'Stock the hold', outcomes: [{ weight: 1, effect: { text: 'Turtle soup every night. Nobody will get scurvy on this ship.', crewHp: 25, navy: 0.5 } }] },
       { label: 'Take a few and sail on', outcomes: [{ weight: 1, effect: { text: 'A feast tonight, at least.', crewHp: 10 } }] },
@@ -226,6 +251,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'distress',
     title: 'Distress Signal',
     text: 'A merchantman flying Dutch colours has her ensign upside down. She lies dead in the water.',
+    variants: [
+      'A becalmed merchant ship flies a signal of distress. Her deck seems strangely empty.',
+    ],
     choices: [
       {
         label: 'Close and board her',
@@ -241,6 +269,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'picket',
     title: 'Navy Picket',
     text: 'A Navy cutter is shadowing you from the horizon, no doubt signalling the fleet.',
+    variants: [
+      'Topsails on the horizon, keeping exactly the same distance hour after hour. A Navy picket, marking you for the fleet.',
+    ],
     choices: [
       { label: 'Turn and fight her', outcomes: [{ weight: 1, effect: { text: 'You come about and run out the guns.', battle: 'cutter' } }] },
       { label: 'Lose her in the night', outcomes: [{ weight: 1, effect: { text: 'You douse every lantern and slip away, but it costs you time.', navy: 0.5 } }] },
@@ -347,6 +378,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'trader',
     title: 'Dutch Trader',
     text: 'A fat Dutch fluyt flying a trade flag. Her master will sell anything to anyone, no questions asked.',
+    variants: [
+      'A Dutch trader hails you cheerfully. In these waters the Dutch will sell powder to the devil and buy his pitchfork.',
+    ],
     choices: [
       { label: 'Buy medicines', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Laudanum, bark and clean linen.', crewHp: 40 } }] },
       { label: 'Buy timber and cordage', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Enough to patch her properly.', hull: 5 } }] },

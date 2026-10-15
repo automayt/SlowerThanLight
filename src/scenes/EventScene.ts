@@ -50,7 +50,7 @@ export class EventScene extends Phaser.Scene {
     this.tx = art ? ART.x + ART.w + 32 : X + 120;
     this.tw = art ? X + W - this.tx - 28 : W - 240;
 
-    const body = this.add.text(this.tx, ART.y, run.fill(ev.text), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
+    const body = this.add.text(this.tx, ART.y, run.eventText(), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
     this.choicesY = body.y + body.height + 28;
 
     ev.choices.forEach((choice, i) => {

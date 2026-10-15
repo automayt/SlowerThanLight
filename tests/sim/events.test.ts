@@ -6,7 +6,7 @@ import { RARITY_WEIGHT, Run } from '../../src/sim/Run';
 import type { EventEffect, EventNeeds, SeaEventDef } from '../../src/sim/types';
 
 const effects = (e: SeaEventDef): EventEffect[] => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect));
-const texts = (e: SeaEventDef): string[] => [e.text, ...e.choices.map((c) => c.label), ...effects(e).map((x) => x.text)];
+const texts = (e: SeaEventDef): string[] => [e.text, ...(e.variants ?? []), ...e.choices.map((c) => c.label), ...effects(e).map((x) => x.text)];
 const SYSTEMS = ['helm', 'sails', 'guns', 'pumps', 'surgeon'];
 const flagsSet = new Set(SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.flag).filter(Boolean)));
 
@@ -175,6 +175,17 @@ describe('event mechanics', () => {
     const enc = run.encounter as { actor: string; actor2: string };
     expect(enc.actor).not.toBe(enc.actor2);
     expect(run.fill('{crew} and {crew2} aboard {ship}')).toBe(`${enc.actor} and ${enc.actor2} aboard ${run.def.name}`);
+  });
+
+  it('tells a common event in different ways across voyages', () => {
+    const ev = seaEvent('becalmed');
+    const tellings = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) {
+      const run = richRun(seed);
+      run.startEvent(ev);
+      tellings.add(run.eventText());
+    }
+    expect(tellings.size).toBe(1 + ev.variants!.length);
   });
 
   it('losing {crew} removes exactly that crew member, but never the last', () => {
