@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { NAVY_CUTTER } from '../data/enemies';
-import { playerShip } from '../data/ships';
 import { Hud } from '../render/Hud';
+import { currentRun } from '../render/RunBar';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
-import { Battle } from '../sim/Battle';
+import type { Battle } from '../sim/Battle';
+import type { BattleReport, Run } from '../sim/Run';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
 import { SYSTEM_NAMES, type Side } from '../sim/types';
@@ -14,12 +14,12 @@ const TILE = 42;
 const SHIP_CENTER_Y = 292;
 
 export interface ResultData {
-  shipId: string;
   battle: Battle;
+  report: BattleReport;
 }
 
 export class BattleScene extends Phaser.Scene {
-  private shipId = 'gull';
+  private run!: Run;
   private battle!: Battle;
   private sea!: Sea;
   private playerView!: ShipView;
@@ -34,15 +34,15 @@ export class BattleScene extends Phaser.Scene {
     super('Battle');
   }
 
-  init(data: { shipId?: string }): void {
-    this.shipId = data.shipId ?? 'gull';
+  init(): void {
     this.selected = new Set();
     this.aimingGun = null;
     this.ending = false;
   }
 
   create(): void {
-    const battle = (this.battle = new Battle(playerShip(this.shipId), NAVY_CUTTER));
+    const run = (this.run = currentRun(this));
+    const battle = (this.battle = run.startBattle());
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
 
     const p = battle.player;
@@ -62,6 +62,7 @@ export class BattleScene extends Phaser.Scene {
         if (this.aimingGun === i) this.aimingGun = null;
       },
     });
+    if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
     this.hud.addLog(`${e.def.name} bears down on you. Run out the guns!`, COLORS.gold);
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
 
@@ -264,11 +265,12 @@ export class BattleScene extends Phaser.Scene {
   private endBattle(): void {
     this.ending = true;
     const o = this.battle.outcome!;
+    const report = this.run.finishBattle(this.battle);
     this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(40);
     this.add
       .text(SCREEN.w / 2, SCREEN.h / 2 - 60, o.title, { fontFamily: TITLE_FONT, fontSize: '56px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 6 })
       .setOrigin(0.5)
       .setDepth(41);
-    this.time.delayedCall(2200, () => this.scene.start('Result', { shipId: this.shipId, battle: this.battle } satisfies ResultData));
+    this.time.delayedCall(2200, () => this.scene.start('Result', { battle: this.battle, report } satisfies ResultData));
   }
 }

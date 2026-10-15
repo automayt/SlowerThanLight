@@ -4,6 +4,8 @@ import { weapon } from '../data/weapons';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea, drawPips } from '../render/ui';
+import { setRun } from '../render/RunBar';
+import { Run } from '../sim/Run';
 import { Ship } from '../sim/Ship';
 import { SYSTEM_NAMES, type SystemId } from '../sim/types';
 
@@ -78,7 +80,9 @@ export class ShipSelectScene extends Phaser.Scene {
   }
 
   private start(): void {
-    this.scene.start('Battle', { shipId: PLAYER_SHIPS[this.selected].id });
+    setRun(this, new Run(PLAYER_SHIPS[this.selected].id));
+    this.registry.set('chart-note', '');
+    this.scene.start('SeaMap');
   }
 
   update(time: number): void {
