@@ -1,4 +1,4 @@
-"""inspect.py file... -> duration, peak, 0.1 s RMS envelope (dBFS), spectral centroid, crest factor"""
+"""inspect_audio.py file... -> duration, peak, 0.1 s RMS envelope (dBFS), spectral centroid, crest factor"""
 import sys
 import numpy as np
 import soundfile as sf
