@@ -209,7 +209,7 @@ export class Run {
     }
 
     if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') {
-      this.end('lost', o.title);
+      this.end('lost', o.text);
     } else if (enc.boss && o.won) {
       this.end('won', 'You broke the blockade!');
     } else {

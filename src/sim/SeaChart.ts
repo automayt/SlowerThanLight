@@ -34,6 +34,13 @@ export interface ChartOptions {
 /** Columns from start to boss inclusive. */
 export const CHART_COLUMNS = 8;
 
+/** Rough share of middle nodes of each kind; the rest are open sea. */
+const KIND_SHARES: [NodeKind, number][] = [
+  ['battle', 0.4],
+  ['event', 0.3],
+  ['port', 0.12],
+];
+
 /**
  * Lay out a left-to-right chart: one start node, 2-3 nodes per middle column, one boss.
  * Edges only join neighbouring columns and never cross, and every node has a way in and a way out.
@@ -91,20 +98,18 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
   const events = [...opts.events];
   const ports = [...opts.ports];
 
+  // Deal kinds from a shuffled bag so every chart has a similar mix. No port right outside Tortuga.
+  const middle = cols.slice(1, last).flat();
+  const bag: NodeKind[] = [];
+  for (const [kind, share] of KIND_SHARES) for (let i = Math.round(middle.length * share); i > 0; i--) bag.push(kind);
+  while (bag.length < middle.length) bag.push('empty');
+  for (const node of middle) {
+    const allowed = bag.map((k, i) => (node.col === 1 && k === 'port' ? -1 : i)).filter((i) => i >= 0);
+    node.kind = bag.splice(rng.pick(allowed), 1)[0];
+  }
+
   for (let col = 1; col < last; col++) {
     const depth = col / last;
-    for (const node of cols[col]) {
-      const roll = rng.weighted(
-        [
-          ['battle', 42],
-          ['event', 30],
-          ['empty', 14],
-          ['port', col === 1 ? 0 : 14],
-        ] as [NodeKind, number][],
-        (k) => k[1],
-      )[0];
-      node.kind = roll;
-    }
     // A port in the middle of the voyage and one just before the blockade.
     if ((col === Math.floor(last / 2) || col === last - 1) && !cols[col].some((n) => n.kind === 'port')) {
       rng.pick(cols[col]).kind = 'port';

@@ -40,6 +40,8 @@ export class Battle {
   readonly rng: Rng;
   readonly seed: number;
   readonly allowEscape: boolean;
+  /** Crew aboard each ship when the battle began. */
+  readonly crewAtStart: Record<Side, number>;
   time = 0;
   paused = false;
   outcome: Outcome | null = null;
@@ -59,6 +61,7 @@ export class Battle {
     this.allowEscape = opts.allowEscape ?? true;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
+    this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     this.enemyAI = new ShipAI(this.enemy, this.player, this.rng, {
       fleeAt: 0.3,
       surrenderChance: 0.35,

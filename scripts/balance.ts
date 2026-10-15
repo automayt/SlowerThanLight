@@ -47,8 +47,7 @@ for (const foe of ONLY === 'voyages' ? [] : ENEMY_LIST) {
 
 const VOYAGES = Math.max(10, Math.round(RUNS / 4));
 if (ONLY !== 'battles') {
-  console.log(`
-== Whole voyages (${VOYAGES} per ship) ==`);
+  console.log(`\n== Whole voyages (${VOYAGES} per ship) ==`);
   for (const [label, focus] of [['spread', undefined], ['focus guns', 'guns']] as const) {
     for (const def of PLAYER_SHIPS) {
       let won = 0;

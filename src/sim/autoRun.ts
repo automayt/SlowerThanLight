@@ -35,7 +35,7 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
         const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus });
         battle.runToEnd(opts.battleLimit ?? 900);
         if (!battle.outcome) {
-          run.concede('Stalemate');
+          run.concede('The battle dragged on to a stalemate.');
           break;
         }
         battles.push({ enemy, report: run.finishBattle(battle) });

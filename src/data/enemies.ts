@@ -92,7 +92,7 @@ export const NAVY_FRIGATE: ShipDef = {
   hull: 34,
   hands: 12,
   speedBonus: -5,
-  systems: { helm: 2, sails: 3, guns: 8, pumps: 3, surgeon: 2 },
+  systems: { helm: 2, sails: 3, guns: 7, pumps: 3, surgeon: 2 },
   rooms: [
     { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 3, system: 'helm' },
     { id: 'surgeon', name: "Surgeon's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
@@ -108,7 +108,6 @@ export const NAVY_FRIGATE: ShipDef = {
     { weapon: 'pdr12', shot: 'chain' },
     { weapon: 'carronade', shot: 'round' },
     { weapon: 'pdr9', shot: 'grape' },
-    { weapon: 'pdr6', shot: 'hot' },
   ],
   crew: [
     { name: 'Commodore Ashcroft', room: 'helm' },
