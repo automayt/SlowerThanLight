@@ -102,6 +102,7 @@ export interface RunSave {
   endingTitle?: string;
   flags?: string[];
   seenEvents?: string[];
+  prize?: Prize | null;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -126,6 +127,16 @@ export interface BattleReport {
   won: boolean;
   plunder: number;
   lines: string[];
+}
+
+/** What a beaten ship has to offer beyond her gold: one pick, made on the result screen. */
+export interface Prize {
+  /** Weapon ids of her guns you could take. */
+  guns: string[];
+  /** Survivors willing to sign on (only when she struck her colours). */
+  recruits: number;
+  /** Whether the pick has been made. */
+  taken: boolean;
 }
 
 export interface EventResult {
@@ -160,6 +171,8 @@ export class Run {
   flags = new Set<string>();
   /** Events met this voyage, in order. */
   seenEvents: string[] = [];
+  /** Spoils of the last battle, until you sail on. */
+  prize: Prize | null = null;
   private usedNames = new Set<string>();
 
   constructor(shipId: string, seed?: number) {
@@ -209,6 +222,7 @@ export class Run {
     this.nodeId = id;
     this.jumps++;
     this.visited.push(id);
+    this.prize = null;
     this.runningRepairs();
     this.navy += NAVY_SPEED;
 
@@ -322,7 +336,32 @@ export class Run {
     } else {
       this.status = 'chart';
     }
+    if (!enc.boss && (o.kind === 'captured' || o.kind === 'surrender')) {
+      this.prize = { guns: [...new Set(foe.ship.guns.map((g) => g.weapon))], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
+    }
     return { kind: o.kind, won: o.won, plunder: enc.boss ? 0 : plunder, lines };
+  }
+
+  /** Take one of the beaten ship's guns: into a free gun port, or sold for scrap. Returns what happened. */
+  takePrizeGun(weaponId: string): string | null {
+    if (!this.prize || this.prize.taken || !this.prize.guns.includes(weaponId)) return null;
+    this.prize.taken = true;
+    const w = weapon(weaponId);
+    if (this.fit.guns.length < MAX_GUNS) {
+      this.fit.guns.push({ weapon: weaponId });
+      return `Her ${w.name} is swayed across and mounted.`;
+    }
+    const scrap = Math.floor(w.price / 2);
+    this.gold += scrap;
+    return `No free gun port: her ${w.name} fetches ${scrap} gold.`;
+  }
+
+  /** Sign on one of the surrendered crew. Returns the new hand's name. */
+  pressPrizeCrew(): string | null {
+    if (!this.prize || this.prize.taken || this.prize.recruits <= 0) return null;
+    const name = this.recruit();
+    if (name) this.prize.taken = true;
+    return name;
   }
 
   /** Give up the voyage (used by headless runs for stalemates). */
@@ -706,6 +745,7 @@ export class Run {
       endingTitle: this.endingTitle,
       flags: [...this.flags],
       seenEvents: this.seenEvents,
+      prize: this.prize,
     });
   }
 
@@ -731,6 +771,7 @@ export class Run {
     run.endingTitle = s.endingTitle ?? '';
     run.flags = new Set(s.flags ?? []);
     run.seenEvents = s.seenEvents ?? [];
+    run.prize = s.prize ?? null;
     return run;
   }
 }

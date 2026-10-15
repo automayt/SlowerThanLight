@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { currentRun } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea } from '../render/ui';
+import { weapon } from '../data/weapons';
 import type { ResultData } from './BattleScene';
 import { saveRun } from './save';
 
@@ -48,7 +49,8 @@ export class ResultScene extends Phaser.Scene {
       this.add.text(cx + 40, y, a, style).setOrigin(0.5, 0);
       this.add.text(cx + 210, y, b, style).setOrigin(0.5, 0);
     });
-    this.add.text(cx, 478, `Battle lasted ${mins}:${secs}`, textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
+    this.add.text(cx, 470, `Battle lasted ${mins}:${secs}`, textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
+    this.spoils(cx, 496);
     if (report.lines.length) this.add.text(cx, 232, report.lines.join('  '), textStyle(16, COLORS.gold, { align: 'center', wordWrap: { width: 600 } })).setOrigin(0.5, 0);
 
     const next = run.over
@@ -57,8 +59,38 @@ export class ResultScene extends Phaser.Scene {
           this.registry.set('chart-note', [o.text, ...report.lines].join(' '));
           this.scene.start('SeaMap');
         };
-    new Button(this, cx - 140, 540, 280, 44, run.over ? 'The voyage ends →' : 'Back to the chart →', next, { size: 18 });
+    new Button(this, cx - 140, 546, 280, 44, run.over ? 'The voyage ends →' : 'Back to the chart →', next, { size: 18 });
     this.input.keyboard!.once('keydown-ENTER', next);
+  }
+
+  /** One pick from a beaten ship: a gun, or a survivor for the crew. */
+  private spoils(cx: number, y: number): void {
+    const run = currentRun(this);
+    const prize = run.prize;
+    if (!prize || prize.taken) return;
+    const picks: [string, () => string | null][] = [
+      ...prize.guns.map((id): [string, () => string | null] => [`Take her ${weapon(id).name}`, () => run.takePrizeGun(id)]),
+      ...(prize.recruits ? [['Press a survivor into service', () => {
+        const who = run.pressPrizeCrew();
+        return who ? `${who} signs the articles.` : null;
+      }] as [string, () => string | null]] : []),
+    ];
+    if (!picks.length) return;
+    const label = this.add.text(cx - 300, y + 7, 'SPOILS (pick one):', textStyle(13, COLORS.gold, { fontStyle: 'bold' }));
+    const w = Math.min(190, (450 - (picks.length - 1) * 8) / picks.length);
+    const buttons: Button[] = [];
+    picks.forEach(([text, take], i) => {
+      buttons.push(
+        new Button(this, cx - 150 + i * (w + 8), y, w, 30, text, () => {
+          const said = take();
+          if (!said) return;
+          // Destroy after this click has finished dispatching.
+          this.time.delayedCall(0, () => buttons.forEach((b) => b.destroy()));
+          label.setText(said).setX(cx).setOrigin(0.5, 0).setColor(COLORS.textGood);
+          saveRun(run);
+        }, { size: 12 }),
+      );
+    });
   }
 
   update(time: number): void {

@@ -41,6 +41,12 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
           break;
         }
         battles.push({ enemy, report: run.finishBattle(battle) });
+        // Spoils: a hand if short-crewed, else her best gun.
+        const prize = run.prize;
+        if (prize && !prize.taken) {
+          if (prize.recruits && run.condition.crew.length < run.def.crew.length) run.pressPrizeCrew();
+          else if (prize.guns.length) run.takePrizeGun(prize.guns[prize.guns.length - 1]);
+        }
         break;
       }
       case 'event': {

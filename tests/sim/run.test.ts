@@ -345,3 +345,41 @@ describe('saving', () => {
     expect(() => Run.fromSave({ version: 9 } as never)).toThrow();
   });
 });
+
+describe('prizes', () => {
+  const win = (kind: 'captured' | 'surrender' | 'victory') => {
+    const run = runAt('battle');
+    const battle = run.startBattle();
+    if (kind === 'captured') for (const c of battle.enemy.crew) c.hp = 0;
+    if (kind === 'captured') battle.step(0.05);
+    else (battle as unknown as { finish(k: string): void }).finish(kind);
+    run.finishBattle(battle);
+    return run;
+  };
+
+  it('a captured ship offers her guns; one pick only', () => {
+    const run = win('captured');
+    expect(run.prize?.guns.length).toBeGreaterThan(0);
+    expect(run.prize?.recruits).toBe(0);
+    const guns = run.fit.guns.length;
+    expect(run.takePrizeGun(run.prize!.guns[0])).toBeTruthy();
+    expect(run.fit.guns.length + run.gold).toBeGreaterThan(guns);
+    expect(run.takePrizeGun(run.prize!.guns[0])).toBeNull();
+  });
+
+  it('a ship that struck her colours offers a survivor too', () => {
+    const run = win('surrender');
+    expect(run.prize?.recruits).toBe(1);
+    const crew = run.condition.crew.length;
+    run.condition.crew.pop();
+    expect(run.pressPrizeCrew()).toBeTruthy();
+    expect(run.condition.crew.length).toBe(crew);
+  });
+
+  it('a sunk ship offers nothing, and spoils expire when you sail on', () => {
+    expect(win('victory').prize).toBeNull();
+    const run = win('captured');
+    run.jump(run.reachable()[0].id);
+    expect(run.prize).toBeNull();
+  });
+});
