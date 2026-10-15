@@ -100,7 +100,7 @@ export function changeShot(gun: GunState, shot: ShotType): void {
 export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile[], events: BattleEvent[], stats: CombatStats): void {
   const working = ship.level('guns') > 0;
   const gunner = ship.stationed('guns');
-  const rate = gunner ? 1.15 + rank(gunner, 'gunnery') * GUNNERY_RELOAD : 1;
+  const rate = (gunner ? 1.15 + rank(gunner, 'gunnery') * GUNNERY_RELOAD : 1) * ship.reloadRate;
   ship.guns.forEach((g, i) => {
     if (!g.powered || !working) {
       g.charge = Math.max(0, g.charge - dt * 3);

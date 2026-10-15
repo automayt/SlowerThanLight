@@ -4,7 +4,7 @@ import { playLoop, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
-import { NAVY_SPEED, type Run } from '../sim/Run';
+import type { Run } from '../sim/Run';
 import type { NodeKind, SeaNode } from '../sim/SeaChart';
 import { saveRun } from './save';
 
@@ -174,7 +174,7 @@ export class SeaMapScene extends Phaser.Scene {
       g.strokePath();
     }
     // Where the fleet will be after your next jump.
-    const next = this.colX(run.navy + NAVY_SPEED);
+    const next = this.colX(run.navy + run.navySpeed);
     if (next > 0 && run.status === 'chart') {
       g.lineStyle(1, 0xd23c3c, 0.45);
       for (let y = 82; y < SCREEN.h - 80; y += 16) g.lineBetween(next, y, next, y + 8);

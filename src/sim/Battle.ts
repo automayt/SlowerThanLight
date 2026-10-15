@@ -33,6 +33,8 @@ export interface BattleOptions {
   allowEscape?: boolean;
   /** With autoPlayer: send boarding parties of this size. */
   playerBoardWith?: number;
+  /** How fast enemy guns load, relative to normal (difficulty). */
+  enemyReload?: number;
 }
 
 /** Fixed simulation step in seconds. */
@@ -67,6 +69,7 @@ export class Battle {
     this.allowEscape = opts.allowEscape ?? true;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
+    this.enemy.reloadRate = opts.enemyReload ?? 1;
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     const actions = (side: Side) => ({
       board: (crew: Crew[], room: string) => this.board(side, crew, room),

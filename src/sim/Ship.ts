@@ -102,6 +102,8 @@ export class Ship {
   readonly guns: GunState[];
   crew: Crew[] = [];
   hull: number;
+  /** Loading speed multiplier for every gun (difficulty scales the enemy's). */
+  reloadRate = 1;
   /** "Make sail" escape charge, 0..100. */
   escape = 0;
   /** Bounding size in tiles. */

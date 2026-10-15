@@ -383,3 +383,23 @@ describe('prizes', () => {
     expect(run.prize).toBeNull();
   });
 });
+
+describe('difficulty', () => {
+  it('changes the fleet speed, starting gold and enemy hulls, and survives a save', () => {
+    const easy = new Run('gull', 3, 'easy');
+    const hard = new Run('gull', 3, 'hard');
+    expect(easy.gold).toBeGreaterThan(hard.gold);
+    expect(easy.navySpeed).toBeLessThan(hard.navySpeed);
+    for (const run of [easy, hard]) {
+      run.navy = 5;
+      run.jump(run.reachable()[0].id);
+    }
+    const hulls = [easy, hard].map((r) => r.startBattle().enemy.hull);
+    expect(hulls[0]).toBeLessThan(hulls[1]);
+    expect(Run.fromSave(JSON.parse(JSON.stringify(hard.toSave()))).difficulty).toBe('hard');
+  });
+
+  it('defaults to normal', () => {
+    expect(new Run('gull', 1).difficulty).toBe('normal');
+  });
+});

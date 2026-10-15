@@ -21,6 +21,15 @@ export const ALARM_DELAY = 0.5;
 export const PORT_REST_DELAY = 0.5;
 
 export const START_GOLD = 30;
+
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/** What each difficulty changes: how fast the fleet closes, starting gold, and how tough enemy hulls are. */
+export const DIFFICULTY: Record<Difficulty, { label: string; navySpeed: number; startGold: number; enemyHull: number; enemyReload: number; blurb: string }> = {
+  easy: { label: 'Easy', navySpeed: 1.0, startGold: 80, enemyHull: 0.75, enemyReload: 0.8, blurb: 'A slower fleet, a fuller purse, weaker enemies.' },
+  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, enemyHull: 1, enemyReload: 1, blurb: 'The voyage as intended.' },
+  hard: { label: 'Hard', navySpeed: 1.5, startGold: 10, enemyHull: 1.3, enemyReload: 1.15, blurb: 'A faster fleet, an empty purse, deadlier enemies.' },
+};
 export const HULL_PRICE = 3;
 export const CREW_PRICE = 30;
 /** Hired crew allowed above the ship's starting complement. */
@@ -100,6 +109,7 @@ export interface RunSave {
   usedNames: string[];
   /** Added after the first saves; optional so older saves still load. */
   endingTitle?: string;
+  difficulty?: Difficulty;
   flags?: string[];
   seenEvents?: string[];
   prize?: Prize | null;
@@ -155,7 +165,8 @@ export class Run {
   nodeId = 0;
   /** Column the Navy fleet has reached; nodes at or behind it are overrun. */
   navy = NAVY_START;
-  gold = START_GOLD;
+  gold: number;
+  readonly difficulty: Difficulty;
   condition: ShipCondition;
   status: RunStatus = 'chart';
   encounter: Encounter = { kind: 'start' };
@@ -175,7 +186,9 @@ export class Run {
   prize: Prize | null = null;
   private usedNames = new Set<string>();
 
-  constructor(shipId: string, seed?: number) {
+  constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal') {
+    this.difficulty = difficulty;
+    this.gold = DIFFICULTY[difficulty].startGold;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     this.rng = new Rng(this.seed);
     this.def = playerShip(shipId);
@@ -183,6 +196,11 @@ export class Run {
     for (const c of this.condition.crew) this.usedNames.add(c.name);
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
     this.chart = generateChart(this.rng, { ports: PORT_NAMES, armoury: ARMOURY });
+  }
+
+  /** Columns the fleet advances per jump on this difficulty. */
+  get navySpeed(): number {
+    return DIFFICULTY[this.difficulty].navySpeed;
   }
 
   /** The ship as currently fitted out. */
@@ -211,7 +229,7 @@ export class Run {
 
   /** True if the fleet will have overrun this node by the time you get there. */
   willBeOverrun(node: SeaNode): boolean {
-    return node.kind !== 'boss' && node.col <= this.navy + NAVY_SPEED;
+    return node.kind !== 'boss' && node.col <= this.navy + this.navySpeed;
   }
 
   /** Sail to a neighbouring node. The crew make running repairs and the fleet advances. */
@@ -224,7 +242,7 @@ export class Run {
     this.visited.push(id);
     this.prize = null;
     this.runningRepairs();
-    this.navy += NAVY_SPEED;
+    this.navy += this.navySpeed;
 
     if (node.kind === 'boss') {
       const foe = enemy(node.enemy ?? 'frigate');
@@ -291,11 +309,13 @@ export class Run {
   startBattle(opts: Partial<BattleOptions> = {}): Battle {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
-    return new Battle(this.ship, { ...foe.ship, name: this.encounter.name }, {
+    const hull = Math.round(foe.ship.hull * DIFFICULTY[this.difficulty].enemyHull);
+    return new Battle(this.ship, { ...foe.ship, name: this.encounter.name, hull }, {
       seed: this.rng.int(2 ** 31),
       enemyAI: foe.ai,
       playerCondition: this.condition,
       allowEscape: !this.encounter.boss,
+      enemyReload: DIFFICULTY[this.difficulty].enemyReload,
       ...opts,
     });
   }
@@ -746,13 +766,14 @@ export class Run {
       flags: [...this.flags],
       seenEvents: this.seenEvents,
       prize: this.prize,
+      difficulty: this.difficulty,
     });
   }
 
   static fromSave(raw: RunSave): Run {
     if (raw?.version !== 1) throw new Error('Unknown save version');
     const s = structuredClone(raw);
-    const run = new Run(s.shipId, s.seed);
+    const run = new Run(s.shipId, s.seed, s.difficulty ?? 'normal');
     run.rng.position = s.rng;
     run.chart = s.chart;
     run.nodeId = s.nodeId;

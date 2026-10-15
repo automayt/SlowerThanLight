@@ -6,7 +6,7 @@ import { setRun } from '../render/RunBar';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea, drawPips } from '../render/ui';
-import { Run } from '../sim/Run';
+import { DIFFICULTY, Run, type Difficulty } from '../sim/Run';
 import { Ship } from '../sim/Ship';
 import { SYSTEM_NAMES, type ShipDef, type SystemId } from '../sim/types';
 import { bumpProfile, profile } from './save';
@@ -33,6 +33,7 @@ export class ShipSelectScene extends Phaser.Scene {
   private pips!: Phaser.GameObjects.Graphics;
   private selected = 1;
   private launch!: Button;
+  private difficulty: Difficulty = 'normal';
 
   constructor() {
     super('ShipSelect');
@@ -101,6 +102,19 @@ export class ShipSelectScene extends Phaser.Scene {
     this.launch = new Button(this, SCREEN.w / 2 - 150, CARD_Y + CARD_H + 18, 300, 44, '', () => this.start(), { size: 19 });
     new Button(this, MARGIN, CARD_Y + CARD_H + 24, 100, 32, '← Back', () => this.scene.start('Title'), { size: 14 });
 
+    const levels = Object.keys(DIFFICULTY) as Difficulty[];
+    const saved = this.registry.get('difficulty') as Difficulty | undefined;
+    this.difficulty = saved && levels.includes(saved) ? saved : 'normal';
+    const blurb = this.add.text(SCREEN.w - MARGIN, CARD_Y + CARD_H + 62, '', textStyle(12, COLORS.textDim)).setOrigin(1, 0);
+    const label = () => `Difficulty: ${DIFFICULTY[this.difficulty].label}`;
+    const diff = new Button(this, SCREEN.w - MARGIN - 200, CARD_Y + CARD_H + 24, 200, 32, label(), () => {
+      this.difficulty = levels[(levels.indexOf(this.difficulty) + 1) % levels.length];
+      this.registry.set('difficulty', this.difficulty);
+      diff.setText(label());
+      blurb.setText(DIFFICULTY[this.difficulty].blurb);
+    }, { size: 14 });
+    blurb.setText(DIFFICULTY[this.difficulty].blurb);
+
     const kb = this.input.keyboard!;
     kb.on('keydown-LEFT', () => (this.selected = (this.selected + PLAYER_SHIPS.length - 1) % PLAYER_SHIPS.length));
     kb.on('keydown-RIGHT', () => (this.selected = (this.selected + 1) % PLAYER_SHIPS.length));
@@ -112,7 +126,7 @@ export class ShipSelectScene extends Phaser.Scene {
     if (lockReason(def)) return;
     bumpProfile('voyages');
     this.registry.set('counted-win', false);
-    setRun(this, new Run(def.id));
+    setRun(this, new Run(def.id, undefined, this.difficulty));
     this.registry.set('chart-note', '');
     this.scene.start('SeaMap');
   }
