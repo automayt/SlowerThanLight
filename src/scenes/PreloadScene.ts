@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isMuted, soundKey } from '../render/sound';
 import { COLORS, SCREEN, textStyle } from '../render/theme';
 
 interface ArtManifest {
@@ -24,9 +25,14 @@ export class PreloadScene extends Phaser.Scene {
       for (const file of files) if (!file.startsWith('event-')) this.load.image(artKey(file), `art/${file}`);
     });
     this.load.text('art-manifest', 'art/manifest.json');
+    this.load.on('filecomplete-text-audio-manifest', (_key: string, _type: string, data: string) => {
+      for (const file of parseManifest(data, /\.(ogg|mp3|wav|m4a)$/i)) this.load.audio(soundKey(file), `audio/${file}`);
+    });
+    this.load.text('audio-manifest', 'audio/manifest.json');
   }
 
   create(): void {
+    this.sound.mute = isMuted();
     this.scene.start('Title');
   }
 }
@@ -39,10 +45,10 @@ export function loadArtOnDemand(scene: Phaser.Scene, name: string): void {
 }
 
 /** Image files listed in the manifest; none when it is missing or malformed. */
-function parseManifest(text: string): string[] {
+function parseManifest(text: string, kind = /\.(jpe?g|png|webp)$/i): string[] {
   try {
     const files = (JSON.parse(text) as ArtManifest).files;
-    return Array.isArray(files) ? files.filter((f) => typeof f === 'string' && /^[\w-]+\.(jpe?g|png|webp)$/i.test(f)) : [];
+    return Array.isArray(files) ? files.filter((f) => typeof f === 'string' && /^[\w-]+\.\w+$/.test(f) && kind.test(f)) : [];
   } catch {
     return [];
   }

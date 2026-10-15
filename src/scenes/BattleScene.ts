@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Hud } from '../render/Hud';
+import { playLoop, playSfx, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -73,6 +74,8 @@ export class BattleScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown-SPACE', () => battle.togglePause());
+    kb.on('keydown-M', () => toggleMute(this.game));
+    playLoop(this, 'waves', 0.25);
     kb.on('keydown-ESC', () => {
       this.aimingGun = null;
       this.selected.clear();
@@ -239,11 +242,13 @@ export class BattleScene extends Phaser.Scene {
     const ours = ev.side === 'player';
     switch (ev.t) {
       case 'shot': {
+        playSfx(this, 'cannon', ours ? 0.55 : 0.4);
         const gunRoom = view.ship.system('guns')?.room;
         if (gunRoom) this.burst(view.roomCenter(gunRoom).x, view.roomCenter(gunRoom).y, 0xfff0a0, 14, 250);
         break;
       }
       case 'hit': {
+        playSfx(this, 'hit-wood', ours ? 0.6 : 0.4);
         const c = view.roomCenter(ev.room);
         const jx = (Math.random() - 0.5) * TILE * 0.6;
         const jy = (Math.random() - 0.5) * TILE * 0.6;
@@ -256,11 +261,13 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'miss': {
+        playSfx(this, 'splash', 0.35);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y, 'MISS', '#cfe8ff');
         break;
       }
       case 'fire': {
+        playSfx(this, 'fire', 0.3);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y - 10, 'FIRE!', '#ffb050');
         if (ours) this.hud.addLog(`Fire in the ${view.ship.room(ev.room).def.name}!`);
@@ -300,6 +307,7 @@ export class BattleScene extends Phaser.Scene {
   private endBattle(): void {
     this.ending = true;
     const o = this.battle.outcome!;
+    if (o.won) playSfx(this, 'bell', 0.6);
     if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
     this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(40);

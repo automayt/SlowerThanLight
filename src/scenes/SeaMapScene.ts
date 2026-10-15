@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { placeArt } from '../render/art';
+import { playLoop, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
@@ -45,6 +46,8 @@ export class SeaMapScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     saveRun(run);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
+    stopLoop(this, 'shanty');
+    playLoop(this, 'waves', 0.25);
     this.g = this.add.graphics();
     this.bar = new RunBar(this, run);
 

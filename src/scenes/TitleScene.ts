@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { placeBackdrop } from '../render/art';
+import { isMuted, playLoop, toggleMute } from '../render/sound';
 import { setRun } from '../render/RunBar';
 import { Button, Sea } from '../render/ui';
 import { loadRun, sceneFor } from './save';
@@ -40,6 +41,8 @@ export class TitleScene extends Phaser.Scene {
     }
 
     new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 });
+    const sound = new Button(this, 20, SCREEN.h - 58, 150, 38, isMuted() ? 'Sound: off' : 'Sound: on', () => sound.setText(toggleMute(this.game) ? 'Sound: off' : 'Sound: on'), { size: 16 });
+    playLoop(this, 'shanty', 0.35);
 
     const help = [
       'Space — pause (you can still give orders)',
