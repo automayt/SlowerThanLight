@@ -4,6 +4,7 @@ import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
+import { loadArtOnDemand } from './PreloadScene';
 import { recordDiscovery, saveRun } from './save';
 
 const X = 40;
@@ -25,6 +26,11 @@ export class EventScene extends Phaser.Scene {
 
   constructor() {
     super('Event');
+  }
+
+  preload(): void {
+    const run = currentRun(this);
+    if (run.encounter.kind === 'event') loadArtOnDemand(this, `event-${run.encounter.event}`);
   }
 
   create(): void {

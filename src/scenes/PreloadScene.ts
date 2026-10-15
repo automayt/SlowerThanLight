@@ -5,7 +5,10 @@ interface ArtManifest {
   files: string[];
 }
 
-/** Loads the painted illustrations listed in public/art/manifest.json. The game runs fine without any of them. */
+/**
+ * Loads the painted illustrations listed in public/art/manifest.json. Backdrops load up front; event
+ * vignettes load on demand when their event opens (see loadArtOnDemand). The game runs fine without any of them.
+ */
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super('Preload');
@@ -16,7 +19,9 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('progress', (p: number) => label.setText(`Loading… ${Math.round(p * 100)}%`));
     // Loaded as text: without a manifest the dev server answers with index.html, which must not crash the JSON parser.
     this.load.on('filecomplete-text-art-manifest', (_key: string, _type: string, data: string) => {
-      for (const file of parseManifest(data)) this.load.image(artKey(file), `art/${file}`);
+      const files = parseManifest(data);
+      this.registry.set('art-files', files);
+      for (const file of files) if (!file.startsWith('event-')) this.load.image(artKey(file), `art/${file}`);
     });
     this.load.text('art-manifest', 'art/manifest.json');
   }
@@ -24,6 +29,13 @@ export class PreloadScene extends Phaser.Scene {
   create(): void {
     this.scene.start('Title');
   }
+}
+
+/** Queue a piece of art in a scene's preload() if the manifest lists it and it is not loaded yet. */
+export function loadArtOnDemand(scene: Phaser.Scene, name: string): void {
+  const files = (scene.registry.get('art-files') as string[] | undefined) ?? [];
+  const file = files.find((f) => artKey(f) === `art:${name}`);
+  if (file && !scene.textures.exists(artKey(file))) scene.load.image(artKey(file), `art/${file}`);
 }
 
 /** Image files listed in the manifest; none when it is missing or malformed. */
