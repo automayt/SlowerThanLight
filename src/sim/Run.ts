@@ -47,6 +47,8 @@ export type { UpgradeId };
 
 /** How often each rarity is drawn, relative to the others. */
 export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon: 5, rare: 2, legendary: 0.6 };
+/** How a missing story flag is described on a locked choice. */
+const FLAG_LACKING: Record<string, string> = { cat: 'no ship’s cat', 'map-half': 'no map', 'map-whole': 'no map', cursed: 'not cursed' };
 /** Chance that crossing open sea brings an incident aboard. */
 export const INCIDENT_CHANCE = 0.6;
 
@@ -382,7 +384,7 @@ export class Run {
     if (n.hurt && !c.crew.some((m) => m.hp < 70)) return 'nobody is hurt';
     if (n.damaged && !Object.keys(c.damage).length) return 'nothing is damaged';
     if (n.battered && c.hull >= this.fit.hull / 2) return 'hull is sound';
-    if (n.flag && !this.flags.has(n.flag)) return 'you lack something';
+    if (n.flag && !this.flags.has(n.flag)) return FLAG_LACKING[n.flag] ?? 'you lack something';
     if (n.noFlag && this.flags.has(n.noFlag)) return 'already done';
     if (n.gunPort && this.fit.guns.length >= MAX_GUNS) return 'no free gun port';
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
