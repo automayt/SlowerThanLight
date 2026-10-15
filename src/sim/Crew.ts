@@ -66,6 +66,7 @@ export function updateCrew(ship: Ship, dt: number): void {
       if (sys.repair >= 100) {
         sys.damage -= 1;
         sys.repair = 0;
+        ship.restoreWanted();
       }
     } else if (sys && MANNABLE.has(sys.id)) {
       task = 'man';

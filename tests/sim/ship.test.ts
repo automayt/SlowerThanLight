@@ -59,3 +59,31 @@ describe('routes', () => {
     expect(route.map((d) => d.b)).toEqual(['sails', 'guns']);
   });
 });
+
+describe('repairs', () => {
+  it('re-powers guns and hands the captain wanted once the system is repaired', () => {
+    const ship = new Ship(playerShip('gull'), 'player');
+    const sailsBefore = ship.allocated('sails');
+    ship.damageSystem('guns', 4);
+    ship.damageSystem('sails', 3);
+    expect(ship.guns.some((g) => g.powered)).toBe(false);
+    expect(ship.allocated('sails')).toBe(0);
+
+    const guns = ship.system('guns')!;
+    const sails = ship.system('sails')!;
+    guns.damage = 0;
+    sails.damage = 0;
+    ship.restoreWanted();
+    expect(ship.guns.every((g) => g.powered)).toBe(true);
+    expect(ship.allocated('sails')).toBe(sailsBefore);
+  });
+
+  it('does not re-power a gun the captain switched off', () => {
+    const ship = new Ship(playerShip('gull'), 'player');
+    ship.toggleGun(0, false);
+    ship.damageSystem('guns', 4);
+    ship.system('guns')!.damage = 0;
+    ship.restoreWanted();
+    expect(ship.guns[0].powered).toBe(false);
+  });
+});

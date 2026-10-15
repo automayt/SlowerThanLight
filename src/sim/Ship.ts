@@ -25,6 +25,8 @@ export interface SystemState {
   damage: number;
   /** Hands assigned (unused for helm and guns). */
   hands: number;
+  /** Hands the captain asked for; restored automatically after repairs. */
+  wanted: number;
   /** 0..100 toward repairing one damage point. */
   repair: number;
 }
@@ -32,6 +34,8 @@ export interface SystemState {
 export interface GunState {
   def: WeaponDef;
   powered: boolean;
+  /** Captain wants this gun crewed; it is re-powered automatically after repairs. */
+  wanted: boolean;
   /** Seconds loaded so far. */
   charge: number;
   target: string | null;
@@ -92,13 +96,14 @@ export class Ship {
       this.rooms.set(r.id, { def: r, fire: 0, burn: 0, water: 0, breach: false, breachProgress: 0 });
       if (r.system) {
         const max = def.systems[r.system] ?? 1;
-        this.systems.set(r.system, { id: r.system, room: r.id, max, damage: 0, hands: 0, repair: 0 });
+        this.systems.set(r.system, { id: r.system, room: r.id, max, damage: 0, hands: 0, wanted: 0, repair: 0 });
       }
     }
 
     this.guns = def.guns.map((g) => ({
       def: weapon(g.weapon),
       powered: false,
+      wanted: false,
       charge: 0,
       target: null,
       shot: g.shot ?? 'round',
@@ -198,6 +203,7 @@ export class Ship {
     if (next < 0 || next > this.capacity(id)) return false;
     if (delta > 0 && this.freeHands() < delta) return false;
     s.hands = next;
+    s.wanted = next;
     return true;
   }
 
@@ -206,13 +212,30 @@ export class Ship {
     const g = this.guns[index];
     if (!g) return false;
     const want = on ?? !g.powered;
-    if (want === g.powered) return true;
-    if (want) {
-      if (this.freeHands() < g.def.hands) return false;
-      if (this.allocated('guns') + g.def.hands > this.capacity('guns')) return false;
+    if (want === g.powered) {
+      g.wanted = want;
+      return true;
     }
+    if (want && !this.canPower(index)) return false;
     g.powered = want;
+    g.wanted = want;
     return true;
+  }
+
+  private canPower(index: number): boolean {
+    const g = this.guns[index];
+    return this.freeHands() >= g.def.hands && this.allocated('guns') + g.def.hands <= this.capacity('guns');
+  }
+
+  /** Put hands back where the captain wanted them, as far as capacity and free hands allow. */
+  restoreWanted(): void {
+    this.guns.forEach((g, i) => {
+      if (g.wanted && !g.powered && this.canPower(i)) g.powered = true;
+    });
+    for (const id of HANDS_SYSTEMS) {
+      const s = this.systems.get(id);
+      while (s && s.hands < s.wanted && s.hands < this.capacity(id) && this.freeHands() > 0) s.hands++;
+    }
   }
 
   damageSystem(id: SystemId, amount: number): void {

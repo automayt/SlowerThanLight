@@ -174,6 +174,7 @@ export class BattleScene extends Phaser.Scene {
   private drawProjectiles(): void {
     const g = this.fx;
     g.clear();
+    if (this.battle.outcome) return;
     for (const p of this.battle.projectiles) {
       if (p.t < p.delay) continue;
       const k = Math.min(1, (p.t - p.delay) / TRAVEL_TIME);

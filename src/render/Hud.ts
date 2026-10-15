@@ -223,6 +223,10 @@ export class Hud {
     });
 
     this.logText.setText(this.log.map((l) => l.text).join('\n'));
+    while (this.logText.height > 172 && this.log.length > 1) {
+      this.log.shift();
+      this.logText.setText(this.log.map((l) => l.text).join('\n'));
+    }
     this.pauseBanner.setVisible(battle.paused && !battle.outcome);
     this.hoverText.setText(state.hoverText).setVisible(!!state.hoverText);
   }
