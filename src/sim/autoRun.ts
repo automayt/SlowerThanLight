@@ -1,4 +1,4 @@
-import { Run, type BattleReport } from './Run';
+import { Run, type BattleReport, type UpgradeId } from './Run';
 import type { SystemId } from './types';
 
 export interface AutoRunOptions {
@@ -6,6 +6,8 @@ export interface AutoRunOptions {
   focus?: SystemId;
   /** Simulated seconds before a battle counts as a stalemate. */
   battleLimit?: number;
+  /** Spend spare gold in port on guns and upgrades (default true). */
+  shop?: boolean;
 }
 
 export interface AutoRunResult {
@@ -23,7 +25,7 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
     switch (run.status) {
       case 'chart': {
         const options = run.reachable();
-        const hurt = run.condition.hull < run.def.hull * 0.6;
+        const hurt = run.condition.hull < run.fit.hull * 0.6;
         const score = (n: (typeof options)[number]) =>
           (run.willBeOverrun(n) ? -10 : 0) + (n.kind === 'port' && hurt ? 5 : 0) + (n.kind === 'battle' && hurt ? -2 : 0) + run.rng.next();
         const pick = [...options].sort((a, b) => score(b) - score(a))[0];
@@ -52,10 +54,22 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
         if (hurt) run.rest();
         while (run.repairHull(1));
         if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
+        if (opts.shop !== false) shop(run);
         run.leavePort();
         break;
       }
     }
   }
   return { run, battles };
+}
+
+/** Spend spare gold: the biggest affordable gun if a port is free, then upgrades in a sensible order. */
+function shop(run: Run): void {
+  const gun = run
+    .gunOffers()
+    .filter((o) => o.available)
+    .sort((a, b) => b.price - a.price)[0];
+  if (gun) run.buyGun(gun.weapon.id);
+  const priority: UpgradeId[] = ['guns', 'hull', 'hands', 'sails', 'pumps', 'helm', 'surgeon'];
+  for (const id of priority) while (run.buyUpgrade(id));
 }

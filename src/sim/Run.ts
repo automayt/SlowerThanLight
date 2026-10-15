@@ -1,11 +1,13 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
 import { PORT_NAMES, RECRUIT_NAMES, SEA_EVENTS, seaEvent } from '../data/voyage';
+import { WEAPONS, weapon } from '../data/weapons';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
 import { Rng } from './rng';
 import { generateChart, nodeById, type SeaChart, type SeaNode } from './SeaChart';
 import { Ship, type ShipCondition } from './Ship';
-import type { EnemyDef, EventEffect, SeaEventDef, ShipDef, SystemId } from './types';
+import type { EnemyDef, EventEffect, GunMount, SeaEventDef, ShipDef, SystemId, WeaponDef } from './types';
+import { SYSTEM_NAMES } from './types';
 
 /** Where the Navy fleet starts, in chart columns (the player starts in column 0). */
 export const NAVY_START = -2.5;
@@ -18,13 +20,74 @@ export const ALARM_DELAY = 0.5;
 /** Columns the fleet gains while you rest and refit in port. */
 export const PORT_REST_DELAY = 0.5;
 
-export const START_GOLD = 20;
+export const START_GOLD = 30;
 export const HULL_PRICE = 3;
 export const CREW_PRICE = 30;
 /** Hired crew allowed above the ship's starting complement. */
 export const EXTRA_CREW = 2;
 /** Healing per jump while under way. */
 export const JUMP_HEAL = 15;
+
+/** Gun ports on every ship. */
+export const MAX_GUNS = 4;
+/** Most bars a shipwright can give each system. */
+export const SYSTEM_CAP: Record<SystemId, number> = { helm: 3, sails: 6, guns: 8, pumps: 4, surgeon: 3 };
+/** Deckhands you can sign on above the ship's own. */
+export const EXTRA_HANDS = 3;
+/** Max hull added by each round of oak planking, and how many rounds a ship can take. */
+export const PLATING = 3;
+export const MAX_PLATING = 2;
+
+/** Weapons sold in port armouries, cheapest first. */
+export const ARMOURY = Object.values(WEAPONS)
+  .sort((a, b) => a.price - b.price)
+  .map((w) => w.id);
+
+export type UpgradeId = SystemId | 'hands' | 'hull';
+
+export interface UpgradeOffer {
+  id: UpgradeId;
+  label: string;
+  detail: string;
+  price: number;
+  available: boolean;
+}
+
+export interface GunOffer {
+  weapon: WeaponDef;
+  price: number;
+  available: boolean;
+}
+
+/** How the ship is fitted out: starts as built, changed by the shipwright and the armoury. */
+export interface ShipFit {
+  hull: number;
+  hands: number;
+  systems: Partial<Record<SystemId, number>>;
+  guns: GunMount[];
+}
+
+/** Everything needed to pick a voyage back up. */
+export interface RunSave {
+  version: 1;
+  shipId: string;
+  seed: number;
+  rng: number;
+  chart: SeaChart;
+  nodeId: number;
+  navy: number;
+  gold: number;
+  condition: ShipCondition;
+  fit: ShipFit;
+  status: RunStatus;
+  encounter: Encounter;
+  jumps: number;
+  visited: number[];
+  battlesWon: number;
+  plunderTaken: number;
+  ending: string;
+  usedNames: string[];
+}
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
 export const PLUNDER_SHARE: Partial<Record<OutcomeKind, number>> = {
@@ -37,9 +100,9 @@ export const PLUNDER_SHARE: Partial<Record<OutcomeKind, number>> = {
 export type RunStatus = 'chart' | 'battle' | 'event' | 'port' | 'won' | 'lost';
 
 export type Encounter =
-  | { kind: 'battle'; enemy: string; boss: boolean; ambush: boolean; text: string }
+  | { kind: 'battle'; enemy: string; name: string; boss: boolean; ambush: boolean; text: string }
   | { kind: 'event'; event: string }
-  | { kind: 'port'; name: string; rested: boolean }
+  | { kind: 'port'; name: string; rested: boolean; stock: string[] }
   | { kind: 'empty'; text: string }
   | { kind: 'start' };
 
@@ -61,7 +124,8 @@ export class Run {
   readonly seed: number;
   readonly rng: Rng;
   readonly def: ShipDef;
-  readonly chart: SeaChart;
+  chart: SeaChart;
+  fit: ShipFit;
   nodeId = 0;
   /** Column the Navy fleet has reached; nodes at or behind it are overrun. */
   navy = NAVY_START;
@@ -83,7 +147,14 @@ export class Run {
     this.def = playerShip(shipId);
     this.condition = new Ship(this.def, 'player').condition();
     for (const c of this.condition.crew) this.usedNames.add(c.name);
-    this.chart = generateChart(this.rng, { events: SEA_EVENTS.map((e) => e.id), ports: PORT_NAMES });
+    this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
+    this.chart = generateChart(this.rng, { events: SEA_EVENTS.map((e) => e.id), ports: PORT_NAMES, armoury: ARMOURY });
+  }
+
+  /** The ship as currently fitted out. */
+  get ship(): ShipDef {
+    const f = this.fit;
+    return { ...this.def, hull: f.hull, hands: f.hands, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
   get node(): SeaNode {
@@ -122,23 +193,33 @@ export class Run {
 
     if (node.kind === 'boss') {
       const foe = enemy(node.enemy ?? 'frigate');
-      return this.begin({ kind: 'battle', enemy: foe.id, boss: true, ambush: false, text: foe.sighting });
+      return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: true, ambush: false, text: foe.sighting });
     }
     if (overrun) {
-      return this.begin({ kind: 'battle', enemy: 'cutter', boss: false, ambush: true, text: 'The fleet has overrun these waters. A Navy cutter of the vanguard bears down on you!' });
+      const foe = enemy('cutter');
+      const text = 'The fleet has overrun these waters. A Navy cutter of the vanguard bears down on you!';
+      return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: true, text });
     }
     switch (node.kind) {
       case 'battle': {
         const foe = enemy(node.enemy ?? 'cutter');
-        return this.begin({ kind: 'battle', enemy: foe.id, boss: false, ambush: false, text: foe.sighting });
+        return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: foe.sighting });
       }
       case 'event':
         return this.begin({ kind: 'event', event: node.event ?? SEA_EVENTS[0].id });
       case 'port':
-        return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false });
+        return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false, stock: [...(node.stock ?? [])] });
       default:
         return this.begin({ kind: 'empty', text: 'Open water and a fair wind. The crew make running repairs.' });
     }
+  }
+
+  /** A name for the ship you meet: one you have not fought before, if it can be helped. */
+  private shipName(foe: EnemyDef): string {
+    const fresh = foe.names.filter((n) => !this.usedNames.has(n));
+    const name = this.rng.pick(fresh.length ? fresh : foe.names);
+    this.usedNames.add(name);
+    return name;
   }
 
   private begin(enc: Encounter): Encounter {
@@ -170,7 +251,7 @@ export class Run {
   startBattle(opts: Partial<BattleOptions> = {}): Battle {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
-    return new Battle(this.def, foe.ship, {
+    return new Battle(this.ship, { ...foe.ship, name: this.encounter.name }, {
       seed: this.rng.int(2 ** 31),
       enemyAI: foe.ai,
       playerCondition: this.condition,
@@ -250,7 +331,7 @@ export class Run {
     if (choice.cost) changes.unshift(`−${choice.cost} gold`);
     if (effect.battle) {
       const foe = enemy(effect.battle);
-      this.begin({ kind: 'battle', enemy: foe.id, boss: false, ambush: false, text: effect.text });
+      this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: effect.text });
     } else {
       this.status = 'chart';
     }
@@ -268,7 +349,7 @@ export class Run {
     }
     if (e.hull) {
       const before = c.hull;
-      c.hull = Math.max(1, Math.min(this.def.hull, c.hull + e.hull));
+      c.hull = Math.max(1, Math.min(this.fit.hull, c.hull + e.hull));
       if (c.hull !== before) out.push(`${c.hull > before ? '+' : '−'}${Math.abs(c.hull - before)} hull`);
     }
     if (e.crewHp) {
@@ -308,7 +389,7 @@ export class Run {
 
   /** Hull points missing. */
   hullMissing(): number {
-    return this.def.hull - this.condition.hull;
+    return this.fit.hull - this.condition.hull;
   }
 
   canRest(): boolean {
@@ -348,5 +429,144 @@ export class Run {
 
   leavePort(): void {
     if (this.status === 'port') this.status = 'chart';
+  }
+
+  // --- Shipwright and armoury -----------------------------------------------
+
+  private get inPort(): boolean {
+    return this.status === 'port' && this.encounter.kind === 'port';
+  }
+
+  /** Improvements the shipwright offers, with their prices. */
+  upgradeOffers(): UpgradeOffer[] {
+    const f = this.fit;
+    const offers: UpgradeOffer[] = [];
+    const plating = (f.hull - this.def.hull) / PLATING;
+    offers.push({
+      id: 'hull',
+      label: 'Oak planking',
+      detail: plating >= MAX_PLATING ? 'She can carry no more timber' : `Max hull ${f.hull} → ${f.hull + PLATING}`,
+      price: 35 + 15 * plating,
+      available: plating < MAX_PLATING,
+    });
+    const extra = f.hands - this.def.hands;
+    offers.push({
+      id: 'hands',
+      label: 'Sign on deckhands',
+      detail: extra >= EXTRA_HANDS ? 'No hammocks to spare' : `Hands ${f.hands} → ${f.hands + 1}`,
+      price: 30 + 10 * extra,
+      available: extra < EXTRA_HANDS,
+    });
+    for (const id of ['sails', 'guns', 'pumps', 'helm', 'surgeon'] as SystemId[]) {
+      const now = f.systems[id] ?? 0;
+      if (!now) continue;
+      offers.push({
+        id,
+        label: `Refit ${SYSTEM_NAMES[id]}`,
+        detail: now >= SYSTEM_CAP[id] ? 'Fully fitted' : `${SYSTEM_NAMES[id]} ${now} → ${now + 1}`,
+        price: 20 + 8 * now,
+        available: now < SYSTEM_CAP[id],
+      });
+    }
+    for (const o of offers) o.available = o.available && this.inPort && this.gold >= o.price;
+    return offers;
+  }
+
+  buyUpgrade(id: UpgradeId): boolean {
+    const offer = this.upgradeOffers().find((o) => o.id === id);
+    if (!offer?.available) return false;
+    this.gold -= offer.price;
+    if (id === 'hull') {
+      this.fit.hull += PLATING;
+      this.condition.hull += PLATING;
+    } else if (id === 'hands') {
+      this.fit.hands++;
+    } else {
+      this.fit.systems[id] = (this.fit.systems[id] ?? 0) + 1;
+    }
+    return true;
+  }
+
+  /** Guns in this port's armoury. You need a free gun port to buy one. */
+  gunOffers(): GunOffer[] {
+    if (this.encounter.kind !== 'port') return [];
+    const room = this.fit.guns.length < MAX_GUNS;
+    return this.encounter.stock.map((id) => {
+      const w = weapon(id);
+      return { weapon: w, price: w.price, available: this.inPort && room && this.gold >= w.price };
+    });
+  }
+
+  buyGun(weaponId: string): boolean {
+    const offer = this.gunOffers().find((o) => o.weapon.id === weaponId);
+    if (!offer?.available || this.encounter.kind !== 'port') return false;
+    this.gold -= offer.price;
+    this.fit.guns.push({ weapon: weaponId });
+    this.encounter.stock.splice(this.encounter.stock.indexOf(weaponId), 1);
+    return true;
+  }
+
+  /** What the armoury pays for one of your guns. */
+  sellPrice(index: number): number {
+    const g = this.fit.guns[index];
+    return g ? Math.floor(weapon(g.weapon).price / 2) : 0;
+  }
+
+  canSellGun(index: number): boolean {
+    return this.inPort && !!this.fit.guns[index] && this.fit.guns.length > 1;
+  }
+
+  sellGun(index: number): boolean {
+    if (!this.canSellGun(index)) return false;
+    this.gold += this.sellPrice(index);
+    this.fit.guns.splice(index, 1);
+    return true;
+  }
+
+  // --- Saving -----------------------------------------------------------------
+
+  toSave(): RunSave {
+    return structuredClone({
+      version: 1 as const,
+      shipId: this.def.id,
+      seed: this.seed,
+      rng: this.rng.position,
+      chart: this.chart,
+      nodeId: this.nodeId,
+      navy: this.navy,
+      gold: this.gold,
+      condition: this.condition,
+      fit: this.fit,
+      status: this.status,
+      encounter: this.encounter,
+      jumps: this.jumps,
+      visited: this.visited,
+      battlesWon: this.battlesWon,
+      plunderTaken: this.plunderTaken,
+      ending: this.ending,
+      usedNames: [...this.usedNames],
+    });
+  }
+
+  static fromSave(raw: RunSave): Run {
+    if (raw?.version !== 1) throw new Error('Unknown save version');
+    const s = structuredClone(raw);
+    const run = new Run(s.shipId, s.seed);
+    run.rng.position = s.rng;
+    run.chart = s.chart;
+    run.nodeId = s.nodeId;
+    run.navy = s.navy;
+    run.gold = s.gold;
+    run.condition = s.condition;
+    run.fit = s.fit;
+    run.status = s.status;
+    run.encounter = s.encounter;
+    run.jumps = s.jumps;
+    run.visited = s.visited;
+    run.battlesWon = s.battlesWon;
+    run.plunderTaken = s.plunderTaken;
+    run.ending = s.ending;
+    run.usedNames = new Set(s.usedNames);
+    return run;
   }
 }

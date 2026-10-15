@@ -15,6 +15,8 @@ export interface SeaNode {
   event?: string;
   /** Display name for ports. */
   name?: string;
+  /** Weapon ids a port's armoury has for sale. */
+  stock?: string[];
   /** Ids of nodes in the next column you can sail to. */
   next: number[];
 }
@@ -29,6 +31,8 @@ export interface ChartOptions {
   columns?: number;
   events: string[];
   ports: string[];
+  /** Weapon ids ports can stock, cheapest first. Heavier guns turn up later in the voyage. */
+  armoury?: string[];
 }
 
 /** Columns from start to boss inclusive. */
@@ -123,9 +127,22 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
       if (node.kind === 'port') {
         if (!ports.length) ports.push(...opts.ports);
         node.name = ports.splice(rng.int(ports.length), 1)[0];
+        node.stock = stockArmoury(rng, opts.armoury ?? [], depth);
       }
     }
   }
+}
+
+/** Two different guns, the heavy ones likelier the deeper into the voyage. */
+function stockArmoury(rng: Rng, armoury: string[], depth: number): string[] {
+  const pool = armoury.map((id, i) => ({ id, w: 1 + depth * i }));
+  const stock: string[] = [];
+  while (stock.length < 2 && pool.length) {
+    const pick = rng.weighted(pool, (p) => p.w);
+    stock.push(pick.id);
+    pool.splice(pool.indexOf(pick), 1);
+  }
+  return stock;
 }
 
 /** Merchants early, more Navy patrols as you near the blockade. */

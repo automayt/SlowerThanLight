@@ -44,6 +44,8 @@ export interface WeaponDef {
   shots: number;
   /** Extra miss chance in percent. */
   inaccuracy: number;
+  /** Price in gold at a port armoury. */
+  price: number;
 }
 
 export interface GunMount {
@@ -83,6 +85,8 @@ export interface EnemyDef {
   ai: { fleeAt: number; surrenderChance: number; surrenderAt: number };
   /** Gold in her hold, as [min, max]. */
   plunder: [number, number];
+  /** Names she might sail under; one is picked per encounter. */
+  names: string[];
   /** Line shown when she is sighted. */
   sighting: string;
 }

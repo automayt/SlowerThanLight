@@ -51,8 +51,8 @@ export class RunBar {
     const c = run.condition;
     const g = this.g;
     g.clear();
-    this.hull.setText(`Hull ${c.hull}/${run.def.hull}`);
-    const frac = c.hull / run.def.hull;
+    this.hull.setText(`Hull ${c.hull}/${run.fit.hull}`);
+    const frac = c.hull / run.fit.hull;
     drawBar(g, 330, 17, 200, 14, frac, frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f);
     const hurt = c.crew.filter((m) => m.hp < 70).length;
     this.crew.setText(`Crew ${c.crew.length}/${run.maxCrew}${hurt ? `  (${hurt} wounded)` : ''}`);

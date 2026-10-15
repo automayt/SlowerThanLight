@@ -126,7 +126,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     ship: NAVY_CUTTER,
     faction: 'navy',
     ai: { fleeAt: 0.3, surrenderChance: 0.35, surrenderAt: 0.25 },
-    plunder: [15, 25],
+    plunder: [20, 30],
+    names: ['HMS Diligence', 'HMS Swift', 'HMS Vigilant', 'HMS Hound', 'HMS Ferret', 'HMS Sparrowhawk', 'HMS Badger'],
     sighting: 'A Navy cutter beats up to windward, guns run out.',
   },
   merchant: {
@@ -135,6 +136,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     faction: 'merchant',
     ai: { fleeAt: 1, surrenderChance: 0.6, surrenderAt: 0.45 },
     plunder: [55, 85],
+    names: ['The Fat Margaret', 'The Bristol Rose', 'The Good Intent', 'The Prosperous', 'The Mary Anne', 'The Honest Trader', 'The Sugar Queen'],
     sighting: 'A fat merchant brig, low in the water. She has seen you and means to run!',
   },
   privateer: {
@@ -143,6 +145,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     faction: 'privateer',
     ai: { fleeAt: 0.25, surrenderChance: 0.25, surrenderAt: 0.2 },
     plunder: [30, 50],
+    names: ['The Mistral', 'La Vipère', 'The Black Prince', 'The Revenge', 'Le Corbeau', 'The Lucky Strike', 'The Bounty Hunter'],
     sighting: 'A privateer schooner hoists her colours. Bounty hunters!',
   },
   frigate: {
@@ -151,6 +154,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     faction: 'navy',
     ai: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 },
     plunder: [150, 150],
+    names: ['HMS Relentless'],
     sighting: 'HMS Relentless bars the channel. The Commodore means to finish this here.',
   },
 };

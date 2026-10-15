@@ -6,6 +6,15 @@ export class Rng {
     this.state = seed >>> 0;
   }
 
+  /** Internal state, for saving and restoring a sequence exactly. */
+  get position(): number {
+    return this.state;
+  }
+
+  set position(state: number) {
+    this.state = state >>> 0;
+  }
+
   /** Float in [0, 1). */
   next(): number {
     this.state = (this.state + 0x6d2b79f5) >>> 0;

@@ -4,7 +4,7 @@ import { SEA_EVENTS } from '../../src/data/voyage';
 import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
-import { CREW_PRICE, HULL_PRICE, NAVY_SPEED, PORT_REST_DELAY, Run } from '../../src/sim/Run';
+import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, SYSTEM_CAP } from '../../src/sim/Run';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
@@ -165,7 +165,7 @@ describe('events', () => {
     const run = new Run('wren', 1);
     const crew = run.condition.crew.length;
     run.applyEffect({ text: '', gold: 10, hull: -99, crewHp: -500, recruit: 1, navy: 1 });
-    expect(run.gold).toBe(30);
+    expect(run.gold).toBe(START_GOLD + 10);
     expect(run.condition.hull).toBe(1);
     expect(run.condition.crew.every((c) => c.hp >= 1)).toBe(true);
     expect(run.condition.crew).toHaveLength(crew + 1);
@@ -255,5 +255,96 @@ describe('auto runs', () => {
     const a = autoRun(new Run('gull', 77)).run;
     const b = autoRun(new Run('gull', 77)).run;
     expect([a.status, a.gold, a.visited]).toEqual([b.status, b.gold, b.visited]);
+  });
+});
+
+describe('enemy names', () => {
+  it('ships you meet sail under their own names, and you do not meet the same one twice early on', () => {
+    const run = new Run('gull', 5);
+    run.navy = -99;
+    const names: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      run.encounter = { kind: 'event', event: 'picket' };
+      run.status = 'event';
+      run.chooseEvent(0);
+      const battle = run.startBattle();
+      names.push(battle.enemy.def.name);
+      run.status = 'chart';
+    }
+    expect(new Set(names).size).toBe(5);
+    for (const n of names) expect(ENEMIES.cutter.names).toContain(n);
+  });
+});
+
+describe('shipwright and armoury', () => {
+  it('upgrades raise the fitted ship and cost gold', () => {
+    const run = runAt('port');
+    run.gold = 1000;
+    const before = run.ship;
+    expect(run.buyUpgrade('hull')).toBe(true);
+    expect(run.buyUpgrade('hands')).toBe(true);
+    expect(run.buyUpgrade('sails')).toBe(true);
+    const after = run.ship;
+    expect(after.hull).toBe(before.hull + PLATING);
+    expect(run.condition.hull).toBe(before.hull + PLATING);
+    expect(after.hands).toBe(before.hands + 1);
+    expect(after.systems.sails).toBe(before.systems.sails! + 1);
+    expect(run.gold).toBeLessThan(1000);
+    expect(run.def.hull).toBe(before.hull);
+  });
+
+  it('upgrades stop at their caps and need gold and a port', () => {
+    const run = runAt('port');
+    run.gold = 100000;
+    while (run.buyUpgrade('sails'));
+    expect(run.fit.systems.sails).toBe(SYSTEM_CAP.sails);
+    run.gold = 0;
+    expect(run.buyUpgrade('hull')).toBe(false);
+    run.gold = 1000;
+    run.leavePort();
+    expect(run.buyUpgrade('hull')).toBe(false);
+  });
+
+  it('sells guns from the port stock into free gun ports, and buys yours back at half price', () => {
+    const run = runAt('port');
+    run.gold = 1000;
+    const stock = run.gunOffers();
+    expect(stock.length).toBeGreaterThan(0);
+    while (run.fit.guns.length < MAX_GUNS - 1) run.fit.guns.push({ weapon: 'pdr6' });
+    expect(run.buyGun(stock[0].weapon.id)).toBe(true);
+    expect(run.fit.guns).toHaveLength(MAX_GUNS);
+    expect(run.gunOffers().every((o) => !o.available)).toBe(true);
+    const gold = run.gold;
+    const price = run.sellPrice(0);
+    expect(run.sellGun(0)).toBe(true);
+    expect(run.gold).toBe(gold + price);
+    while (run.fit.guns.length > 1) run.sellGun(0);
+    expect(run.sellGun(0)).toBe(false);
+  });
+
+  it('a battle uses the fitted ship', () => {
+    const run = runAt('battle');
+    run.fit.guns.push({ weapon: 'pdr18' });
+    run.fit.hands += 2;
+    const battle = run.startBattle();
+    expect(battle.player.guns.map((g) => g.def.id)).toContain('pdr18');
+    expect(battle.player.def.hands).toBe(run.def.hands + 2);
+  });
+});
+
+describe('saving', () => {
+  it('a restored voyage carries on exactly as the original would', () => {
+    const a = new Run('wren', 31);
+    a.jump(a.reachable()[0].id);
+    if (a.status === 'event') a.chooseEvent(a.currentEvent().choices.findIndex((_, i) => a.canChoose(i)));
+    const save = JSON.parse(JSON.stringify(a.toSave()));
+    const b = Run.fromSave(save);
+    expect(b.toSave()).toEqual(a.toSave());
+    const rest = (r: Run) => autoRun(r).run.toSave();
+    expect(rest(b)).toEqual(rest(a));
+  });
+
+  it('rejects an unknown save', () => {
+    expect(() => Run.fromSave({ version: 9 } as never)).toThrow();
   });
 });
