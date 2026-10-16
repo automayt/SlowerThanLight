@@ -105,11 +105,12 @@ export class Hud {
     systems.forEach((id, i) => {
       if (!player.system(id)) return;
       const y = BOTTOM_Y + 40 + i * 31;
-      this.sysLabels.set(id, scene.add.text(18, y, SYSTEM_NAMES[id], textStyle(13)));
-      this.sysStatus.set(id, scene.add.text(232, y + 1, '', textStyle(11, COLORS.textDim)));
+      if (scene.textures.exists(`sysicon:${id}`)) scene.add.image(27, y + 8, `sysicon:${id}`).setScale(0.48);
+      this.sysLabels.set(id, scene.add.text(42, y, SYSTEM_NAMES[id], textStyle(13)));
+      this.sysStatus.set(id, scene.add.text(264, y + 1, '', textStyle(11, COLORS.textDim)));
       if (id === 'sails' || id === 'pumps' || id === 'surgeon') {
-        new Button(scene, 92, y - 2, 22, 22, '−', () => battle.addHands(id, -1), { size: 15 });
-        new Button(scene, 204, y - 2, 22, 22, '+', () => battle.addHands(id, 1), { size: 15 });
+        new Button(scene, 112, y - 2, 22, 22, '−', () => battle.addHands(id, -1), { size: 15 });
+        new Button(scene, 236, y - 2, 22, 22, '+', () => battle.addHands(id, 1), { size: 15 });
       }
     });
 
@@ -127,7 +128,8 @@ export class Hud {
       const status = scene.add.text(x + 8, BOTTOM_Y + 98, '', textStyle(11, COLORS.textDim));
       const target = scene.add.text(x + 8, BOTTOM_Y + 114, '', textStyle(11));
       const shots = SHOT_TYPES.map((s, j) => {
-        const b = new Button(scene, x + 8 + j * 36, BOTTOM_Y + 140, 33, 24, SHOT_EFFECTS[s].label[0], () => battle.setShot(i, s), { size: 13 });
+        const b = new Button(scene, x + 8 + j * 36, BOTTOM_Y + 140, 33, 24, '', () => battle.setShot(i, s), { size: 13 });
+        b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));
         b.bg.on('pointerover', () => this.showTooltip(`${SHOT_EFFECTS[s].label} shot: ${SHOT_EFFECTS[s].blurb}`, x, BOTTOM_Y - 8));
         b.bg.on('pointerout', () => this.tooltip.setVisible(false));
         return b;
@@ -218,7 +220,7 @@ export class Hud {
       const sys = player.system(id)!;
       const y = label.y + 3;
       const on = id === 'helm' ? player.level('helm') : player.allocated(id);
-      drawPips(g, 120, y, on, sys.max, sys.damage, 12, 3);
+      drawPips(g, 140, y, on, sys.max, sys.damage, 12, 3);
       this.sysStatus.get(id)!.setText(systemStatus(player, id)).setColor(systemStatus(player, id).startsWith('!') ? COLORS.textWarn : COLORS.textDim);
     }
 
@@ -303,4 +305,73 @@ function systemStatus(ship: Ship, id: SystemId): string {
   if (id === 'surgeon' && ship.level('surgeon') > 0) return 'Treating';
   if (id === 'pumps' && ship.level('pumps') > 0) return ship.isSwamped('pumps') ? '! Half rate' : 'Bailing';
   return '';
+}
+
+/** A small painted icon for each kind of shot, made once. */
+function shotIcon(scene: Phaser.Scene, shot: ShotType): string {
+  const key = `shoticon:${shot}`;
+  if (scene.textures.exists(key)) return key;
+  const tex = scene.textures.createCanvas(key, 40, 40)!;
+  const ctx = tex.getContext();
+  const ball = (x: number, y: number, r: number, base = '#2a2a2a') => {
+    const grad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    grad.addColorStop(0, '#8a8a88');
+    grad.addColorStop(1, base);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+  switch (shot) {
+    case 'round':
+      ball(20, 20, 11);
+      break;
+    case 'chain':
+      ctx.strokeStyle = '#9a9a96';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([3, 2]);
+      ctx.beginPath();
+      ctx.moveTo(11, 26);
+      ctx.quadraticCurveTo(20, 34, 29, 14);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ball(10, 27, 7);
+      ball(30, 13, 7);
+      break;
+    case 'grape':
+      for (const [x, y] of [
+        [14, 14],
+        [26, 13],
+        [20, 21],
+        [12, 26],
+        [27, 26],
+        [20, 31],
+        [20, 9],
+      ])
+        ball(x, y, 5);
+      break;
+    case 'hot': {
+      const glow = ctx.createRadialGradient(20, 22, 2, 20, 22, 18);
+      glow.addColorStop(0, 'rgba(255,200,80,0.9)');
+      glow.addColorStop(1, 'rgba(255,90,30,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(20, 22, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff7a22';
+      ctx.beginPath();
+      ctx.moveTo(10, 24);
+      ctx.quadraticCurveTo(12, 8, 20, 3);
+      ctx.quadraticCurveTo(26, 12, 30, 24);
+      ctx.closePath();
+      ctx.fill();
+      ball(20, 25, 9, '#7a2a10');
+      break;
+    }
+  }
+  tex.refresh();
+  return key;
 }
