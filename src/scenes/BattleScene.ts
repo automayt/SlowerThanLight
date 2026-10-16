@@ -31,6 +31,9 @@ export class BattleScene extends Phaser.Scene {
   private fx!: Phaser.GameObjects.Graphics;
   private seaImage: Phaser.GameObjects.Image | null = null;
   private readonly swingers = new Map<number, Phaser.GameObjects.Image>();
+  private ambient!: Phaser.GameObjects.Graphics;
+  private clouds: { x: number; y: number; s: number; v: number }[] = [];
+  private gulls: { x: number; y: number; v: number; phase: number; drift: number }[] = [];
   private hud!: Hud;
   private selected = new Set<number>();
   private aimingGun: number | null = null;
@@ -65,6 +68,9 @@ export class BattleScene extends Phaser.Scene {
       flag: faction === 'navy' ? 'navy' : 'merchant',
     });
     this.fx = this.add.graphics().setDepth(10);
+    this.ambient = this.add.graphics().setDepth(8);
+    this.clouds = Array.from({ length: 4 }, (_, i) => ({ x: i * 380 + Math.random() * 200, y: 60 + Math.random() * 420, s: 0.8 + Math.random() * 0.8, v: 6 + Math.random() * 6 }));
+    this.gulls = Array.from({ length: 3 }, () => ({ x: Math.random() * SCREEN.w, y: 90 + Math.random() * 380, v: 22 + Math.random() * 18, phase: Math.random() * 6, drift: Math.random() * 6 }));
 
     this.hud = new Hud(this, battle, {
       selectCrew: (id, additive) => {
@@ -144,8 +150,8 @@ export class BattleScene extends Phaser.Scene {
     for (const ev of b.drainEvents()) this.onEvent(ev);
 
     // Drop selections of crew who died.
-    const alive = new Set(b.crewOf('player').map((c) => c.id));
-    for (const id of this.selected) if (!alive.has(id)) this.selected.delete(id);
+    const mine = new Set(b.crewOf('player').map((c) => c.id));
+    for (const id of this.selected) if (!mine.has(id)) this.selected.delete(id);
 
     const ptr = this.input.activePointer;
     const hoverEnemy = this.enemyView.roomAt(ptr.x, ptr.y);
@@ -161,8 +167,10 @@ export class BattleScene extends Phaser.Scene {
       const k = Math.sin(time / 4000);
       this.seaImage.setPosition(SCREEN.w / 2 + k * 8, SCREEN.h / 2 + Math.cos(time / 5200) * 5);
     } else this.sea.draw(time);
-    this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer });
-    this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null });
+    const alive = new Set([...b.crewOf('player'), ...b.crewOf('enemy')].map((c) => c.id));
+    this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer, alive });
+    this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null, alive });
+    this.drawAmbient(time, delta / 1000);
     this.drawProjectiles();
 
     this.hud.refresh({
@@ -172,6 +180,48 @@ export class BattleScene extends Phaser.Scene {
     });
 
     if (b.outcome && !this.ending) this.endBattle();
+  }
+
+  /** Cloud shadows sliding over the water and ships, and a few gulls wheeling overhead. */
+  private drawAmbient(time: number, dt: number): void {
+    const g = this.ambient;
+    const t = time / 1000;
+    g.clear();
+    for (const c of this.clouds) {
+      c.x += c.v * dt;
+      if (c.x - 260 * c.s > SCREEN.w) {
+        c.x = -260 * c.s;
+        c.y = 60 + Math.random() * 420;
+      }
+      for (let i = 0; i < 5; i++) {
+        g.fillStyle(0x061420, 0.045).fillEllipse(c.x + Math.sin(i * 2.1) * 90 * c.s, c.y + Math.cos(i * 1.7) * 30 * c.s, 220 * c.s, 90 * c.s);
+      }
+    }
+    for (const gull of this.gulls) {
+      gull.x += gull.v * dt;
+      gull.y += Math.sin(t * 0.7 + gull.drift) * 8 * dt;
+      if (gull.x > SCREEN.w + 30) {
+        gull.x = -30;
+        gull.y = 90 + Math.random() * 380;
+      }
+      const flap = Math.sin(t * 9 + gull.phase);
+      const wing = 7;
+      // Shadow on the sea, then the bird.
+      g.lineStyle(2, 0x061420, 0.18);
+      g.beginPath();
+      g.moveTo(gull.x - wing + 12, gull.y + 40 + flap * 2);
+      g.lineTo(gull.x + 12, gull.y + 42);
+      g.lineTo(gull.x + wing + 12, gull.y + 40 + flap * 2);
+      g.strokePath();
+      g.lineStyle(2.2, 0xf4f1ea, 0.95);
+      g.beginPath();
+      g.moveTo(gull.x - wing, gull.y - 3 + flap * 3);
+      g.lineTo(gull.x - 2, gull.y);
+      g.lineTo(gull.x, gull.y + 1);
+      g.lineTo(gull.x + 2, gull.y);
+      g.lineTo(gull.x + wing, gull.y - 3 + flap * 3);
+      g.strokePath();
+    }
   }
 
   private hoverText(playerRoom: string | null, enemyRoom: string | null): string {
@@ -241,8 +291,15 @@ export class BattleScene extends Phaser.Scene {
       const target = this.viewFor(p.from === 'player' ? 'enemy' : 'player');
       const a = shooter.muzzle(p.gun);
       const b = target.roomCenter(p.room);
-      const x = a.x + (b.x - a.x) * k;
-      const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 70;
+      const at = (kk: number) => ({ x: a.x + (b.x - a.x) * kk, y: a.y + (b.y - a.y) * kk - Math.sin(kk * Math.PI) * 70 });
+      const { x, y } = at(k);
+      // Shadow on the water below, so the arc reads.
+      g.fillStyle(0x061420, 0.28).fillEllipse(a.x + (b.x - a.x) * k + 6, a.y + (b.y - a.y) * k + 10, 10, 4);
+      for (let i = 1; i <= 4; i++) {
+        const tp = at(Math.max(0, k - i * 0.035));
+        if (p.shot === 'hot') g.fillStyle(i < 2 ? 0xffc040 : 0xff5a1f, 0.55 - i * 0.12).fillCircle(tp.x, tp.y, 5 - i * 0.8);
+        else g.fillStyle(0xd8d4cc, 0.28 - i * 0.06).fillCircle(tp.x, tp.y, 3 + i * 0.8);
+      }
       switch (p.shot) {
         case 'chain':
           g.fillStyle(0x111111, 1).fillCircle(x - 5, y, 4).fillCircle(x + 5, y, 4);
@@ -280,6 +337,10 @@ export class BattleScene extends Phaser.Scene {
         this.burst(c.x + jx, c.y + jy, ev.shot === 'hot' ? COLORS.fire : 0xffb050, 22, 380);
         this.splinters(c.x + jx, c.y + jy);
         if (ev.hull > 0 || ev.shot === 'hot') view.addScorch(ev.room);
+        if (ev.hull > 0) {
+          view.addHullScar(ev.room);
+          this.floatText(c.x + jx, c.y + jy - 18, `-${ev.hull}`, ours ? '#ff6a5a' : '#ffd27a');
+        }
         if (ours) this.cameras.main.shake(140, 0.004);
         const name = view.ship.room(ev.room).def.name;
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
@@ -377,11 +438,38 @@ export class BattleScene extends Phaser.Scene {
     if (o.won) playSfx(this, 'bell', 0.6);
     if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
-    this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(40);
-    this.add
-      .text(SCREEN.w / 2, SCREEN.h / 2 - 60, o.title, { fontFamily: TITLE_FONT, fontSize: '56px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 6 })
-      .setOrigin(0.5)
-      .setDepth(41);
-    this.time.delayedCall(2200, () => this.scene.start('Result', { battle: this.battle, report } satisfies ResultData));
+    const now = this.time.now;
+    switch (o.kind) {
+      case 'victory':
+        this.enemyView.startFinale('explode', now);
+        break;
+      case 'enemySunk':
+        this.enemyView.startFinale('sink', now);
+        break;
+      case 'enemyEscaped':
+        this.enemyView.startFinale('sail', now);
+        break;
+      case 'escaped':
+        this.playerView.startFinale('sail', now);
+        break;
+      case 'defeat':
+      case 'sunk':
+        this.playerView.startFinale('sink', now);
+        break;
+    }
+    if (o.kind === 'victory' || o.kind === 'defeat') this.cameras.main.shake(500, 0.006);
+    // Let the finale play, then dim the scene and name the outcome.
+    this.time.delayedCall(1400, () => {
+      const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0).setOrigin(0).setDepth(40);
+      this.tweens.add({ targets: shade, fillAlpha: 0.45, duration: 600 });
+      const title = this.add
+        .text(SCREEN.w / 2, SCREEN.h / 2 - 60, o.title, { fontFamily: TITLE_FONT, fontSize: '56px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 6 })
+        .setOrigin(0.5)
+        .setDepth(41)
+        .setAlpha(0)
+        .setScale(0.85);
+      this.tweens.add({ targets: title, alpha: 1, scale: 1, duration: 500, ease: 'Back.easeOut' });
+    });
+    this.time.delayedCall(3800, () => this.scene.start('Result', { battle: this.battle, report } satisfies ResultData));
   }
 }

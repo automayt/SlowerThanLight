@@ -173,7 +173,7 @@ export class Hud {
 
     // Top bars.
     this.drawHull(player, 64, 14);
-    this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%   Flooding ${floodPct(player)}   ${battle.canBoard() ? 'Can board' : 'Too slow to board'}`);
+    this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
     this.playerStats.setColor(battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
     const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : 'Make Sail…';
@@ -182,7 +182,7 @@ export class Hud {
     this.drawHull(enemy, SCREEN.w - 414, 14);
     this.enemyTitle.setText('HULL');
     const fleeing = battle.enemyFleeing ? '   FLEEING!' : '';
-    this.enemyStats.setText(`${enemy.def.className}   Evasion ${Math.round(enemy.evasion())}%   Flooding ${floodPct(enemy)}${fleeing}`);
+    this.enemyStats.setText(`${enemy.def.className}  ·  Evasion ${Math.round(enemy.evasion())}%  ·  Flood ${floodPct(enemy)}${fleeing}`);
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
     // Crew list: your people wherever they are, aboard, crossing, or on her deck.

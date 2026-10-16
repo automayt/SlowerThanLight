@@ -12,7 +12,12 @@ export interface ShipViewState {
   targets?: Map<string, number[]>;
   /** Highlight rooms as aimable (a gun is selected). */
   aiming?: boolean;
+  /** Every crew member still alive on either side; anyone who drops out of this has died rather than crossed over. */
+  alive?: Set<number>;
 }
+
+/** How a ship leaves the fight: going down, or sailing off over the horizon. */
+export type Finale = 'sink' | 'explode' | 'sail';
 
 export interface ShipViewOptions {
   showLabels?: boolean;
@@ -43,6 +48,11 @@ export class ShipView {
   private readonly sprites = new Map<number, Phaser.GameObjects.Image>();
   private readonly facing = new Map<number, { x: number; dir: number }>();
   private readonly scorches: Scorch[] = [];
+  private readonly scars: Scorch[] = [];
+  private finale: { kind: Finale; t0: number } | null = null;
+  /** Offsets applied while the ship sinks or sails away. */
+  private fx = 0;
+  private fy = 0;
   private readonly geom: ShipGeometry;
   private readonly keys: string[];
   private readonly phase = Math.random() * 10;
@@ -95,13 +105,13 @@ export class ShipView {
   /** Tile coordinates (fractional) to screen pixels. */
   toScreen(p: Vec): Vec {
     const x = this.flip ? this.ship.width - p.x : p.x;
-    return { x: this.ox + x * this.tile, y: this.oy + this.bob + p.y * this.tile };
+    return { x: this.ox + this.fx + x * this.tile, y: this.oy + this.bob + this.fy + p.y * this.tile };
   }
 
   /** Screen pixels to fractional tile coordinates. */
   toTile(px: number, py: number): Vec {
-    const x = (px - this.ox) / this.tile;
-    return { x: this.flip ? this.ship.width - x : x, y: (py - this.oy - this.bob) / this.tile };
+    const x = (px - this.ox - this.fx) / this.tile;
+    return { x: this.flip ? this.ship.width - x : x, y: (py - this.oy - this.bob - this.fy) / this.tile };
   }
 
   roomAt(px: number, py: number): string | null {
@@ -161,6 +171,25 @@ export class ShipView {
     if (this.scorches.length > 40) this.scorches.shift();
   }
 
+  /** A cannonball through the side leaves a ragged scar in the planking near the room it struck. */
+  addHullScar(roomId: string): void {
+    const d = this.ship.room(roomId).def;
+    const g = this.geom;
+    const mid = this.ship.height / 2;
+    const x = Math.max(g.stern + 0.4, Math.min(g.tip - 0.7, d.x + d.w / 2 + (Math.random() - 0.5) * d.w * 0.8));
+    const side = d.y + d.h / 2 < mid ? -1 : d.y + d.h / 2 > mid ? 1 : Math.random() < 0.5 ? -1 : 1;
+    this.scars.push({ x, y: mid + side * (g.half(x) - 0.1), r: 0.12 + Math.random() * 0.1, rot: Math.random() * Math.PI });
+    if (this.scars.length > 30) this.scars.shift();
+  }
+
+  /** Begin the ship's exit: sinking, blowing apart, or sailing off. */
+  startFinale(kind: Finale, nowMs: number): void {
+    if (this.finale) return;
+    this.finale = { kind, t0: nowMs / 1000 };
+    this.nameText?.setVisible(false);
+    for (const b of this.badges.values()) b.setVisible(false);
+  }
+
   destroy(): void {
     for (const o of [this.wake, this.over, this.ui, this.base, this.rig, this.nameText, ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
@@ -169,8 +198,8 @@ export class ShipView {
   private placeImages(): void {
     const g = this.geom;
     const T = this.tile;
-    const left = this.flip ? this.ox - g.padR * T : this.ox - g.padL * T;
-    const top = this.oy + this.bob - g.padT * T;
+    const left = (this.flip ? this.ox - g.padR * T : this.ox - g.padL * T) + this.fx;
+    const top = this.oy + this.bob + this.fy - g.padT * T;
     this.base.setPosition(left, top);
     this.rig.setPosition(left, top);
   }
@@ -178,16 +207,84 @@ export class ShipView {
   draw(timeMs: number, state: ShipViewState = {}): void {
     const t = timeMs / 1000;
     this.bob = Math.sin(t * 0.9 + this.phase) * 1.4;
+    const fin = this.finaleProgress(t);
     this.placeImages();
     if (this.nameText) this.nameText.setY(this.oy + this.bob - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
 
     const sails = this.ship.system('sails');
-    this.rig.setAlpha(sails ? 0.6 + 0.4 * (this.ship.capacity('sails') / sails.max) : 1);
+    const fade = fin && fin.kind !== 'sail' ? 1 - fin.k * 0.92 : 1;
+    this.rig.setAlpha((sails ? 0.6 + 0.4 * (this.ship.capacity('sails') / sails.max) : 1) * (fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1));
+    this.base.setAlpha(fade);
+    this.over.setAlpha(fade);
+    if (fin && fin.kind !== 'sail') {
+      // Darken and drown the hull as she goes.
+      const c = Math.round(255 - fin.k * 150);
+      const tint = (c << 16) | (Math.round(255 - fin.k * 110) << 8) | Math.round(255 - fin.k * 70);
+      this.base.setTint(tint);
+      this.rig.setTint(tint);
+    }
 
     this.drawWake(t);
     this.drawOverlay(t, state);
-    this.drawCrew(t, state);
-    this.drawUi(t, state);
+    this.drawCrew(t, state, fade);
+    if (fin) this.drawFinale(fin);
+    else this.drawUi(t, state);
+  }
+
+  private finaleProgress(t: number): { kind: Finale; k: number; age: number } | null {
+    if (!this.finale) return null;
+    const age = t - this.finale.t0;
+    const { kind } = this.finale;
+    const k = Math.max(0, Math.min(1, age / (kind === 'sail' ? 3 : 3.2)));
+    if (kind === 'sail') {
+      this.fx = (this.flip ? 1 : -1) * k * k * 520;
+      this.fy = 0;
+    } else {
+      // Settle, then slide under.
+      this.fy = Math.pow(k, 1.6) * this.tile * 0.9;
+      this.fx = (this.flip ? 1 : -1) * k * this.tile * 0.3;
+    }
+    return { kind, k, age };
+  }
+
+  /** Smoke, fire and swirling water as she goes down; the markers and pips are gone by now. */
+  private drawFinale(fin: { kind: Finale; k: number; age: number }): void {
+    const g = this.ui;
+    const T = this.tile;
+    const geo = this.geom;
+    const mid = this.ship.height / 2;
+    g.clear();
+    if (fin.kind === 'sail') return;
+    const c = this.toScreen({ x: (geo.stern + geo.tip) / 2, y: mid });
+    const len = (geo.tip - geo.stern) * T;
+    // Churning water closing over her.
+    for (let i = 0; i < 3; i++) {
+      const kk = (fin.age * 0.6 + i / 3) % 1;
+      g.lineStyle(2.5, 0xe8f4f8, 0.5 * (1 - kk) * Math.min(1, fin.k * 3));
+      g.strokeEllipse(c.x, c.y, len * (0.8 + kk * 0.5), geo.beam * 2 * T * (0.9 + kk * 0.6));
+    }
+    for (let i = 0; i < 14; i++) {
+      const kk = (fin.age * 0.8 + i / 14) % 1;
+      const bx = c.x + Math.sin(i * 7.3) * len * 0.42;
+      const by = c.y + Math.cos(i * 3.1) * geo.beam * T * 0.8 - kk * 10;
+      g.fillStyle(0xe8f4f8, 0.6 * (1 - kk) * fin.k).fillCircle(bx, by, 2 + kk * 3);
+    }
+    // Black smoke boiling up from the wreck.
+    for (let i = 0; i < 8; i++) {
+      const kk = (fin.age * 0.35 + i / 8) % 1;
+      const sx = c.x + Math.sin(i * 2.4) * len * 0.3 + kk * 30;
+      const sy = c.y - kk * 140;
+      g.fillStyle(0x1c1a18, 0.42 * (1 - kk) * (1 - fin.k * 0.5)).fillCircle(sx, sy, 10 + kk * 34);
+    }
+    if (fin.kind === 'explode' && fin.age < 1.6) {
+      for (let i = 0; i < 6; i++) {
+        const kk = (fin.age * 1.8 + i / 6) % 1;
+        const ex = c.x + Math.sin(i * 5.1) * len * 0.35;
+        const ey = c.y + Math.cos(i * 2.7) * geo.beam * T * 0.5;
+        g.fillStyle(0xffc040, 0.8 * (1 - kk)).fillCircle(ex, ey, 6 + kk * 26);
+        g.fillStyle(0xff5a1f, 0.6 * (1 - kk)).fillCircle(ex, ey, 3 + kk * 16);
+      }
+    }
   }
 
   // --- Layers --------------------------------------------------------------
@@ -238,6 +335,22 @@ export class ShipView {
       const p = this.toScreen({ x: s.x, y: s.y });
       g.fillStyle(0x140a04, 0.32).fillEllipse(p.x, p.y, s.r * T * 2, s.r * T * 1.4);
       g.fillStyle(0x140a04, 0.25).fillEllipse(p.x + Math.cos(s.rot) * 4, p.y + Math.sin(s.rot) * 3, s.r * T, s.r * T * 0.8);
+    }
+
+    for (const s of this.scars) {
+      const p = this.toScreen({ x: s.x, y: s.y });
+      const pts: Vec[] = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + s.rot;
+        const rr = s.r * T * (0.7 + 0.35 * Math.sin(i * 2.9 + s.rot * 3));
+        pts.push({ x: p.x + Math.cos(a) * rr * 1.3, y: p.y + Math.sin(a) * rr * 0.75 });
+      }
+      g.fillStyle(0x0a0604, 0.9).fillPoints(pts, true);
+      g.lineStyle(1.5, 0xd2aa72, 0.85);
+      for (let i = 0; i < 4; i++) {
+        const a = s.rot + i * 1.6;
+        g.lineBetween(p.x + Math.cos(a) * s.r * T * 0.8, p.y + Math.sin(a) * s.r * T * 0.45, p.x + Math.cos(a) * s.r * T * 1.5, p.y + Math.sin(a) * s.r * T * 0.8);
+      }
     }
 
     for (const room of ship.rooms.values()) {
@@ -331,7 +444,7 @@ export class ShipView {
     }
   }
 
-  private drawCrew(t: number, state: ShipViewState): void {
+  private drawCrew(t: number, state: ShipViewState, fade = 1): void {
     const T = this.tile;
     const live = new Set<number>();
     const scale = (T / 42) * 0.5;
@@ -354,15 +467,21 @@ export class ShipView {
       f.x = p.x;
       this.facing.set(c.id, f);
       sprite.setFlipX(f.dir < 0);
-      sprite.setAlpha(c.hp <= 0 ? 0.4 : 1);
+      sprite.setAlpha((c.hp <= 0 ? 0.4 : 1) * fade);
       if (state.selected?.has(c.id)) sprite.setTint(0xfff4c8);
       else sprite.clearTint();
     }
     for (const [id, s] of this.sprites) {
       if (live.has(id)) continue;
-      s.destroy();
       this.sprites.delete(id);
+      const dir = this.facing.get(id)?.dir ?? 1;
       this.facing.delete(id);
+      if (state.alive && !state.alive.has(id)) {
+        // Fallen: topple over, then fade away.
+        s.setTint(0xb0a090);
+        this.scene.tweens.add({ targets: s, angle: -88 * dir, y: s.y - 2, duration: 380, ease: 'Quad.easeIn' });
+        this.scene.tweens.add({ targets: s, alpha: 0, delay: 1400, duration: 900, onComplete: () => s.destroy() });
+      } else s.destroy();
     }
   }
 
