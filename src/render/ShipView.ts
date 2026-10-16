@@ -50,6 +50,8 @@ export class ShipView {
   private readonly scorches: Scorch[] = [];
   private readonly scars: Scorch[] = [];
   private finale: { kind: Finale; t0: number } | null = null;
+  /** When the ship started sailing into view, if she is still arriving. */
+  private arrival: number | null = null;
   /** Offsets applied while the ship sinks or sails away. */
   private fx = 0;
   private fy = 0;
@@ -182,6 +184,12 @@ export class ShipView {
     if (this.scars.length > 30) this.scars.shift();
   }
 
+  /** Sail in from off-screen over the next couple of seconds. */
+  arrive(nowMs: number): void {
+    this.arrival = nowMs / 1000;
+    this.fx = (this.flip ? 1 : -1) * 600;
+  }
+
   /** Begin the ship's exit: sinking, blowing apart, or sailing off. */
   startFinale(kind: Finale, nowMs: number): void {
     if (this.finale) return;
@@ -232,6 +240,13 @@ export class ShipView {
   }
 
   private finaleProgress(t: number): { kind: Finale; k: number; age: number } | null {
+    if (this.arrival !== null && !this.finale) {
+      const k = Math.min(1, (t - this.arrival) / 2.2);
+      // Ease out: running in fast, then rounding up alongside.
+      this.fx = (this.flip ? 1 : -1) * Math.pow(1 - k, 3) * 600;
+      if (k >= 1) this.arrival = null;
+      return null;
+    }
     if (!this.finale) return null;
     const age = t - this.finale.t0;
     const { kind } = this.finale;

@@ -38,6 +38,8 @@ export class BattleScene extends Phaser.Scene {
   private selected = new Set<number>();
   private aimingGun: number | null = null;
   private ending = false;
+  /** Scene time at which the fight actually starts, after the ships have sailed in. */
+  private startAt = 0;
 
   constructor() {
     super('Battle');
@@ -47,6 +49,7 @@ export class BattleScene extends Phaser.Scene {
     this.selected = new Set();
     this.aimingGun = null;
     this.ending = false;
+    this.startAt = 0;
   }
 
   create(): void {
@@ -88,6 +91,7 @@ export class BattleScene extends Phaser.Scene {
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
 
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => this.onPointerDown(ptr, over));
+    this.introduce();
 
     const kb = this.input.keyboard!;
     kb.on('keydown-SPACE', () => battle.togglePause());
@@ -146,7 +150,8 @@ export class BattleScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     const b = this.battle;
-    b.update(delta / 1000);
+    // Orders can be given while the ships close, but the clock only starts once they are alongside.
+    if (time >= this.startAt) b.update(delta / 1000);
     for (const ev of b.drainEvents()) this.onEvent(ev);
 
     // Drop selections of crew who died.
@@ -180,6 +185,34 @@ export class BattleScene extends Phaser.Scene {
     });
 
     if (b.outcome && !this.ending) this.endBattle();
+  }
+
+  /** Both ships sail into range under a banner before the shooting starts. */
+  private introduce(): void {
+    const now = this.time.now;
+    this.startAt = now + 2300;
+    this.playerView.arrive(now);
+    this.enemyView.arrive(now);
+    const banner = this.add
+      .text(SCREEN.w / 2, 200, this.run.encounter.kind === 'battle' && this.run.encounter.boss ? 'The Blockade!' : 'Beat to Quarters!', {
+        fontFamily: TITLE_FONT,
+        fontSize: '50px',
+        color: COLORS.gold,
+        stroke: '#000000',
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5)
+      .setDepth(41)
+      .setAlpha(0)
+      .setScale(0.8);
+    const sub = this.add
+      .text(SCREEN.w / 2, 246, `${this.battle.enemy.def.name}, ${this.battle.enemy.def.className}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: COLORS.text, stroke: '#000000', strokeThickness: 4, fontStyle: 'italic' })
+      .setOrigin(0.5)
+      .setDepth(41)
+      .setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 450, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: sub, alpha: 1, duration: 450, delay: 200 });
+    this.tweens.add({ targets: [banner, sub], alpha: 0, delay: 1900, duration: 450, onComplete: () => (banner.destroy(), sub.destroy()) });
   }
 
   /** Cloud shadows sliding over the water and ships, and a few gulls wheeling overhead. */
@@ -236,7 +269,11 @@ export class BattleScene extends Phaser.Scene {
     const room = side.room(id);
     const sys = room.def.system;
     const parts = [room.def.name];
-    if (sys) parts.push(`${SYSTEM_NAMES[sys]} ${side.level(sys)}/${side.system(sys)!.max}`);
+    if (sys) {
+      const level = `${side.level(sys)}/${side.system(sys)!.max}`;
+      if (SYSTEM_NAMES[sys] === room.def.name) parts[0] = `${room.def.name} ${level}`;
+      else parts.push(`${SYSTEM_NAMES[sys]} ${level}`);
+    }
     if (room.fire > 0) parts.push('ON FIRE');
     if (room.breach) parts.push('HOLED');
     if (room.water > 5) parts.push(`water ${Math.round(room.water)}%`);

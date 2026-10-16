@@ -62,6 +62,7 @@ export class Hud {
   private readonly pauseBanner: Phaser.GameObjects.Text;
   private readonly hoverText: Phaser.GameObjects.Text;
   private readonly tooltip: Phaser.GameObjects.Text;
+  private readonly pointer: Phaser.Input.Pointer;
 
   constructor(
     scene: Phaser.Scene,
@@ -147,7 +148,11 @@ export class Hud {
       .text(SCREEN.w / 2, 98, 'PAUSED  ·  Space to resume', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, backgroundColor: '#0b1622dd', padding: { x: 18, y: 7 }, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5)
       .setDepth(20);
-    this.hoverText = scene.add.text(SCREEN.w / 2, BOTTOM_Y - 12, '', textStyle(13, COLORS.text, { backgroundColor: '#0b1622dd', padding: { x: 10, y: 4 } })).setOrigin(0.5, 1).setDepth(20);
+    this.hoverText = scene.add
+      .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#0b1622e8', padding: { x: 10, y: 5 }, wordWrap: { width: 340 } }))
+      .setOrigin(0, 1)
+      .setDepth(30);
+    this.pointer = scene.input.activePointer;
     this.tooltip = scene.add
       .text(0, 0, '', textStyle(12, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 300 } }))
       .setOrigin(0, 1)
@@ -221,7 +226,12 @@ export class Hud {
     player.guns.forEach((gun, i) => {
       const card = this.cards[i];
       const aiming = state.aimingGun === i;
-      card.bg.setStrokeStyle(aiming ? 3 : 2, aiming ? COLORS.select : gun.powered ? 0x5c7f99 : COLORS.panelEdge);
+      const loadedIdle = gun.powered && gun.charge >= gun.def.loadTime && !gun.target;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+      card.bg.setStrokeStyle(
+        aiming ? 3 : loadedIdle ? 2 + pulse * 1.5 : 2,
+        aiming ? COLORS.select : loadedIdle ? Phaser.Display.Color.GetColor(242, 160 + Math.round(pulse * 36), 60) : gun.powered ? 0x5c7f99 : COLORS.panelEdge,
+      );
       card.power.setText(gun.powered ? '⏻ Manned' : '⏻ Idle').setOn(gun.powered);
       const loaded = gun.charge / gun.def.loadTime;
       drawBar(g, card.x + 8, BOTTOM_Y + 80, CARD_W - 16, 12, loaded, loaded >= 1 ? 0x7fdc6a : 0xd0a040);
@@ -232,11 +242,14 @@ export class Hud {
           : !working
             ? '! Gun deck out of action'
             : loaded >= 1
-              ? 'Loaded — pick a target'
+              ? gun.target
+                ? 'Loaded — firing'
+                : 'Loaded — pick a target!'
               : `Loading… ${(gun.def.loadTime - gun.charge).toFixed(1)}s`,
       );
       card.target.setText(gun.target ? `→ ${enemy.room(gun.target).def.name}` : aiming ? '→ click an enemy room' : '→ no target');
       card.target.setColor(gun.target ? COLORS.textWarn : COLORS.textDim);
+      card.status.setColor(loadedIdle ? COLORS.gold : !working && gun.powered ? COLORS.textWarn : COLORS.textDim);
       SHOT_TYPES.forEach((s: ShotType, j) => card.shots[j].setOn(gun.shot === s));
     });
 
@@ -246,7 +259,13 @@ export class Hud {
       this.logText.setText(this.log.map((l) => l.text).join('\n'));
     }
     this.pauseBanner.setVisible(battle.paused && !battle.outcome);
+    // Room info follows the pointer, kept on screen.
     this.hoverText.setText(state.hoverText).setVisible(!!state.hoverText);
+    if (state.hoverText) {
+      const x = Math.min(this.pointer.x + 16, SCREEN.w - this.hoverText.width - 6);
+      const y = Math.max(this.pointer.y - 12, this.hoverText.height + 6);
+      this.hoverText.setPosition(x, y);
+    }
   }
 
   private drawHull(ship: Ship, x: number, y: number): void {
