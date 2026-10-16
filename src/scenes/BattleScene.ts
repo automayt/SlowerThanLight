@@ -3,7 +3,7 @@ import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/C
 import { Hud } from '../render/Hud';
 import { playLoop, playSfx, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
-import { ShipView } from '../render/ShipView';
+import { ShipView, type AimMark } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
 import type { Battle } from '../sim/Battle';
@@ -38,6 +38,8 @@ export class BattleScene extends Phaser.Scene {
   private selected = new Set<number>();
   private aimingGun: number | null = null;
   private ending = false;
+  private drag: { x: number; y: number; active: boolean } | null = null;
+  private band!: Phaser.GameObjects.Graphics;
   /** Scene time at which the fight actually starts, after the ships have sailed in. */
   private startAt = 0;
 
@@ -50,6 +52,7 @@ export class BattleScene extends Phaser.Scene {
     this.aimingGun = null;
     this.ending = false;
     this.startAt = 0;
+    this.drag = null;
   }
 
   create(): void {
@@ -91,6 +94,9 @@ export class BattleScene extends Phaser.Scene {
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
 
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => this.onPointerDown(ptr, over));
+    this.input.on('pointermove', (ptr: Phaser.Input.Pointer) => this.onPointerMove(ptr));
+    this.input.on('pointerup', (ptr: Phaser.Input.Pointer) => this.onPointerUp(ptr));
+    this.band = this.add.graphics().setDepth(25);
     this.introduce();
 
     const kb = this.input.keyboard!;
@@ -106,6 +112,36 @@ export class BattleScene extends Phaser.Scene {
         if (i < battle.player.guns.length) this.aimingGun = this.aimingGun === i ? null : i;
       }),
     );
+  }
+
+  private onPointerUp(ptr: Phaser.Input.Pointer): void {
+    const drag = this.drag;
+    this.drag = null;
+    this.band.clear();
+    if (!drag || !drag.active) return;
+    const x0 = Math.min(drag.x, ptr.x);
+    const x1 = Math.max(drag.x, ptr.x);
+    const y0 = Math.min(drag.y, ptr.y);
+    const y1 = Math.max(drag.y, ptr.y);
+    if (!ptr.event.shiftKey) this.selected.clear();
+    for (const view of [this.playerView, this.enemyView]) {
+      for (const c of view.ship.crew) {
+        if (c.side !== 'player') continue;
+        const p = view.toScreen(c.pos);
+        if (p.x >= x0 && p.x <= x1 && p.y >= y0 - 12 && p.y <= y1 + 12) this.selected.add(c.id);
+      }
+    }
+  }
+
+  private onPointerMove(ptr: Phaser.Input.Pointer): void {
+    const drag = this.drag;
+    if (!drag || !ptr.isDown) return;
+    if (!drag.active && Math.hypot(ptr.x - drag.x, ptr.y - drag.y) > 8) drag.active = true;
+    if (!drag.active) return;
+    const g = this.band;
+    g.clear();
+    g.fillStyle(COLORS.select, 0.08).fillRect(Math.min(drag.x, ptr.x), Math.min(drag.y, ptr.y), Math.abs(ptr.x - drag.x), Math.abs(ptr.y - drag.y));
+    g.lineStyle(1.5, COLORS.select, 0.8).strokeRect(Math.min(drag.x, ptr.x), Math.min(drag.y, ptr.y), Math.abs(ptr.x - drag.x), Math.abs(ptr.y - drag.y));
   }
 
   private onPointerDown(ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
@@ -136,6 +172,7 @@ export class BattleScene extends Phaser.Scene {
     const room = this.playerView.roomAt(ptr.x, ptr.y);
     if (room && this.selected.size) {
       b.orderCrew(this.selected, room, 'player');
+      for (const c of b.player.crew) if (this.selected.has(c.id) && c.waypoints.length) this.playerView.markMove(c.slot);
       return;
     }
     if (enemyRoom && this.selected.size) {
@@ -144,7 +181,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    this.selected.clear();
+    // Empty water or deck: the start of a drag-select, or a click that clears the selection.
+    this.drag = { x: ptr.x, y: ptr.y, active: false };
+    if (!ptr.event.shiftKey) this.selected.clear();
     this.aimingGun = null;
   }
 
@@ -162,10 +201,14 @@ export class BattleScene extends Phaser.Scene {
     const hoverEnemy = this.enemyView.roomAt(ptr.x, ptr.y);
     const hoverPlayer = this.playerView.roomAt(ptr.x, ptr.y);
 
-    const targets = new Map<string, number[]>();
+    const targets: AimMark[] = [];
     b.player.guns.forEach((g, i) => {
-      if (!g.target) return;
-      targets.set(g.target, [...(targets.get(g.target) ?? []), i + 1]);
+      if (g.target) targets.push({ room: g.target, gun: i + 1, charge: g.powered ? g.charge / g.def.loadTime : 0, hostile: false });
+    });
+    // What the enemy has her guns laid on, so you can clear a room before the broadside lands.
+    const threats: AimMark[] = [];
+    b.enemy.guns.forEach((g, i) => {
+      if (g.target && g.powered) threats.push({ room: g.target, gun: i + 1, charge: g.charge / g.def.loadTime, hostile: true });
     });
 
     if (this.seaImage) {
@@ -173,7 +216,7 @@ export class BattleScene extends Phaser.Scene {
       this.seaImage.setPosition(SCREEN.w / 2 + k * 8, SCREEN.h / 2 + Math.cos(time / 5200) * 5);
     } else this.sea.draw(time);
     const alive = new Set([...b.crewOf('player'), ...b.crewOf('enemy')].map((c) => c.id));
-    this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer, alive });
+    this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer, alive, targets: threats });
     this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null, alive });
     this.drawAmbient(time, delta / 1000);
     this.drawProjectiles();

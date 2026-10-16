@@ -8,12 +8,21 @@ import { COLORS, TITLE_FONT } from './theme';
 export interface ShipViewState {
   selected?: Set<number>;
   hoverRoom?: string | null;
-  /** Rooms aimed at, with the gun numbers aiming at them (enemy view). */
-  targets?: Map<string, number[]>;
+  /** Guns aimed at rooms on this ship: ours (bold reticle) or the enemy's (a warning marker), with how loaded each is. */
+  targets?: AimMark[];
   /** Highlight rooms as aimable (a gun is selected). */
   aiming?: boolean;
   /** Every crew member still alive on either side; anyone who drops out of this has died rather than crossed over. */
   alive?: Set<number>;
+}
+
+export interface AimMark {
+  room: string;
+  /** Gun number shown on the marker (1-based). */
+  gun: number;
+  /** 0..1 loaded. */
+  charge: number;
+  hostile: boolean;
 }
 
 /** How a ship leaves the fight: going down, or sailing off over the horizon. */
@@ -49,6 +58,7 @@ export class ShipView {
   private readonly facing = new Map<number, { x: number; dir: number }>();
   private readonly scorches: Scorch[] = [];
   private readonly scars: Scorch[] = [];
+  private moveMarks: { at: Vec; t0: number }[] = [];
   private finale: { kind: Finale; t0: number } | null = null;
   /** When the ship started sailing into view, if she is still arriving. */
   private arrival: number | null = null;
@@ -550,28 +560,57 @@ export class ShipView {
       }
     }
 
-    // Aim markers.
-    if (state.targets) {
-      for (const [roomId, guns] of state.targets) {
-        if (!ship.rooms.has(roomId)) continue;
+    // Aim markers, one per targeted room, with a pip per gun that fills as it loads.
+    if (state.targets?.length) {
+      const byRoom = new Map<string, AimMark[]>();
+      for (const m of state.targets) if (ship.rooms.has(m.room)) byRoom.set(m.room, [...(byRoom.get(m.room) ?? []), m]);
+      for (const [roomId, marks] of byRoom) {
         const c = this.roomCenter(roomId);
-        const rad = T * 0.34;
-        const spin = t * 1.5;
-        g.lineStyle(2, COLORS.aim, 0.95);
+        const hostile = marks[0].hostile;
+        const rad = T * (hostile ? 0.26 : 0.34);
+        const color = hostile ? 0xff8a3a : COLORS.aim;
+        const ready = Math.max(...marks.map((m) => m.charge));
+        const alpha = hostile ? 0.5 + (ready > 0.85 ? 0.45 * (0.5 + 0.5 * Math.sin(t * 14)) : 0) : 0.95;
+        const spin = t * (hostile ? -1 : 1.5);
+        g.lineStyle(2, color, alpha);
         for (let i = 0; i < 4; i++) {
           const a0 = spin + (i * Math.PI) / 2 + 0.25;
           g.beginPath();
           g.arc(c.x, c.y, rad, a0, a0 + Math.PI / 2 - 0.5);
           g.strokePath();
         }
-        g.lineBetween(c.x - rad * 1.35, c.y, c.x - rad * 0.55, c.y).lineBetween(c.x + rad * 0.55, c.y, c.x + rad * 1.35, c.y);
-        g.lineBetween(c.x, c.y - rad * 1.35, c.x, c.y - rad * 0.55).lineBetween(c.x, c.y + rad * 0.55, c.x, c.y + rad * 1.35);
-        guns.forEach((_, i) => {
-          g.fillStyle(0x0b1622, 0.9).fillCircle(c.x + rad + 7 + i * 11, c.y - rad - 3, 5.5);
-          g.fillStyle(COLORS.aim, 1).fillCircle(c.x + rad + 7 + i * 11, c.y - rad - 3, 4);
+        if (!hostile) {
+          g.lineBetween(c.x - rad * 1.35, c.y, c.x - rad * 0.55, c.y).lineBetween(c.x + rad * 0.55, c.y, c.x + rad * 1.35, c.y);
+          g.lineBetween(c.x, c.y - rad * 1.35, c.x, c.y - rad * 0.55).lineBetween(c.x, c.y + rad * 0.55, c.x, c.y + rad * 1.35);
+        } else {
+          g.fillStyle(color, alpha).fillCircle(c.x, c.y, 2.5);
+        }
+        marks.forEach((m, i) => {
+          const px = c.x + rad + 8 + i * 14;
+          const py = c.y - rad - 4;
+          g.fillStyle(0x0b1622, 0.9).fillCircle(px, py, 6.5);
+          g.lineStyle(2.5, m.charge >= 1 ? 0xffe066 : color, hostile ? 0.85 : 1);
+          g.beginPath();
+          g.arc(px, py, 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.02, Math.min(1, m.charge)));
+          g.strokePath();
+          g.fillStyle(color, hostile ? 0.8 : 1).fillCircle(px, py, 2.4);
         });
       }
     }
+
+    // Where ordered crew are headed.
+    for (const mk of this.moveMarks) {
+      const k = (t - mk.t0) / 0.9;
+      if (k >= 1) continue;
+      const p = this.toScreen(mk.at);
+      g.lineStyle(2, COLORS.select, 0.9 * (1 - k)).strokeEllipse(p.x, p.y + T * 0.3, T * (0.3 + k * 0.6), T * (0.12 + k * 0.24));
+    }
+    this.moveMarks = this.moveMarks.filter((mk) => t - mk.t0 < 0.9);
+  }
+
+  /** Flash a marker where a crew member has been sent. */
+  markMove(at: Vec): void {
+    this.moveMarks.push({ at: { x: at.x + 0.5, y: at.y + 0.5 }, t0: this.scene.time.now / 1000 });
   }
 }
 
