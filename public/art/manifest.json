@@ -111,6 +111,10 @@
     "enemy-privateer.jpg",
     "enemy-guarda.jpg",
     "ship-gull.jpg",
-    "ship-wolf.jpg"
+    "ship-wolf.jpg",
+    "tex-deck.jpg",
+    "tex-hull.jpg",
+    "tex-sea.jpg",
+    "tex-canvas.jpg"
   ]
 }

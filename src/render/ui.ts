@@ -86,14 +86,21 @@ export function drawPips(g: Phaser.GameObjects.Graphics, x: number, y: number, o
 }
 
 /** Horizontal fill bar. */
-export function drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number, color: number, back = 0x222a30): void {
+export function drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number, color: number, back = 0x1a232b): void {
+  const fw = Math.max(0, Math.min(1, frac)) * w;
+  g.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
   g.fillStyle(back, 1).fillRect(x, y, w, h);
-  g.fillStyle(color, 1).fillRect(x, y, Math.max(0, Math.min(1, frac)) * w, h);
-  g.lineStyle(1, 0x000000, 0.7).strokeRect(x, y, w, h);
+  g.fillStyle(color, 1).fillRect(x, y, fw, h);
+  // A sheen along the top half gives the bar some roundness.
+  if (h >= 4) g.fillStyle(0xffffff, 0.22).fillRect(x, y, fw, Math.ceil(h * 0.4));
+  g.fillStyle(0x000000, 0.18).fillRect(x, y + h - Math.max(1, Math.floor(h * 0.25)), fw, Math.max(1, Math.floor(h * 0.25)));
 }
 
 export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: number): Phaser.GameObjects.Rectangle {
-  return scene.add.rectangle(x, y, w, h, COLORS.panel, 0.92).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge);
+  const rect = scene.add.rectangle(x, y, w, h, COLORS.panel, 0.9).setOrigin(0).setStrokeStyle(1.5, COLORS.panelEdge);
+  // Inner keyline, like a framed chart.
+  scene.add.rectangle(x + 3, y + 3, w - 6, h - 6).setOrigin(0).setStrokeStyle(1, COLORS.panelInner, 0.9);
+  return rect;
 }
 
 /** Animated sea backdrop. Call `draw(time)` each frame. */

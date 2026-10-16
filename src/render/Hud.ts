@@ -5,6 +5,7 @@ import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
 import type { Ship } from '../sim/Ship';
 import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/types';
+import { crewTextures } from './CrewArt';
 import { COLORS, SCREEN, textStyle, TITLE_FONT } from './theme';
 import { Button, drawBar, drawPips, panel } from './ui';
 
@@ -21,6 +22,11 @@ export interface HudState {
 }
 
 const BOTTOM_Y = 512;
+
+/** Small-caps section heading in the serif face. */
+function heading(scene: Phaser.Scene, x: number, y: number, text: string, size = 14): Phaser.GameObjects.Text {
+  return scene.add.text(x, y, text, { fontFamily: TITLE_FONT, fontSize: `${size}px`, color: COLORS.gold, fontStyle: 'bold' });
+}
 const CARD_W = 158;
 
 interface GunCard {
@@ -66,31 +72,34 @@ export class Hud {
 
     // --- Top: player status ---
     panel(scene, 8, 8, 470, 66);
-    scene.add.text(18, 14, 'HULL', textStyle(13, COLORS.textDim, { fontStyle: 'bold' }));
+    heading(scene, 18, 14, 'HULL', 15);
     this.playerStats = scene.add.text(18, 50, '', textStyle(13));
     this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => battle.escape(), { size: 13 });
 
     // --- Top: enemy status ---
     panel(scene, SCREEN.w - 478, 8, 470, 66);
-    this.enemyTitle = scene.add.text(SCREEN.w - 468, 14, 'HULL', textStyle(13, COLORS.textDim, { fontStyle: 'bold' }));
+    this.enemyTitle = heading(scene, SCREEN.w - 468, 14, 'HULL', 15);
     this.enemyStats = scene.add.text(SCREEN.w - 468, 50, '', textStyle(13));
 
     // --- Left: crew list ---
-    scene.add.text(14, 92, 'CREW', textStyle(13, COLORS.textDim, { fontStyle: 'bold' }));
+    heading(scene, 12, 88, 'CREW');
     player.crew.forEach((c, i) => {
-      const y = 112 + i * 40;
-      const bg = scene.add.rectangle(8, y, 150, 36, COLORS.panel, 0.9).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge);
+      const y = 110 + i * 40;
+      const bg = scene.add.rectangle(8, y, 168, 36, COLORS.panel, 0.88).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge);
       bg.setInteractive({ useHandCursor: true });
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => cb.selectCrew(c.id, p.event.shiftKey));
-      const name = scene.add.text(14, y + 3, c.name, textStyle(12));
-      const task = scene.add.text(14, y + 18, '', textStyle(10, COLORS.textDim));
+      // Head-and-shoulders portrait cut from their sprite.
+      scene.add.rectangle(12, y + 3, 28, 30, 0x1b2a38).setOrigin(0).setStrokeStyle(1, COLORS.panelInner);
+      scene.add.image(26, y + 4, `${crewTextures(scene, c)}:idle0`).setOrigin(0.5, 0).setCrop(10, 2, 36, 34).setScale(0.82).setDisplayOrigin(28, 3);
+      const name = scene.add.text(44, y + 3, c.name, textStyle(12, COLORS.text, { fontStyle: 'bold' }));
+      const task = scene.add.text(44, y + 18, '', textStyle(10, COLORS.textDim));
       bg.setData('crewId', c.id);
       this.crewRows.push({ bg, name, task });
     });
 
     // --- Bottom-left: hands ---
     panel(scene, 8, BOTTOM_Y, 330, 200);
-    this.handsTitle = scene.add.text(18, BOTTOM_Y + 8, '', textStyle(14, COLORS.gold, { fontStyle: 'bold' }));
+    this.handsTitle = heading(scene, 18, BOTTOM_Y + 7, '', 15);
     const systems: SystemId[] = ['helm', 'sails', 'pumps', 'surgeon', 'guns'];
     systems.forEach((id, i) => {
       if (!player.system(id)) return;
@@ -106,10 +115,12 @@ export class Hud {
     // --- Bottom-centre: gun cards ---
     player.guns.forEach((gun, i) => {
       const x = 346 + i * (CARD_W + 6);
-      const bg = scene.add.rectangle(x, BOTTOM_Y, CARD_W, 200, COLORS.panel, 0.92).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
+      const bg = scene.add.rectangle(x, BOTTOM_Y, CARD_W, 200, COLORS.panel, 0.9).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
+      scene.add.rectangle(x + 3, BOTTOM_Y + 3, CARD_W - 6, 194).setOrigin(0).setStrokeStyle(1, COLORS.panelInner, 0.9);
       bg.setInteractive({ useHandCursor: true });
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => (p.rightButtonDown() ? cb.clearGunTarget(i) : cb.selectGun(i)));
-      const name = scene.add.text(x + 8, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, textStyle(13, COLORS.text, { fontStyle: 'bold', wordWrap: { width: CARD_W - 16 } }));
+      if (scene.textures.exists('sysicon:guns')) scene.add.image(x + 18, BOTTOM_Y + 19, 'sysicon:guns').setScale(0.55);
+      const name = scene.add.text(x + 34, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, { fontFamily: TITLE_FONT, fontSize: '14px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: CARD_W - 42 } });
       const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 22, '', () => battle.toggleGun(i), { size: 12 });
       scene.add.text(x + 88, BOTTOM_Y + 54, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''} · ${gun.def.shots}×${gun.def.damage}`, textStyle(11, COLORS.textDim));
       const status = scene.add.text(x + 8, BOTTOM_Y + 98, '', textStyle(11, COLORS.textDim));
@@ -127,16 +138,16 @@ export class Hud {
     // --- Bottom-right: log ---
     const logX = 346 + 4 * (CARD_W + 6);
     panel(scene, logX, BOTTOM_Y, SCREEN.w - logX - 8, 200);
-    scene.add.text(logX + 10, BOTTOM_Y + 8, "CAPTAIN'S LOG", textStyle(13, COLORS.textDim, { fontStyle: 'bold' }));
+    heading(scene, logX + 10, BOTTOM_Y + 7, "Captain's Log", 15);
     this.logText = scene.add.text(logX + 10, BOTTOM_Y + 30, '', textStyle(12, COLORS.text, { wordWrap: { width: SCREEN.w - logX - 28 }, lineSpacing: 3 }));
 
     this.g = scene.add.graphics();
 
     this.pauseBanner = scene.add
-      .text(SCREEN.w / 2, 98, 'PAUSED — press Space to resume', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, backgroundColor: '#000000aa', padding: { x: 14, y: 6 } })
+      .text(SCREEN.w / 2, 98, 'PAUSED  ·  Space to resume', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, backgroundColor: '#0b1622dd', padding: { x: 18, y: 7 }, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5)
       .setDepth(20);
-    this.hoverText = scene.add.text(SCREEN.w / 2, BOTTOM_Y - 14, '', textStyle(13, COLORS.text, { backgroundColor: '#00000088', padding: { x: 8, y: 3 } })).setOrigin(0.5, 1);
+    this.hoverText = scene.add.text(SCREEN.w / 2, BOTTOM_Y - 12, '', textStyle(13, COLORS.text, { backgroundColor: '#0b1622dd', padding: { x: 10, y: 4 } })).setOrigin(0.5, 1).setDepth(20);
     this.tooltip = scene.add
       .text(0, 0, '', textStyle(12, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 300 } }))
       .setOrigin(0, 1)
@@ -191,7 +202,7 @@ export class Hud {
       row.task.setText(!aboard ? 'Crossing over…' : aboard === player ? `${taskLabel(c.task)} · ${player.room(c.room).def.name}` : `${taskLabel(c.task)} · HER ${aboard.room(c.room).def.name}`);
       row.task.setColor(aboard && aboard !== player ? COLORS.gold : COLORS.textDim);
       const frac = c.hp / c.maxHp;
-      drawBar(g, row.bg.x + 5, row.bg.y + 31, 140, 3, frac, frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f);
+      drawBar(g, row.bg.x + 36, row.bg.y + 31, 126, 3, frac, frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f);
     });
 
     // Hands.
@@ -242,10 +253,17 @@ export class Hud {
     const g = this.g;
     const n = ship.def.hull;
     const w = Math.min(12, Math.floor(400 / n) - 2);
+    const frac = ship.hull / n;
+    const color = frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f;
+    g.fillStyle(0x000000, 0.6).fillRect(x - 2, y - 2, n * (w + 2) + 2, 22);
     for (let i = 0; i < n; i++) {
-      const frac = ship.hull / n;
-      const color = i < ship.hull ? (frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f) : 0x2a2f33;
-      g.fillStyle(color, 1).fillRect(x + i * (w + 2), y, w, 18);
+      const on = i < ship.hull;
+      const sx = x + i * (w + 2);
+      g.fillStyle(on ? color : 0x252b30, 1).fillRect(sx, y, w, 18);
+      if (on) {
+        g.fillStyle(0xffffff, 0.25).fillRect(sx, y, w, 6);
+        g.fillStyle(0x000000, 0.2).fillRect(sx, y + 14, w, 4);
+      }
     }
   }
 }

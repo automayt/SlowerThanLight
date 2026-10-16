@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
 import { Hud } from '../render/Hud';
 import { playLoop, playSfx, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
@@ -28,6 +29,8 @@ export class BattleScene extends Phaser.Scene {
   private playerView!: ShipView;
   private enemyView!: ShipView;
   private fx!: Phaser.GameObjects.Graphics;
+  private seaImage: Phaser.GameObjects.Image | null = null;
+  private readonly swingers = new Map<number, Phaser.GameObjects.Image>();
   private hud!: Hud;
   private selected = new Set<number>();
   private aimingGun: number | null = null;
@@ -48,11 +51,19 @@ export class BattleScene extends Phaser.Scene {
     saveRun(run);
     const battle = (this.battle = run.startBattle());
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
+    if (this.textures.exists('art:tex-sea')) {
+      this.seaImage = this.add.image(SCREEN.w / 2, SCREEN.h / 2, 'art:tex-sea').setDepth(-9);
+      this.seaImage.setScale(Math.max(SCREEN.w / this.seaImage.width, SCREEN.h / this.seaImage.height) * 1.04);
+    }
 
+    const faction = run.encounter.kind === 'battle' ? run.currentEnemy().faction : 'navy';
+    setEnemyStyle(faction === 'navy' ? 'navy' : faction === 'merchant' ? 'merchant' : 'pirate');
     const p = battle.player;
     const e = battle.enemy;
-    this.playerView = new ShipView(this, p, 200, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false);
-    this.enemyView = new ShipView(this, e, SCREEN.w - 40 - (e.width + 0.6) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true);
+    this.playerView = new ShipView(this, p, 250, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false, { flag: 'pirate' });
+    this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + 1.7) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
+      flag: faction === 'navy' ? 'navy' : 'merchant',
+    });
     this.fx = this.add.graphics().setDepth(10);
 
     this.hud = new Hud(this, battle, {
@@ -146,7 +157,10 @@ export class BattleScene extends Phaser.Scene {
       targets.set(g.target, [...(targets.get(g.target) ?? []), i + 1]);
     });
 
-    this.sea.draw(time);
+    if (this.seaImage) {
+      const k = Math.sin(time / 4000);
+      this.seaImage.setPosition(SCREEN.w / 2 + k * 8, SCREEN.h / 2 + Math.cos(time / 5200) * 5);
+    } else this.sea.draw(time);
     this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer });
     this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null });
     this.drawProjectiles();
@@ -195,6 +209,7 @@ export class BattleScene extends Phaser.Scene {
     g.clear();
     if (this.battle.outcome) return;
     // Boarders swinging across on lines between the ships.
+    const swinging = new Set<number>();
     for (const tr of this.battle.transit) {
       const fromView = this.viewFor(tr.to === 'player' ? 'enemy' : 'player');
       const toView = this.viewFor(tr.to);
@@ -204,18 +219,27 @@ export class BattleScene extends Phaser.Scene {
       const k = 1 - Math.max(0, tr.t) / BOARD_TIME;
       const x = a.x + (b.x - a.x) * k;
       const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 50;
-      g.lineStyle(1, 0xd8c8a0, 0.5).lineBetween(a.x, a.y - 60, x, y);
-      g.fillStyle(tr.crew.side === 'player' ? COLORS.playerCrew : COLORS.enemyCrew, 1).fillCircle(x, y, 7);
-      g.lineStyle(2, 0x1a1208, 1).strokeCircle(x, y, 7);
+      g.lineStyle(1.5, 0xd8c8a0, 0.7).lineBetween((a.x + b.x) / 2, Math.min(a.y, b.y) - 120, x, y - 30);
+      swinging.add(tr.crew.id);
+      const prefix = crewTextures(this, tr.crew);
+      let img = this.swingers.get(tr.crew.id);
+      if (!img) {
+        img = this.add.image(x, y, `${prefix}:walk1`).setOrigin(CREW_ORIGIN.x, CREW_ORIGIN.y).setScale(0.5).setDepth(9);
+        this.swingers.set(tr.crew.id, img);
+      }
+      img.setTexture(`${prefix}:${crewFrame(tr.crew, this.time.now / 1000)}`).setPosition(x, y).setFlipX(b.x < a.x);
+    }
+    for (const [id, img] of this.swingers) {
+      if (swinging.has(id)) continue;
+      img.destroy();
+      this.swingers.delete(id);
     }
     for (const p of this.battle.projectiles) {
       if (p.t < p.delay) continue;
       const k = Math.min(1, (p.t - p.delay) / TRAVEL_TIME);
       const shooter = this.viewFor(p.from);
       const target = this.viewFor(p.from === 'player' ? 'enemy' : 'player');
-      const gunRoom = shooter.ship.system('guns')?.room;
-      if (!gunRoom) continue;
-      const a = shooter.roomCenter(gunRoom);
+      const a = shooter.muzzle(p.gun);
       const b = target.roomCenter(p.room);
       const x = a.x + (b.x - a.x) * k;
       const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 70;
@@ -243,8 +267,9 @@ export class BattleScene extends Phaser.Scene {
     switch (ev.t) {
       case 'shot': {
         playSfx(this, 'cannon', ours ? 0.55 : 0.4);
-        const gunRoom = view.ship.system('guns')?.room;
-        if (gunRoom) this.burst(view.roomCenter(gunRoom).x, view.roomCenter(gunRoom).y, 0xfff0a0, 14, 250);
+        const m = view.muzzle(ev.gun);
+        this.burst(m.x, m.y, 0xfff0a0, 9, 180);
+        this.smoke(m.x, m.y, m.dx, m.dy);
         break;
       }
       case 'hit': {
@@ -252,7 +277,9 @@ export class BattleScene extends Phaser.Scene {
         const c = view.roomCenter(ev.room);
         const jx = (Math.random() - 0.5) * TILE * 0.6;
         const jy = (Math.random() - 0.5) * TILE * 0.6;
-        this.burst(c.x + jx, c.y + jy, ev.shot === 'hot' ? COLORS.fire : 0xffb050, 26, 420);
+        this.burst(c.x + jx, c.y + jy, ev.shot === 'hot' ? COLORS.fire : 0xffb050, 22, 380);
+        this.splinters(c.x + jx, c.y + jy);
+        if (ev.hull > 0 || ev.shot === 'hot') view.addScorch(ev.room);
         if (ours) this.cameras.main.shake(140, 0.004);
         const name = view.ship.room(ev.room).def.name;
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
@@ -263,6 +290,7 @@ export class BattleScene extends Phaser.Scene {
       case 'miss': {
         playSfx(this, 'splash', 0.35);
         const c = view.roomCenter(ev.room);
+        this.splash(c.x + (Math.random() - 0.5) * TILE * 2, c.y + (Math.random() < 0.5 ? -1 : 1) * TILE * (2.4 + Math.random()));
         this.floatText(c.x, c.y, 'MISS', '#cfe8ff');
         break;
       }
@@ -297,6 +325,45 @@ export class BattleScene extends Phaser.Scene {
   private burst(x: number, y: number, color: number, radius: number, duration: number): void {
     const c = this.add.circle(x, y, radius, color, 0.85).setDepth(11);
     this.tweens.add({ targets: c, scale: 1.8, alpha: 0, duration, onComplete: () => c.destroy() });
+  }
+
+  private smoke(x: number, y: number, dx: number, dy: number): void {
+    for (let i = 0; i < 4; i++) {
+      const c = this.add.circle(x, y, 6 + i * 2, 0xd8d4cc, 0.55).setDepth(11);
+      this.tweens.add({
+        targets: c,
+        x: x + dx * (14 + i * 10) + (Math.random() - 0.5) * 10,
+        y: y + dy * (14 + i * 10) - 6,
+        scale: 2.4,
+        alpha: 0,
+        duration: 900 + i * 200,
+        ease: 'Cubic.easeOut',
+        onComplete: () => c.destroy(),
+      });
+    }
+  }
+
+  private splinters(x: number, y: number): void {
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = 14 + Math.random() * 22;
+      const r = this.add.rectangle(x, y, 6, 2, 0xc9a36a).setDepth(11).setRotation(a);
+      this.tweens.add({ targets: r, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, angle: r.angle + 180, alpha: 0, duration: 500, onComplete: () => r.destroy() });
+    }
+    const puff = this.add.circle(x, y, 10, 0x3a3530, 0.5).setDepth(11);
+    this.tweens.add({ targets: puff, y: y - 18, scale: 2.6, alpha: 0, duration: 1100, onComplete: () => puff.destroy() });
+  }
+
+  private splash(x: number, y: number): void {
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.ellipse(x, y, 10, 5).setStrokeStyle(2, 0xe8f4f8, 0.8).setDepth(1.5);
+      this.tweens.add({ targets: ring, scaleX: 4 + i, scaleY: 4 + i, alpha: 0, delay: i * 120, duration: 800, onComplete: () => ring.destroy() });
+    }
+    for (let i = 0; i < 6; i++) {
+      const drop = this.add.circle(x, y, 2.5, 0xe8f4f8, 0.9).setDepth(11);
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+      this.tweens.add({ targets: drop, x: x + Math.cos(a) * 18, y: y + Math.sin(a) * 22, alpha: 0, duration: 500, ease: 'Quad.easeOut', onComplete: () => drop.destroy() });
+    }
   }
 
   private floatText(x: number, y: number, text: string, color: string): void {

@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
-import type { Vec } from '../sim/types';
-import { COLORS, textStyle } from './theme';
-import { drawPips } from './ui';
+import type { SystemId, Vec } from '../sim/types';
+import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
+import { ART_SCALE, paintShip, type ShipGeometry } from './ShipArt';
+import { COLORS, TITLE_FONT } from './theme';
 
 export interface ShipViewState {
   selected?: Set<number>;
@@ -13,11 +14,39 @@ export interface ShipViewState {
   aiming?: boolean;
 }
 
+export interface ShipViewOptions {
+  showLabels?: boolean;
+  flag?: 'pirate' | 'navy' | 'merchant';
+}
+
+/** Draw order of a ship's layers. Projectiles and effects in the battle scene sit above these. */
+const DEPTH = { wake: 1, base: 2, over: 3, crew: 4, rig: 5, ui: 6 } as const;
+
+let viewCount = 0;
+
+interface Scorch {
+  x: number;
+  y: number;
+  r: number;
+  rot: number;
+}
+
 /** Draws one ship top-down. The player's bow points right; `flip` turns the enemy to face left. */
 export class ShipView {
-  readonly g: Phaser.GameObjects.Graphics;
-  private readonly labels = new Map<string, Phaser.GameObjects.Text>();
-  private readonly nameText: Phaser.GameObjects.Text;
+  private readonly wake: Phaser.GameObjects.Graphics;
+  private readonly over: Phaser.GameObjects.Graphics;
+  private readonly ui: Phaser.GameObjects.Graphics;
+  private readonly base: Phaser.GameObjects.Image;
+  private readonly rig: Phaser.GameObjects.Image;
+  private readonly nameText: Phaser.GameObjects.Text | null;
+  private readonly badges = new Map<SystemId, Phaser.GameObjects.Image>();
+  private readonly sprites = new Map<number, Phaser.GameObjects.Image>();
+  private readonly facing = new Map<number, { x: number; dir: number }>();
+  private readonly scorches: Scorch[] = [];
+  private readonly geom: ShipGeometry;
+  private readonly keys: string[];
+  private readonly phase = Math.random() * 10;
+  private bob = 0;
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -26,35 +55,53 @@ export class ShipView {
     readonly oy: number,
     readonly tile: number,
     readonly flip: boolean,
-    showLabels = true,
+    showLabelsOrOpts: boolean | ShipViewOptions = true,
   ) {
-    this.g = scene.add.graphics();
-    for (const r of ship.rooms.values()) {
-      const name = r.def.system ? r.def.system.toUpperCase() : '';
-      if (!showLabels || !name) continue;
-      const c = this.toScreen({ x: r.def.x + r.def.w / 2, y: r.def.y + 0.02 });
-      const t = scene.add
-        .text(c.x, c.y + 2, name, textStyle(Math.max(9, Math.round(tile * 0.24)), '#3a2614', { fontStyle: 'bold' }))
-        .setOrigin(0.5, 0);
-      this.labels.set(r.def.id, t);
+    const opts: ShipViewOptions = typeof showLabelsOrOpts === 'boolean' ? { showLabels: showLabelsOrOpts } : showLabelsOrOpts;
+    const showLabels = opts.showLabels ?? true;
+    const flag = opts.flag ?? (ship.side === 'player' ? 'pirate' : 'navy');
+    const art = paintShip(scene, ship, tile, `shipart:${viewCount++}`, flag);
+    this.geom = art.geom;
+    this.keys = [art.base, art.rig];
+
+    this.wake = scene.add.graphics().setDepth(DEPTH.wake);
+    this.base = scene.add.image(0, 0, art.base).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.base);
+    this.over = scene.add.graphics().setDepth(DEPTH.over);
+    this.rig = scene.add.image(0, 0, art.rig).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.rig).setAlpha(0.9);
+    this.ui = scene.add.graphics().setDepth(DEPTH.ui);
+
+    if (showLabels) {
+      for (const sys of ship.systems.values()) {
+        this.badges.set(sys.id, scene.add.image(0, 0, systemIcon(scene, sys.id)).setScale(0.5).setDepth(DEPTH.ui).setOrigin(0.5));
+      }
+      const nx = this.toScreen({ x: ship.width / 2, y: 0 }).x;
+      this.nameText = scene.add
+        .text(nx, oy - (this.geom.beam - ship.height / 2) * tile - 22, ship.def.name, {
+          fontFamily: TITLE_FONT,
+          fontSize: `${Math.round(tile * 0.48)}px`,
+          color: COLORS.gold,
+          stroke: '#0b1622',
+          strokeThickness: 5,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTH.ui);
+    } else {
+      this.nameText = null;
     }
-    const nx = this.toScreen({ x: ship.width / 2, y: 0 }).x;
-    this.nameText = scene.add
-      .text(nx, oy - tile * 0.95, `${ship.def.name}`, textStyle(Math.round(tile * 0.36), COLORS.gold, { fontStyle: 'bold' }))
-      .setOrigin(0.5, 1);
-    if (!showLabels) this.nameText.setVisible(false);
+    this.placeImages();
   }
 
   /** Tile coordinates (fractional) to screen pixels. */
   toScreen(p: Vec): Vec {
     const x = this.flip ? this.ship.width - p.x : p.x;
-    return { x: this.ox + x * this.tile, y: this.oy + p.y * this.tile };
+    return { x: this.ox + x * this.tile, y: this.oy + this.bob + p.y * this.tile };
   }
 
   /** Screen pixels to fractional tile coordinates. */
   toTile(px: number, py: number): Vec {
     const x = (px - this.ox) / this.tile;
-    return { x: this.flip ? this.ship.width - x : x, y: (py - this.oy) / this.tile };
+    return { x: this.flip ? this.ship.width - x : x, y: (py - this.oy - this.bob) / this.tile };
   }
 
   roomAt(px: number, py: number): string | null {
@@ -64,10 +111,11 @@ export class ShipView {
 
   crewAt(px: number, py: number): Crew | null {
     let best: Crew | null = null;
-    let bestD = this.tile * 0.4;
+    let bestD = this.tile * 0.45;
     for (const c of this.ship.crew) {
       const s = this.toScreen(c.pos);
-      const d = Math.hypot(s.x - px, s.y - py);
+      // Aim at the body, which stands a little above the tile centre.
+      const d = Math.hypot(s.x - px, s.y - this.tile * 0.05 - py);
       if (d < bestD) {
         best = c;
         bestD = d;
@@ -88,157 +136,408 @@ export class ShipView {
     return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
   }
 
+  /** Muzzle of the cannon that stands for gun `index`, and the way it points. */
+  muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
+    const guns = [...this.ship.rooms.values()].find((r) => r.def.system === 'guns')?.def;
+    if (!guns) {
+      const c = this.toScreen({ x: this.ship.width / 2, y: this.ship.height / 2 });
+      return { ...c, dx: 0, dy: -1 };
+    }
+    const col = index % guns.w;
+    const top = Math.floor(index / guns.w) % 2 === 0 || guns.h === 1;
+    const p = this.toScreen({ x: guns.x + col + 0.5, y: top ? guns.y + 0.3 - 0.4 : guns.y + guns.h - 0.3 + 0.4 });
+    return { x: p.x, y: p.y, dx: 0, dy: top ? -1 : 1 };
+  }
+
+  /** Leave a scorch mark where a ball struck. */
+  addScorch(roomId: string): void {
+    const d = this.ship.room(roomId).def;
+    this.scorches.push({
+      x: d.x + 0.2 + Math.random() * (d.w - 0.4),
+      y: d.y + 0.2 + Math.random() * (d.h - 0.4),
+      r: 0.18 + Math.random() * 0.16,
+      rot: Math.random() * Math.PI,
+    });
+    if (this.scorches.length > 40) this.scorches.shift();
+  }
+
   destroy(): void {
-    this.g.destroy();
-    this.nameText.destroy();
-    for (const t of this.labels.values()) t.destroy();
+    for (const o of [this.wake, this.over, this.ui, this.base, this.rig, this.nameText, ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
+    for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
+  }
+
+  private placeImages(): void {
+    const g = this.geom;
+    const T = this.tile;
+    const left = this.flip ? this.ox - g.padR * T : this.ox - g.padL * T;
+    const top = this.oy + this.bob - g.padT * T;
+    this.base.setPosition(left, top);
+    this.rig.setPosition(left, top);
   }
 
   draw(timeMs: number, state: ShipViewState = {}): void {
-    const g = this.g;
+    const t = timeMs / 1000;
+    this.bob = Math.sin(t * 0.9 + this.phase) * 1.4;
+    this.placeImages();
+    if (this.nameText) this.nameText.setY(this.oy + this.bob - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
+
+    const sails = this.ship.system('sails');
+    this.rig.setAlpha(sails ? 0.6 + 0.4 * (this.ship.capacity('sails') / sails.max) : 1);
+
+    this.drawWake(t);
+    this.drawOverlay(t, state);
+    this.drawCrew(t, state);
+    this.drawUi(t, state);
+  }
+
+  // --- Layers --------------------------------------------------------------
+
+  private drawWake(t: number): void {
+    const g = this.wake;
+    const geo = this.geom;
+    const mid = this.ship.height / 2;
+    g.clear();
+    // Foam hugging the hull.
+    for (let ring = 0; ring < 3; ring++) {
+      const pts = geo.outline.map((p, i) => {
+        const nx = p.x - (geo.stern + geo.tip) / 2;
+        const ny = p.y - mid;
+        const len = Math.hypot(nx * 0.35, ny) || 1;
+        const out = 0.1 + ring * 0.12 + 0.05 * Math.sin(t * 2.2 + i * 0.7 + ring);
+        return this.toScreen({ x: p.x + ((nx * 0.35) / len) * out, y: p.y + (ny / len) * out });
+      });
+      g.lineStyle(2 - ring * 0.5, 0xe8f4f8, 0.32 - ring * 0.09);
+      g.strokePoints(pts, true);
+    }
+    // Foam boiling off the bow, and a wake trailing astern.
+    const dir = this.flip ? -1 : 1;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 5; i++) {
+        const k = (i + ((t * 0.9) % 1)) / 5;
+        const x = geo.tip - 0.2 - k * 2.2;
+        const p = this.toScreen({ x, y: mid + side * (geo.half(x) + 0.12 + k * 0.45) });
+        g.fillStyle(0xe8f4f8, 0.3 * (1 - k));
+        g.fillEllipse(p.x, p.y, this.tile * (0.55 + k * 0.5), this.tile * (0.18 + k * 0.2));
+      }
+    }
+    const stern = this.toScreen({ x: geo.stern, y: mid });
+    for (let i = 0; i < 6; i++) {
+      const k = (i + ((t * 0.8) % 1)) / 6;
+      g.fillStyle(0xe8f4f8, 0.22 * (1 - k));
+      g.fillEllipse(stern.x - dir * this.tile * (0.4 + k * 3.2), stern.y + Math.sin(t * 1.3 + i) * 3, this.tile * (0.5 + k * 0.9), this.tile * (0.25 + k * 0.5));
+    }
+  }
+
+  private drawOverlay(t: number, state: ShipViewState): void {
+    const g = this.over;
     const T = this.tile;
     const ship = this.ship;
     g.clear();
 
-    this.drawHull();
+    for (const s of this.scorches) {
+      const p = this.toScreen({ x: s.x, y: s.y });
+      g.fillStyle(0x140a04, 0.32).fillEllipse(p.x, p.y, s.r * T * 2, s.r * T * 1.4);
+      g.fillStyle(0x140a04, 0.25).fillEllipse(p.x + Math.cos(s.rot) * 4, p.y + Math.sin(s.rot) * 3, s.r * T, s.r * T * 0.8);
+    }
 
     for (const room of ship.rooms.values()) {
       const r = this.roomRect(room.def.id);
       const sys = room.def.system ? ship.system(room.def.system) : undefined;
-      const base = ship.side === 'enemy' ? COLORS.deckEnemy : sys ? COLORS.deckSystem : COLORS.deck;
-      g.fillStyle(base, 1).fillRect(r.x, r.y, r.width, r.height);
 
-      // Plank lines.
-      g.lineStyle(1, 0x000000, 0.08);
-      for (let y = r.y + T / 4; y < r.bottom; y += T / 4) g.lineBetween(r.x, y, r.right, y);
-
-      if (room.water > 0) g.fillStyle(COLORS.water, 0.15 + (room.water / 100) * 0.6).fillRect(r.x, r.y, r.width, r.height);
-
-      if (room.fire > 0) {
-        const flicker = 0.25 + 0.1 * Math.sin(timeMs / 90 + r.x);
-        g.fillStyle(COLORS.fire, flicker + (room.fire / 100) * 0.35).fillRect(r.x, r.y, r.width, r.height);
-        const flames = Math.ceil((room.fire / 100) * room.def.w * room.def.h);
-        for (let i = 0; i < flames; i++) {
-          const fx = r.x + ((i * 0.618 * r.width + 9) % (r.width - 10)) + 5;
-          const fy = r.y + r.height * (0.35 + 0.4 * ((i * 0.37) % 1));
-          const h = T * (0.25 + 0.08 * Math.sin(timeMs / 120 + i * 2));
-          g.fillStyle(COLORS.fireCore, 0.9).fillTriangle(fx - 5, fy + h / 2, fx + 5, fy + h / 2, fx, fy - h / 2);
+      if (room.water > 0) {
+        const a = 0.22 + (room.water / 100) * 0.5;
+        g.fillStyle(0x1f7fc4, a).fillRect(r.x, r.y, r.width, r.height);
+        g.fillStyle(0x7fc8ff, 0.08 + (room.water / 100) * 0.1).fillRect(r.x, r.y, r.width, r.height * 0.35);
+        g.lineStyle(1.5, 0xd8f0ff, 0.3 + (room.water / 100) * 0.3);
+        for (let y = r.y + 7; y < r.bottom - 3; y += 9) {
+          g.beginPath();
+          for (let x = r.x + 2; x <= r.right - 2; x += 4) {
+            const yy = y + Math.sin(t * 3 + x * 0.25 + y) * 1.4;
+            if (x === r.x + 2) g.moveTo(x, yy);
+            else g.lineTo(x, yy);
+          }
+          g.strokePath();
         }
       }
 
       if (room.breach) {
         const c = this.roomCenter(room.def.id);
-        g.fillStyle(COLORS.breach, 1).fillEllipse(c.x + T * 0.3, c.y + T * 0.15, T * 0.34, T * 0.22);
-        g.lineStyle(2, COLORS.water, 0.9).strokeEllipse(c.x + T * 0.3, c.y + T * 0.15, T * 0.44, T * 0.3);
-      }
-
-      if (sys?.id === 'sails') {
-        const c = this.roomCenter(room.def.id);
-        g.fillStyle(0x3b2412, 1).fillCircle(c.x, c.y, T * 0.16);
-        g.lineStyle(2, 0xeeeeee, 0.5).lineBetween(c.x, r.y + 3, c.x, r.bottom - 3);
-      }
-      if (sys?.id === 'guns') {
-        for (let i = 0; i < room.def.w; i++) {
-          const gx = r.x + T * (i + 0.5) - T * 0.1;
-          g.fillStyle(0x1a1a1a, 1).fillRect(gx, r.y - T * 0.18, T * 0.2, T * 0.26);
-          g.fillRect(gx, r.bottom - T * 0.08, T * 0.2, T * 0.26);
+        const hx = c.x + T * 0.25;
+        const hy = c.y + T * 0.12;
+        const pts: Vec[] = [];
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          const rr = T * (0.17 + 0.06 * Math.sin(i * 2.7));
+          pts.push({ x: hx + Math.cos(a) * rr * 1.2, y: hy + Math.sin(a) * rr * 0.8 });
         }
-      }
-      if (sys?.id === 'helm') {
-        const c = this.roomCenter(room.def.id);
-        g.lineStyle(3, 0x4a2c14, 1).strokeCircle(c.x, c.y + T * 0.15, T * 0.22);
-        for (let a = 0; a < 8; a++) {
-          const ang = (a / 8) * Math.PI * 2;
-          g.lineBetween(c.x, c.y + T * 0.15, c.x + Math.cos(ang) * T * 0.3, c.y + T * 0.15 + Math.sin(ang) * T * 0.3);
+        g.fillStyle(0x0a0d10, 1).fillPoints(pts, true);
+        g.lineStyle(2, 0xc9a36a, 0.8);
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.3;
+          g.lineBetween(hx + Math.cos(a) * T * 0.16, hy + Math.sin(a) * T * 0.1, hx + Math.cos(a) * T * 0.3, hy + Math.sin(a) * T * 0.2);
+        }
+        for (let i = 0; i < 4; i++) {
+          const k = (t * 1.6 + i / 4) % 1;
+          g.fillStyle(0xcfeaff, 0.6 * (1 - k)).fillCircle(hx + Math.sin(i * 2.1) * T * 0.15 * k, hy - T * 0.05 - k * T * 0.25, 2 + k * 3);
         }
       }
 
-      if (state.hoverRoom === room.def.id) g.fillStyle(0xffffff, state.aiming ? 0.18 : 0.12).fillRect(r.x, r.y, r.width, r.height);
+      if (room.fire > 0) {
+        const k = room.fire / 100;
+        g.fillStyle(0xff6a1a, 0.14 + 0.22 * k + 0.05 * Math.sin(t * 9 + r.x)).fillRect(r.x, r.y, r.width, r.height);
+        g.fillStyle(0xffc040, 0.08 + 0.1 * k).fillRect(r.x + 3, r.y + 3, r.width - 6, r.height - 6);
+        const n = Math.max(2, Math.ceil(k * room.def.w * room.def.h * 2));
+        for (let i = 0; i < n; i++) {
+          const fx = r.x + T * 0.2 + (((i * 0.618 + 0.13) % 1) * (r.width - T * 0.4));
+          const fy = r.y + T * 0.3 + (((i * 0.371 + 0.4) % 1) * (r.height - T * 0.45));
+          const s = T * (0.22 + 0.16 * k) * (1 + 0.15 * Math.sin(t * 11 + i * 3));
+          flame(g, fx, fy, s, t + i);
+        }
+        for (let i = 0; i < 6; i++) {
+          const kk = (t * 0.9 + i / 6) % 1;
+          g.fillStyle(0xffb040, 0.9 * (1 - kk)).fillCircle(r.x + ((i * 0.37 + 0.2) % 1) * r.width + Math.sin(t * 3 + i) * 4, r.bottom - T * 0.2 - kk * r.height * 0.9, 1.6);
+        }
+        for (let i = 0; i < 3; i++) {
+          const kk = (t * 0.45 + i / 3) % 1;
+          g.fillStyle(0x2a2420, 0.3 * (1 - kk)).fillCircle(r.centerX + Math.sin(t + i * 2) * T * 0.4, r.y + r.height * 0.4 - kk * T * 1.2, T * (0.15 + kk * 0.3));
+        }
+      }
 
-      const damaged = sys && sys.damage > 0;
-      g.lineStyle(damaged ? 3 : 2, damaged ? COLORS.pipDamaged : COLORS.roomEdge, 1).strokeRect(r.x, r.y, r.width, r.height);
+      if (sys && sys.damage > 0) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+        g.lineStyle(2, 0xe0452f, 0.45 + 0.35 * pulse).strokeRect(r.x + 2, r.y + 2, r.width - 4, r.height - 4);
+        if (ship.capacity(sys.id) === 0) {
+          // Sparks and a wisp of smoke from a wrecked station.
+          for (let i = 0; i < 2; i++) {
+            const kk = (t * 0.6 + i / 2) % 1;
+            g.fillStyle(0x3a3530, 0.25 * (1 - kk)).fillCircle(r.centerX + T * 0.2 * (i - 0.5), r.centerY - kk * T * 0.8, T * (0.1 + kk * 0.2));
+          }
+        }
+      }
 
-      if (sys) {
-        const level = ship.level(sys.id);
-        const pip = Math.max(5, Math.round(T * 0.16));
-        const w = sys.max * (pip + 2);
-        drawPips(g, r.centerX - w / 2, r.bottom - pip - 4, level, sys.max, sys.damage, pip, 2);
+      if (state.hoverRoom === room.def.id) {
+        g.fillStyle(0xffffff, state.aiming ? 0.14 : 0.1).fillRect(r.x, r.y, r.width, r.height);
+        g.lineStyle(2, state.aiming ? COLORS.aim : 0xf2c45a, 0.9).strokeRect(r.x + 1, r.y + 1, r.width - 2, r.height - 2);
       }
     }
 
-    for (const d of ship.doors) {
-      const a = this.toScreen({ x: d.ta.x + 0.5, y: d.ta.y + 0.5 });
-      const b = this.toScreen({ x: d.tb.x + 0.5, y: d.tb.y + 0.5 });
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      const vertical = Math.abs(a.x - b.x) > Math.abs(a.y - b.y);
-      g.fillStyle(COLORS.door, 1);
-      if (vertical) g.fillRect(mx - 2, my - T * 0.22, 4, T * 0.44);
-      else g.fillRect(mx - T * 0.22, my - 2, T * 0.44, 4);
+    // Selection rings at the feet, under the crew.
+    for (const c of ship.crew) {
+      if (!state.selected?.has(c.id)) continue;
+      const p = this.toScreen(c.pos);
+      const fy = p.y + T * 0.3;
+      g.lineStyle(2.5, COLORS.select, 0.95).strokeEllipse(p.x, fy, T * 0.62, T * 0.24);
+      g.fillStyle(COLORS.select, 0.18).fillEllipse(p.x, fy, T * 0.62, T * 0.24);
+    }
+  }
+
+  private drawCrew(t: number, state: ShipViewState): void {
+    const T = this.tile;
+    const live = new Set<number>();
+    const scale = (T / 42) * 0.5;
+    for (const c of this.ship.crew) {
+      live.add(c.id);
+      let sprite = this.sprites.get(c.id);
+      const prefix = crewTextures(this.scene, c);
+      if (!sprite) {
+        sprite = this.scene.add.image(0, 0, `${prefix}:idle0`).setOrigin(CREW_ORIGIN.x, CREW_ORIGIN.y).setScale(scale);
+        this.sprites.set(c.id, sprite);
+      }
+      const p = this.toScreen(c.pos);
+      const fy = p.y + T * 0.3;
+      sprite.setTexture(`${prefix}:${crewFrame(c, t)}`);
+      sprite.setPosition(p.x, fy).setDepth(DEPTH.crew + fy / 10000);
+
+      // Face the way they walk; otherwise keep facing as they were (bow-ward to start).
+      const f = this.facing.get(c.id) ?? { x: p.x, dir: (this.flip ? -1 : 1) * (c.side === this.ship.side ? 1 : -1) };
+      if (Math.abs(p.x - f.x) > 0.3) f.dir = Math.sign(p.x - f.x);
+      f.x = p.x;
+      this.facing.set(c.id, f);
+      sprite.setFlipX(f.dir < 0);
+      sprite.setAlpha(c.hp <= 0 ? 0.4 : 1);
+      if (state.selected?.has(c.id)) sprite.setTint(0xfff4c8);
+      else sprite.clearTint();
+    }
+    for (const [id, s] of this.sprites) {
+      if (live.has(id)) continue;
+      s.destroy();
+      this.sprites.delete(id);
+      this.facing.delete(id);
+    }
+  }
+
+  private drawUi(t: number, state: ShipViewState): void {
+    const g = this.ui;
+    const T = this.tile;
+    const ship = this.ship;
+    g.clear();
+
+    // System badges and power pips at each station's top-left corner.
+    for (const [id, badge] of this.badges) {
+      const sys = ship.system(id)!;
+      const r = this.roomRect(sys.room);
+      const bx = r.x + 11;
+      const by = r.y + 11;
+      badge.setPosition(bx, by);
+      const out = ship.level(id) === 0;
+      badge.setTint(sys.damage > 0 && ship.capacity(id) === 0 ? 0xff6a5a : out ? 0x9a9a9a : 0xffffff);
+      const level = ship.level(id);
+      const pip = 5;
+      for (let i = 0; i < sys.max; i++) {
+        const px = bx + 13 + i * (pip + 2);
+        const py = by - pip / 2;
+        const color = i >= sys.max - sys.damage ? COLORS.pipDamaged : i < level ? COLORS.pipOn : 0x2c2f33;
+        g.fillStyle(0x000000, 0.55).fillRect(px - 1, py - 1, pip + 2, pip + 2);
+        g.fillStyle(color, 1).fillRect(px, py, pip, pip);
+      }
     }
 
+    // Crew health and what they're doing, over their heads.
+    for (const c of ship.crew) {
+      const p = this.toScreen(c.pos);
+      const headY = p.y + T * 0.3 - T * 0.95;
+      const hurt = c.hp < c.maxHp;
+      if (hurt || state.selected?.has(c.id)) {
+        const bw = T * 0.5;
+        const frac = Math.max(0, c.hp / c.maxHp);
+        g.fillStyle(0x000000, 0.75).fillRect(p.x - bw / 2 - 1, headY - 1, bw + 2, 5);
+        g.fillStyle(frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f, 1).fillRect(p.x - bw / 2, headY, bw * frac, 3);
+      }
+      const icon = c.task === 'fire' ? 0xff7a2a : c.task === 'breach' ? 0x6fb8ff : c.task === 'repair' ? 0xf0b040 : c.task === 'fight' ? 0xff4040 : c.task === 'sabotage' ? 0xb070ff : 0;
+      if (icon) {
+        const ix = p.x + T * 0.3;
+        const iy = headY - 5;
+        g.fillStyle(0x0b1622, 0.85).fillCircle(ix, iy, 5.5);
+        g.fillStyle(icon, 1).fillCircle(ix, iy, 3.6);
+      }
+      if (c.side !== ship.side) {
+        // Boarders get a coloured pennant so you can tell friend from foe in a melee.
+        g.fillStyle(c.side === 'player' ? 0x151515 : 0xb3261e, 1).fillTriangle(p.x - 2, headY - 14, p.x - 2, headY - 6, p.x + 8, headY - 10);
+      }
+    }
+
+    // Aim markers.
     if (state.targets) {
       for (const [roomId, guns] of state.targets) {
         if (!ship.rooms.has(roomId)) continue;
         const c = this.roomCenter(roomId);
-        const rad = T * 0.32;
-        g.lineStyle(2, COLORS.aim, 0.95).strokeCircle(c.x, c.y, rad);
-        g.lineBetween(c.x - rad * 1.4, c.y, c.x - rad * 0.5, c.y).lineBetween(c.x + rad * 0.5, c.y, c.x + rad * 1.4, c.y);
-        g.lineBetween(c.x, c.y - rad * 1.4, c.x, c.y - rad * 0.5).lineBetween(c.x, c.y + rad * 0.5, c.x, c.y + rad * 1.4);
-        guns.forEach((_, i) => g.fillStyle(COLORS.aim, 1).fillCircle(c.x + rad + 6 + i * 11, c.y - rad - 4, 5));
+        const rad = T * 0.34;
+        const spin = t * 1.5;
+        g.lineStyle(2, COLORS.aim, 0.95);
+        for (let i = 0; i < 4; i++) {
+          const a0 = spin + (i * Math.PI) / 2 + 0.25;
+          g.beginPath();
+          g.arc(c.x, c.y, rad, a0, a0 + Math.PI / 2 - 0.5);
+          g.strokePath();
+        }
+        g.lineBetween(c.x - rad * 1.35, c.y, c.x - rad * 0.55, c.y).lineBetween(c.x + rad * 0.55, c.y, c.x + rad * 1.35, c.y);
+        g.lineBetween(c.x, c.y - rad * 1.35, c.x, c.y - rad * 0.55).lineBetween(c.x, c.y + rad * 0.55, c.x, c.y + rad * 1.35);
+        guns.forEach((_, i) => {
+          g.fillStyle(0x0b1622, 0.9).fillCircle(c.x + rad + 7 + i * 11, c.y - rad - 3, 5.5);
+          g.fillStyle(COLORS.aim, 1).fillCircle(c.x + rad + 7 + i * 11, c.y - rad - 3, 4);
+        });
       }
     }
-
-    for (const c of ship.crew) this.drawCrew(c, state.selected?.has(c.id) ?? false);
   }
+}
 
-  private drawHull(): void {
-    const g = this.g;
-    const w = this.ship.width;
-    const h = this.ship.height;
-    const pts: Vec[] = [
-      { x: -0.45, y: -0.25 },
-      { x: w * 0.55, y: -0.4 },
-      { x: w + 0.4, y: -0.2 },
-      { x: w + 1.1, y: h * 0.25 },
-      { x: w + 1.6, y: h / 2 },
-      { x: w + 1.1, y: h * 0.75 },
-      { x: w + 0.4, y: h + 0.2 },
-      { x: w * 0.55, y: h + 0.4 },
-      { x: -0.45, y: h + 0.25 },
-      { x: -0.6, y: h / 2 },
-    ].map((p) => this.toScreen(p));
-    g.fillStyle(0x000000, 0.25).fillPoints(
-      pts.map((p) => ({ x: p.x + 6, y: p.y + 8 })),
-      true,
-    );
-    g.fillStyle(COLORS.hull, 1).fillPoints(pts, true);
-    g.lineStyle(3, COLORS.hullEdge, 1).strokePoints(pts, true);
+function flame(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, t: number): void {
+  const sway = Math.sin(t * 7) * s * 0.15;
+  const layers: [number, number, number][] = [
+    [0xd8341a, 1, 0.9],
+    [0xff8a1f, 0.72, 0.95],
+    [0xffd24a, 0.42, 1],
+  ];
+  for (const [color, k, a] of layers) {
+    const w = s * 0.55 * k;
+    const h = s * 1.15 * k;
+    g.fillStyle(color, a);
+    g.fillCircle(x, y, w);
+    g.fillTriangle(x - w, y, x + w, y, x + sway, y - h - w * 0.4);
   }
+}
 
-  private drawCrew(c: Crew, selected: boolean): void {
-    const g = this.g;
-    const T = this.tile;
-    const p = this.toScreen(c.pos);
-    const r = T * 0.22;
-    if (selected) g.lineStyle(3, COLORS.select, 1).strokeCircle(p.x, p.y, r + 4);
-    g.fillStyle(c.side === 'player' ? COLORS.playerCrew : COLORS.enemyCrew, 1).fillCircle(p.x, p.y, r);
-    g.lineStyle(2, 0x1a1208, 1).strokeCircle(p.x, p.y, r);
-    if (c.task === 'fight') g.lineStyle(2, 0xff4040, 0.9).strokeCircle(p.x, p.y, r + 2);
-    if (c.side === 'player') {
-      // Red bandana.
-      g.fillStyle(0xb8322a, 1).fillRect(p.x - r * 0.8, p.y - r * 0.55, r * 1.6, r * 0.4);
-    } else {
-      // Bicorne hat.
-      g.fillStyle(0x111111, 1).fillTriangle(p.x - r, p.y - r * 0.2, p.x + r, p.y - r * 0.2, p.x, p.y - r * 1.1);
-    }
-    const frac = c.hp / c.maxHp;
-    const bw = T * 0.5;
-    g.fillStyle(0x000000, 0.7).fillRect(p.x - bw / 2, p.y + r + 2, bw, 4);
-    g.fillStyle(frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f, 1).fillRect(p.x - bw / 2, p.y + r + 2, bw * frac, 4);
-    if (c.task === 'fire' || c.task === 'breach' || c.task === 'repair') {
-      const icon = c.task === 'fire' ? COLORS.fire : c.task === 'breach' ? COLORS.water : 0xf0a030;
-      g.fillStyle(icon, 1).fillCircle(p.x + r * 0.9, p.y - r * 0.9, 4);
-    }
+/** A round parchment badge with a station's symbol, painted once per system. */
+function systemIcon(scene: Phaser.Scene, id: SystemId): string {
+  const key = `sysicon:${id}`;
+  if (scene.textures.exists(key)) return key;
+  const S = 40;
+  const tex = scene.textures.createCanvas(key, S, S)!;
+  const ctx = tex.getContext();
+  const c = S / 2;
+  ctx.beginPath();
+  ctx.arc(c, c, 18, 0, Math.PI * 2);
+  ctx.fillStyle = '#e9dcb8';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#2a170a';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(c, c, 14.5, 0, Math.PI * 2);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(80,50,20,0.5)';
+  ctx.stroke();
+  ctx.strokeStyle = '#2a170a';
+  ctx.fillStyle = '#2a170a';
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'round';
+  switch (id) {
+    case 'helm':
+      ctx.beginPath();
+      ctx.arc(c, c, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(c, c);
+        ctx.lineTo(c + Math.cos(a) * 11, c + Math.sin(a) * 11);
+        ctx.stroke();
+      }
+      break;
+    case 'sails':
+      ctx.beginPath();
+      ctx.moveTo(c - 1, 8);
+      ctx.lineTo(c - 1, 32);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(c + 1, 10);
+      ctx.quadraticCurveTo(c + 14, 19, c + 1, 29);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(c - 3, 12);
+      ctx.quadraticCurveTo(c - 11, 20, c - 3, 27);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case 'guns':
+      ctx.save();
+      ctx.translate(c, c);
+      ctx.rotate(-0.5);
+      ctx.fillRect(-11, -3.5, 20, 7);
+      ctx.beginPath();
+      ctx.arc(-11, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(c - 3, c + 6, 4.5, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    case 'pumps':
+      ctx.beginPath();
+      ctx.moveTo(c, 8);
+      ctx.bezierCurveTo(c + 9, 18, c + 9, 30, c, 30);
+      ctx.bezierCurveTo(c - 9, 30, c - 9, 18, c, 8);
+      ctx.fillStyle = '#2e6fa8';
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'surgeon':
+      ctx.fillStyle = '#b3261e';
+      ctx.fillRect(c - 3.5, 9, 7, 22);
+      ctx.fillRect(c - 11, c - 3.5, 22, 7);
+      break;
   }
+  tex.refresh();
+  return key;
 }

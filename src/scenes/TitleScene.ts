@@ -4,6 +4,7 @@ import { placeBackdrop } from '../render/art';
 import { isMuted, playLoop, toggleMute } from '../render/sound';
 import { setRun } from '../render/RunBar';
 import { Button, Sea } from '../render/ui';
+import { Run } from '../sim/Run';
 import { loadRun, sceneFor } from './save';
 
 export class TitleScene extends Phaser.Scene {
@@ -14,6 +15,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    if (import.meta.env.DEV && this.devBattle()) return;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     placeBackdrop(this, 'title', SCREEN.w, SCREEN.h, 0.3);
     const cx = SCREEN.w / 2;
@@ -56,6 +58,21 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5, 0);
 
     this.input.keyboard!.once('keydown-ENTER', () => (saved ? resume() : this.scene.start('ShipSelect')));
+  }
+
+  /** Dev shortcut: `?battle=gull&foe=cutter` jumps straight into a fight. */
+  private devBattle(): boolean {
+    const params = new URLSearchParams(location.search);
+    const ship = params.get('battle');
+    if (!ship || this.registry.get('dev-battle-done')) return false;
+    this.registry.set('dev-battle-done', true);
+    const run = new Run(ship);
+    const foe = params.get('foe') ?? 'cutter';
+    run.encounter = { kind: 'battle', enemy: foe, name: 'HMS Diligence', boss: false, ambush: false, text: 'A sail on the horizon!' };
+    run.status = 'battle';
+    setRun(this, run);
+    this.scene.start('Battle');
+    return true;
   }
 
   update(time: number): void {

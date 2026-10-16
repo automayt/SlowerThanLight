@@ -3,6 +3,7 @@ import { PLAYER_SHIPS, SHIP_UNLOCKS } from '../data/ships';
 import { weapon } from '../data/weapons';
 import { placeArt } from '../render/art';
 import { setRun } from '../render/RunBar';
+import { shipGeometry } from '../render/ShipArt';
 import { ShipView } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea, drawPips } from '../render/ui';
@@ -68,9 +69,13 @@ export class ShipSelectScene extends Phaser.Scene {
       const ship = new Ship(def, 'player');
       const boxY = CARD_Y + 126;
       const boxH = 132;
-      const tile = Math.min(26, (CARD_W - 24) / (ship.width + 2.2), (boxH - 16) / ship.height);
-      const widthPx = (ship.width + 2.2) * tile;
-      const view = new ShipView(this, ship, x + (CARD_W - widthPx) / 2 + 0.6 * tile, boxY + (boxH - ship.height * tile) / 2, tile, false, false);
+      // Fit the whole painted ship, ensign to bowsprit, inside the card.
+      const geo = shipGeometry(ship);
+      const spanW = geo.padL - 0.25 + geo.tip + 1.2;
+      const spanH = geo.beam * 2 + 0.2;
+      const tile = Math.min(26, (CARD_W - 16) / spanW, (boxH - 6) / spanH);
+      const left = x + (CARD_W - spanW * tile) / 2 + (geo.padL - 0.25) * tile;
+      const view = new ShipView(this, ship, left, boxY + (boxH - ship.height * tile) / 2, tile, false, false);
       this.views.push(view);
 
       this.add.text(x + 14, CARD_Y + 266, def.description, textStyle(13, COLORS.text, { wordWrap: { width: CARD_W - 28 }, lineSpacing: 2 }));
