@@ -14,7 +14,15 @@
     "breach.ogg",
     "explosion.ogg",
     "boarders.ogg",
-    "creak.ogg"
+    "creak.ogg",
+    "fanfare.ogg",
+    "defeat.ogg",
+    "cheer.ogg",
+    "sink.ogg",
+    "musket.ogg",
+    "sail.ogg",
+    "quill.ogg",
+    "page.ogg"
   ],
   "music": [
     "shanty.ogg",

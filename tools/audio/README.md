@@ -25,3 +25,24 @@ gitignored `candidates/` folder.
 (one take each; seeds in the file). Each was checked by duration, loudness and spectral centroid rather than by ear,
 so listen through and regenerate any that miss: `python gen_sfx.py jobs3.json`, then
 `python finish_sfx.py click=click_a coins=coins_a ...`.
+
+## Third batch (jobs4.json, synth_sfx.py)
+
+From LTX-2.3 (`jobs4.json`): `fanfare` (fanfare_b), `defeat` (defeat_a), `cheer` (cheer_b), `sink` (groan_b, a low
+groaning rumble and gurgle) and a re-cut `splash` (splash_d, now starting on the impact instead of half a second early).
+LTX renders sharp, sparse sounds as a steady wash, so every musket, sail, quill, page and seal take came out as noise;
+`synth_sfx.py` builds `musket`, `sail`, `quill` and `page` from filtered noise instead (seeded, so re-runs match).
+Finish both kinds with `finish_sfx.py name=stem`. Not yet heard by a person: listen through.
+
+## Music beds
+
+The music director in `src/render/sound.ts` plays one bed per screen: `shanty` (title, ship select, logbook),
+`music-sea` (chart, events, results, run end), `music-port` and `music-battle`. They are listed under `"music"` in
+`public/audio/manifest.json`, so they stream in after the first screen instead of on the loading bar.
+
+- `gen_music.py jobs_music.json` renders 60 s LTX-2.3 passes (about 4-7 minutes each on a shared GPU).
+- `analyze_music.py raw/x.flac --png dir` reports tempo, beat regularity, tonality and key stability and draws a
+  spectrogram, waveform and chromagram, which is how the takes were chosen without listening.
+- `finish_music.py raw/x.flac ../../public/audio/music-x.ogg --start S --end E` keeps a clean stretch, loops it at the
+  point whose onsets and harmony best match the head, normalises to -18 LUFS and encodes stereo Vorbis 96k.
+- `seam_png.py loop.ogg --out dir` draws the wrap-around so a click or jump would show.

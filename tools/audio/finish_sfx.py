@@ -35,16 +35,15 @@ SPEC = {
     "explosion": dict(dur=2.5, loop=False, rms=-13, kbps=80, maxkb=80),
     "boarders": dict(dur=2.0, loop=False, rms=-17, kbps=80, maxkb=70),
     "creak": dict(dur=8.0, loop=True, rms=-27, kbps=64, maxkb=300),
-    # jobs4.json
+    # jobs4.json (LTX) and synth_sfx.py (musket, sail, quill, page)
     "sail": dict(dur=1.8, loop=False, rms=-19, kbps=72, maxkb=60),
     "musket": dict(dur=2.0, loop=False, rms=-16, kbps=80, maxkb=70),
     "cheer": dict(dur=3.0, loop=False, rms=-18, kbps=72, maxkb=90),
-    "groan": dict(dur=3.5, loop=False, rms=-18, kbps=72, maxkb=100),
-    "fanfare": dict(dur=3.5, loop=False, rms=-17, kbps=96, maxkb=110),
+    "sink": dict(dur=3.8, loop=False, rms=-19, kbps=72, maxkb=100),
+    "fanfare": dict(dur=4.0, loop=False, rms=-17, kbps=96, maxkb=110),
     "defeat": dict(dur=3.5, loop=False, rms=-18, kbps=96, maxkb=110),
     "quill": dict(dur=0.9, loop=False, rms=-24, kbps=64, maxkb=30),
     "page": dict(dur=0.9, loop=False, rms=-23, kbps=64, maxkb=30),
-    "seal": dict(dur=0.6, loop=False, rms=-22, kbps=64, maxkb=25),
 }
 
 

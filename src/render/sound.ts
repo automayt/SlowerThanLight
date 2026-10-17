@@ -73,6 +73,31 @@ function variants(scene: Phaser.Scene, name: string): string[] {
 }
 
 /**
+ * Every effect in public/audio, by the name playSfx takes (variants such as cannon-1, cannon-2 share one name).
+ * A name that is not loaded plays nothing, so a scene may call one before its file exists.
+ */
+export const SFX = {
+  cannon: 'a gun fires',
+  'hit-wood': 'a ball strikes timber',
+  splash: 'a ball falls short into the sea',
+  fire: 'flames take hold',
+  breach: 'the hull is holed',
+  explosion: 'a magazine goes up',
+  boarders: 'boarders roar over the side',
+  bell: 'the ship’s bell',
+  click: 'a button',
+  coins: 'gold changes hands',
+  musket: 'a ragged musket volley (marines, boarding)',
+  sail: 'canvas flaps and fills (making sail, leaving port, fleeing)',
+  cheer: 'the crew cheers (victory, a prize taken)',
+  sink: 'a hull goes down, groaning and gurgling (a ship sinks)',
+  fanfare: 'victory sting; the music ducks under it',
+  defeat: 'low defeat sting; the music ducks under it',
+  quill: 'a quill scratches the chart (plotting a course)',
+  page: 'a logbook page turns',
+} as const;
+
+/**
  * Musical stings: played straight (no random detune, which would put them out of tune) and the music bed
  * ducks under them for their length.
  */
