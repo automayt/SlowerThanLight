@@ -431,6 +431,14 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'hit': {
+        if (ev.deflected) {
+          playSfx(this, 'hit-wood', 0.25);
+          const g = view.roomCenter(ev.room);
+          this.burst(g.x, g.y, 0xd8d4cc, 10, 260);
+          this.floatText(g.x, g.y - 6, 'GLANCED OFF', '#d8d4cc');
+          if (!ours) this.hud.addLog(`A ball glances off her stout sides. Try heavier guns, chain or grape.`);
+          break;
+        }
         playSfx(this, 'hit-wood', ours ? 0.6 : 0.4);
         const c = view.roomCenter(ev.room);
         const jx = (Math.random() - 0.5) * TILE * 0.6;
