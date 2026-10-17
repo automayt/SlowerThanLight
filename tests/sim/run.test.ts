@@ -4,6 +4,7 @@ import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
 import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
+import { WEAPONS } from '../../src/data/weapons';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
@@ -357,6 +358,18 @@ describe('prizes', () => {
     return run;
   };
 
+  it('spoils are the guns she fought with, heavier in deeper sectors', () => {
+    const run = runAt('battle');
+    run.sector = 2;
+    run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS Test', boss: false, ambush: false, text: '' };
+    const battle = run.startBattle();
+    for (const c of battle.enemy.crew) c.hp = 0;
+    battle.step(0.05);
+    run.finishBattle(battle);
+    expect(run.prize?.guns).toContain('pdr12');
+    expect(new Set(run.prize!.guns)).toEqual(new Set(battle.enemy.def.guns.map((g) => g.weapon)));
+  });
+
   it('a captured ship offers her guns; one pick only', () => {
     const run = win('captured');
     expect(run.prize?.guns.length).toBeGreaterThan(0);
@@ -468,8 +481,16 @@ describe('sectors, provisions and the chandler', () => {
     const hp = starving.condition.crew.map((c) => c.hp);
     starving.jump(starving.reachable()[0].id);
     expect(starving.hungerNote).toContain('hungry');
-    // Running repairs heal 15 first, then hunger takes 25.
-    starving.condition.crew.forEach((c, i) => expect(c.hp).toBeLessThanOrEqual(Math.max(1, Math.min(100, hp[i] + 15) - 25)));
+    // A hungry crew does not mend: the full 25 comes off, even with a surgeon's chest aboard.
+    starving.condition.crew.forEach((c, i) => expect(c.hp).toBe(Math.max(1, hp[i] - 25)));
+
+    const chest = new Run('gull', 4);
+    chest.provisions = 0;
+    chest.navy = -10;
+    chest.fittings.push('chest');
+    chest.condition.crew[0].hp = 60;
+    chest.jump(chest.reachable()[0].id);
+    expect(chest.condition.crew[0].hp).toBe(35);
   });
 
   it('deeper sectors field tougher ships; the blockade does not grow', () => {
@@ -480,6 +501,24 @@ describe('sectors, provisions and the chandler', () => {
     expect(scaled.systems.guns).toBeGreaterThan(base.systems.guns!);
     expect(scaled.guns.some((g) => g.weapon === 'pdr12')).toBe(true);
     expect(scaleEnemy(base, 0)).toBe(base);
+  });
+
+  it('a scaled enemy upgrades different guns one step each, and has a use for every extra hand', () => {
+    const step: Record<string, string> = { pdr6: 'pdr9', pdr9: 'pdr12' };
+    const hands = (guns: { weapon: string }[]) => guns.reduce((n, g) => n + WEAPONS[g.weapon].hands, 0);
+    for (const e of Object.values(ENEMIES)) {
+      for (const tier of [1, 2]) {
+        const base = e.ship;
+        const s = scaleEnemy(base, tier);
+        const changed = s.guns.map((g, i) => [base.guns[i].weapon, g.weapon]).filter(([a, b]) => a !== b);
+        for (const [from, to] of changed) expect(to, `${e.id} tier ${tier}`).toBe(step[from]);
+        expect(changed.length).toBeLessThanOrEqual(tier);
+        expect(s.systems.bulwarks).toBe((base.systems.bulwarks ?? 0) + 1);
+        // Every new hand goes on a heavier gun or the extra bulwark layer.
+        expect(s.hands - base.hands).toBe(hands(s.guns) - hands(base.guns) + 1);
+        expect(s.systems.guns).toBeGreaterThanOrEqual(hands(s.guns));
+      }
+    }
   });
 
   it('the chandler sells provisions and fittings, and fittings change the ship', () => {
@@ -517,5 +556,16 @@ describe('sectors, provisions and the chandler', () => {
     const legacy = Run.fromSave(old);
     expect(legacy.sector).toBe(2);
     expect(legacy.provisions).toBeGreaterThan(0);
+  });
+
+  it('a save from before bulwarks gets her bulwark station back, so the refit is offered', () => {
+    const run = new Run('gull', 21);
+    const old = run.toSave();
+    delete old.fit.systems.bulwarks;
+    const back = Run.fromSave(old);
+    expect(back.fit.systems.bulwarks).toBe(run.def.systems.bulwarks);
+    back.status = 'port';
+    back.encounter = { kind: 'port', name: 'Nassau', rested: false, stock: [] };
+    expect(back.upgradeOffers().some((o) => o.id === 'bulwarks')).toBe(true);
   });
 });

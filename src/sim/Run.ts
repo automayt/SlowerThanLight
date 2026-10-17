@@ -46,21 +46,33 @@ export const FORAGE_CHANCE = 0.3;
 export const PLUNDER_MULT = 1.5;
 export const SECTOR_PLUNDER = 0.5;
 
-/** A tougher enemy for deeper sectors: more hull and hands, heavier guns, and (last sector) an extra gun bar. */
+/** One step heavier for each gun a better-found ship carries. */
+const HEAVIER: Record<string, string> = { pdr6: 'pdr9', pdr9: 'pdr12' };
+
+/** Hands needed to crew a set of guns. */
+const gunHands = (guns: GunMount[]) => guns.reduce((n, g) => n + weapon(g.weapon).hands, 0);
+
+/**
+ * A tougher enemy for deeper sectors: more hull, an extra bulwark layer, and one gun a step heavier per tier
+ * (never the same gun twice). She gets exactly the hands and gun bars to crew it all, so nobody stands idle.
+ */
 export function scaleEnemy(def: ShipDef, tier: number): ShipDef {
   if (tier <= 0) return def;
   const systems = { ...def.systems };
   const guns = def.guns.map((g) => ({ ...g }));
-  const heavier = (from: string, to: string) => {
-    const g = guns.find((x) => x.weapon === from);
-    if (g) g.weapon = to;
-  };
-  heavier('pdr6', 'pdr9');
-  if (tier >= 2) {
-    systems.guns = (systems.guns ?? 0) + 1;
-    heavier('pdr9', 'pdr12');
+  const upgraded = new Set<number>();
+  for (let t = 0; t < Math.min(tier, 2); t++) {
+    // First a 6-pounder becomes a 9; deeper still, another gun goes from a 9 to a 12.
+    const order = t === 0 ? ['pdr6', 'pdr9'] : ['pdr9', 'pdr6'];
+    const pick = order.map((from) => guns.findIndex((g, i) => !upgraded.has(i) && g.weapon === from)).find((i) => i >= 0);
+    if (pick === undefined) break;
+    guns[pick].weapon = HEAVIER[guns[pick].weapon];
+    upgraded.add(pick);
   }
-  return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + tier, systems, guns };
+  const extraGunHands = gunHands(guns) - gunHands(def.guns);
+  systems.guns = Math.max(systems.guns ?? 0, gunHands(guns));
+  systems.bulwarks = (systems.bulwarks ?? 0) + 1;
+  return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + extraGunHands + 1, systems, guns };
 }
 export const HULL_PRICE = 3;
 export const CREW_PRICE = 30;
@@ -343,8 +355,9 @@ export class Run {
     this.jumps++;
     this.visited.push(id);
     this.prize = null;
-    this.runningRepairs();
-    this.eat();
+    // Hungry crews do not mend: eat first, and heal only on a full belly.
+    const fed = this.eat();
+    this.runningRepairs(fed);
     this.navy += this.navySpeed;
 
     if (node.kind === 'exit') return this.enterSector(this.sector + 1);
@@ -380,12 +393,12 @@ export class Run {
     return this.begin({ kind: 'empty', text: this.rng.pick(QUIET_LINES) });
   }
 
-  /** A jump eats a day's provisions. With none left the crew go hungry, and someone may jump ship. */
-  private eat(): void {
+  /** A jump eats a day's provisions. With none left the crew go hungry, and someone may jump ship. Returns whether they ate. */
+  private eat(): boolean {
     this.hungerNote = '';
     if (this.provisions > 0) {
       this.provisions--;
-      return;
+      return true;
     }
     const c = this.condition;
     for (const m of c.crew) m.hp = Math.max(1, m.hp - STARVE_HP);
@@ -395,6 +408,7 @@ export class Run {
       notes.push(`${gone.name} slips over the side in the night.`);
     }
     this.hungerNote = notes.join(' ');
+    return false;
   }
 
   /** Sail through a passage into the next sector: a fresh chart, and the fleet loses your trail for a while. */
@@ -422,10 +436,10 @@ export class Run {
     return enc;
   }
 
-  /** Between nodes: wounds mend a little and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
-  private runningRepairs(): void {
-    const heal = this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
-    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + heal);
+  /** Between nodes: wounds mend a little (not on empty stores) and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
+  private runningRepairs(heal: boolean): void {
+    const hp = !heal ? 0 : this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
+    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + hp);
     for (let i = this.has('spars') ? 2 : 1; i > 0; i--) {
       const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
       if (worst) this.setDamage(worst[0], worst[1] - 1);
@@ -509,7 +523,9 @@ export class Run {
       this.status = 'chart';
     }
     if (!enc.boss && (o.kind === 'captured' || o.kind === 'surrender')) {
-      this.prize = { guns: [...new Set(foe.ship.guns.map((g) => g.weapon))], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
+      // The guns she actually fought with, as found for this sector.
+      const guns = scaleEnemy(foe.ship, this.sector).guns.map((g) => g.weapon);
+      this.prize = { guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
     }
     return { kind: o.kind, won: o.won, plunder: enc.boss ? 0 : plunder, lines };
   }
@@ -974,6 +990,8 @@ export class Run {
     run.gold = s.gold;
     run.condition = s.condition;
     run.fit = s.fit;
+    // Saves from before bulwarks have no bulwark station in the fit: give her the one she was built with.
+    for (const [id, bars] of Object.entries(run.def.systems) as [SystemId, number][]) run.fit.systems[id] ??= bars;
     run.status = s.status;
     run.encounter = s.encounter;
     run.jumps = s.jumps;
