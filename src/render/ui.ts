@@ -419,6 +419,100 @@ export function coin(scene: Phaser.Scene, x: number, y: number, size = 18): Phas
   return scene.add.image(x, y, 'ui:coin').setScale(size / 40);
 }
 
+/** A wax seal, about 96px across, pressed with an anchor or a skull. Red wax for a fair end, black for a foul one. */
+export function waxSeal(scene: Phaser.Scene, mark: 'anchor' | 'skull'): string {
+  const key = `ui:seal-${mark}`;
+  if (scene.textures.exists(key)) return key;
+  const S = 112;
+  const c = S / 2;
+  const tex = scene.textures.createCanvas(key, S, S)!;
+  const ctx = tex.getContext();
+  const rand = seeded(mark === 'anchor' ? 5 : 9);
+  const [hi, mid, lo] = mark === 'anchor' ? ['#e0574a', '#a3221a', '#5e0d08'] : ['#5a4a48', '#2a1e1c', '#0d0807'];
+  // The blob of wax: an irregular round, with a drip or two.
+  ctx.beginPath();
+  for (let i = 0; i <= 40; i++) {
+    const a = (i / 40) * Math.PI * 2;
+    const r = 48 + Math.sin(a * 5 + 1) * 2.5 + Math.sin(a * 9) * 1.5 + rand() * 1.5;
+    if (i === 0) ctx.moveTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+    else ctx.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 3;
+  const wax = ctx.createRadialGradient(c - 14, c - 16, 4, c, c, 52);
+  wax.addColorStop(0, hi);
+  wax.addColorStop(0.55, mid);
+  wax.addColorStop(1, lo);
+  ctx.fillStyle = wax;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  // The pressed disc: a sunken ring, then the device.
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.arc(c + 1, c + 1, 34, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,220,200,0.25)';
+  ctx.beginPath();
+  ctx.arc(c, c, 34, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(c + Math.cos(a) * 29, c + Math.sin(a) * 29, 1.2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // The device, drawn twice: once dark and offset for depth, once lighter on top.
+  for (const [style, d] of [
+    ['rgba(0,0,0,0.45)', 1.2],
+    ['rgba(255,226,208,0.5)', 0],
+  ] as const) {
+    ctx.save();
+    ctx.translate(c + d, c + d);
+    ctx.strokeStyle = style;
+    ctx.fillStyle = style;
+    ctx.lineWidth = 3.4;
+    ctx.lineCap = 'round';
+    if (mark === 'anchor') {
+      ctx.beginPath();
+      ctx.arc(0, -17, 4, 0, Math.PI * 2);
+      ctx.moveTo(0, -13);
+      ctx.lineTo(0, 18);
+      ctx.moveTo(-9, -7);
+      ctx.lineTo(9, -7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 3, 16, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, -4, 13, Math.PI * 0.85, Math.PI * 2.15);
+      ctx.lineTo(8, 12);
+      ctx.lineTo(-8, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = mid;
+      ctx.beginPath();
+      ctx.arc(-5, -3, 3.6, 0, Math.PI * 2);
+      ctx.arc(5, -3, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-18, 14);
+      ctx.lineTo(18, 24);
+      ctx.moveTo(18, 14);
+      ctx.lineTo(-18, 24);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  tex.refresh();
+  return key;
+}
+
 /** Whether to use the painted kit: NineSlice draws only under WebGL, so the canvas renderer keeps the flat look. */
 function painted(scene: Phaser.Scene): boolean {
   if (scene.sys.renderer?.type === Phaser.CANVAS) return false;

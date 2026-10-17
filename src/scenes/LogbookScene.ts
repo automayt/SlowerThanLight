@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SEA_EVENTS } from '../data/voyage';
 import { placeArt } from '../render/art';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
-import { Button, panel, Sea } from '../render/ui';
+import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import type { EventRarity, SeaEventDef } from '../sim/types';
 import { loadArtOnDemand } from './PreloadScene';
 import { discovered } from './save';
@@ -56,7 +56,8 @@ export class LogbookScene extends Phaser.Scene {
     const found = events.filter((e) => seen.has(e.id)).length;
 
     panel(this, 24, 16, SCREEN.w - 48, SCREEN.h - 32);
-    this.add.text(SCREEN.w / 2, 26, 'The Captain’s Logbook', { fontFamily: TITLE_FONT, fontSize: '32px', color: COLORS.gold }).setOrigin(0.5, 0);
+    const title = goldText(this, SCREEN.w / 2, 22, 'The Captain’s Logbook', 36).setOrigin(0.5, 0);
+    for (const s of [-1, 1]) divider(this, SCREEN.w / 2 + s * (title.width / 2 + 80), title.y + title.height / 2 + 2, 110);
     this.add.text(SCREEN.w / 2, 68, `${found} of ${events.length} tales discovered across all your voyages`, textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
     const legend = ORDER.map((r) => `${r[0].toUpperCase()}${r.slice(1)}: ${events.filter((e) => (e.rarity ?? 'common') === r && seen.has(e.id)).length}/${events.filter((e) => (e.rarity ?? 'common') === r).length}`);
     // Centred as a row, spaced by the measured widths.
@@ -99,17 +100,21 @@ export class LogbookScene extends Phaser.Scene {
       const y = GRID.y + Math.floor(i / COLS) * (CARD.h + CARD.labelH + CARD.gap);
       const known = this.seen.has(e.id);
       const rarity = e.rarity ?? 'common';
-      const frame = this.add.rectangle(x, y, CARD.w, CARD.h, 0x0b141c).setOrigin(0).setStrokeStyle(2, RARITY_HEX[rarity], known ? 1 : 0.4);
-      this.pageObjects.push(frame);
+      const back = this.add.rectangle(x, y, CARD.w, CARD.h, 0x0b141c).setOrigin(0);
+      this.pageObjects.push(back);
       if (known) {
         const img = placeArt(this, `event-${e.id}`, x, y, CARD.w, CARD.h, false);
         if (img) this.pageObjects.push(img);
-        this.pageObjects.push(this.add.rectangle(x, y, CARD.w, CARD.h).setOrigin(0).setStrokeStyle(2, RARITY_HEX[rarity], 1));
-        frame.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.open(e));
+        // The rarity as a keyline inside the brass frame.
+        this.pageObjects.push(this.add.rectangle(x + 5, y + 5, CARD.w - 10, CARD.h - 10).setOrigin(0).setStrokeStyle(1.5, RARITY_HEX[rarity], rarity === 'common' ? 0 : 0.9));
+        back.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.open(e));
         img?.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.open(e));
       } else {
         this.pageObjects.push(this.add.text(x + CARD.w / 2, y + CARD.h / 2, '?', { fontFamily: TITLE_FONT, fontSize: '40px', color: RARITY_COLOR[rarity] }).setOrigin(0.5).setAlpha(0.35));
       }
+      const rim = frame(this, x - 2, y - 2, CARD.w + 4, CARD.h + 4);
+      if (!known) rim.forEach((o) => (o as Phaser.GameObjects.Image).setAlpha(0.45));
+      this.pageObjects.push(...rim);
       this.pageObjects.push(
         this.add
           .text(x + CARD.w / 2, y + CARD.h + 5, known ? e.title : '? ? ?', textStyle(13, RARITY_COLOR[rarity], { align: 'center', wordWrap: { width: CARD.w }, fontStyle: known ? 'normal' : 'italic' }))
@@ -129,13 +134,13 @@ export class LogbookScene extends Phaser.Scene {
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.6).setOrigin(0).setDepth(30).setInteractive();
     shade.on('pointerdown', () => this.closeOverlay());
     const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
-    const title = this.add.text(SCREEN.w / 2, y + 16, e.title, { fontFamily: TITLE_FONT, fontSize: '28px', color: RARITY_COLOR[e.rarity ?? 'common'] }).setOrigin(0.5, 0).setDepth(32);
+    const title = goldText(this, SCREEN.w / 2, y + 12, e.title, 32).setOrigin(0.5, 0).setDepth(32);
     this.overlay = [shade, box, title];
     const artH = (w - 80) * 0.5625;
     const img = placeArt(this, `event-${e.id}`, x + 40, y + 62, w - 80, artH, false);
-    if (img) this.overlay.push(img.setDepth(32), this.add.rectangle(x + 40, y + 62, w - 80, artH).setOrigin(0).setStrokeStyle(2, 0x2b1a0d).setDepth(32));
+    if (img) this.overlay.push(img.setDepth(32), ...frame(this, x + 36, y + 58, w - 72, artH + 8, 32.1, false));
     const text = e.text.replaceAll('{crew2}', 'another hand').replaceAll('{crew}', 'one of the crew').replaceAll('{ship}', 'your ship');
-    const body = this.add.text(x + 40, y + 62 + (w - 80) * 0.5625 + 14, text, textStyle(14, COLORS.text, { wordWrap: { width: w - 80 }, lineSpacing: 3 })).setDepth(32);
+    const body = this.add.text(x + 40, y + 62 + (w - 80) * 0.5625 + 14, text, textStyle(16, COLORS.text, { wordWrap: { width: w - 80 }, lineSpacing: 4 })).setDepth(32);
     this.overlay.push(body);
     const close = new Button(this, SCREEN.w / 2 - 80, y + h - 54, 160, 38, 'Close', () => this.closeOverlay(), { size: 15, hint: 'Esc' }).setDepth(32);
     this.overlay.push(close);
