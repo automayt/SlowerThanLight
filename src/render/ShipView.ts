@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
 import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
-import { ART_SCALE, paintShip, type Ensign, type ShipGeometry } from './ShipArt';
+import { ART_SCALE, paintFurls, paintShip, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 
 export interface ShipViewState {
@@ -33,8 +33,20 @@ export interface ShipViewOptions {
   flag?: Ensign;
 }
 
-/** Draw order of a ship's layers. Projectiles and effects in the battle scene sit above these. */
-const DEPTH = { wake: 1, base: 2, over: 3, crew: 4, rig: 5, ui: 6 } as const;
+/**
+ * Draw order of a ship's layers. Projectiles and effects in the battle scene sit above these. Set sails sit under the
+ * crew so they never hide who is where; furled canvas lies along the spars just under them.
+ */
+const DEPTH = { wake: 1, base: 2, over: 3, sails: 3.95, crew: 4, furl: 4.99, rig: 5, ui: 6 } as const;
+/** Strips the ensign is cut into to make it ripple. */
+const FLAG_STRIPS = 8;
+/** Canvas colour, its sunlit belly and its seams. */
+const CLOTH = 0xe6dcc0;
+const CLOTH_LIT = 0xf8f2e2;
+const CLOTH_SEAM = 0x9c8c6a;
+const PENNANT: Record<Ensign, number> = { pirate: 0x8e1b14, navy: 0xc8202a, spanish: 0xd9aa48, trade: 0x2a62a8 };
+/** How full each kind of sail bellies, in tiles. */
+const BELLY: Record<RigKind, number> = { square: 0.5, gaff: 0.42, lateen: 0.5, lug: 0.42 };
 
 let viewCount = 0;
 
@@ -77,6 +89,26 @@ export class ShipView {
   private readonly keys: string[];
   private readonly phase = Math.random() * 10;
   private bob = 0;
+  /** The masts sway against the hull as she rolls, a few pixels of parallax. */
+  private roll = 0;
+  /** Recoil from her own guns, easing back. */
+  private kick = 0;
+  private lastT = 0;
+  private readonly sails: Phaser.GameObjects.Graphics;
+  private readonly furls: { img: Phaser.GameObjects.Image; piece: ShipPiece }[];
+  /** How far each mast's canvas is let fall and drawing, 0 (furled) to 1, easing toward what the hands allow. */
+  private readonly set: number[];
+  /** Shot-holes in her canvas: chain shot rips it, repairs mend it. */
+  private rips = 0;
+  /** The headsail, as a spar of its own, and the mast whose hands set it. */
+  private readonly jib: { spar: Spar; mast: number } | null;
+  private readonly flag: Ensign;
+  private readonly ensign: EnsignArt;
+  private readonly strips: Phaser.GameObjects.Image[] = [];
+  /** Her stern half, once she has blown in two. */
+  private wreck: Phaser.GameObjects.Image | null = null;
+  /** Where she broke, in screen pixels from the left of her painted hull. */
+  private breakX = 0;
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -90,15 +122,30 @@ export class ShipView {
     const opts: ShipViewOptions = typeof showLabelsOrOpts === 'boolean' ? { showLabels: showLabelsOrOpts } : showLabelsOrOpts;
     const showLabels = opts.showLabels ?? true;
     const flag = opts.flag ?? (ship.side === 'player' ? 'pirate' : 'navy');
-    const art = paintShip(scene, ship, tile, `shipart:${viewCount++}`, flag);
+    const prefix = `shipart:${viewCount++}`;
+    const art = paintShip(scene, ship, tile, prefix, flag, flip);
     this.geom = art.geom;
-    this.keys = [art.base, art.rig];
+    this.flag = flag;
+    this.ensign = art.ensign;
+    const furls = paintFurls(scene, ship, art.geom, tile, prefix);
+    this.keys = [art.base, art.rig, art.ensign.key, ...furls.map((f) => f.key)];
     this.gunRoom = [...ship.rooms.values()].find((r) => r.def.system === 'guns')?.def;
 
     this.wake = scene.add.graphics().setDepth(DEPTH.wake);
     this.base = scene.add.image(0, 0, art.base).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.base);
     this.over = scene.add.graphics().setDepth(DEPTH.over);
-    this.rig = scene.add.image(0, 0, art.rig).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.rig).setAlpha(0.9);
+    this.sails = scene.add.graphics().setDepth(DEPTH.sails);
+    this.furls = furls.map((piece) => ({ piece, img: scene.add.image(0, 0, piece.key).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.furl) }));
+    this.set = this.geom.spars.map((_, i) => this.sailTarget(i));
+    const { jib, spars } = this.geom;
+    const fore = spars.reduce((f, sp, i) => (sp.mast.x > spars[f].mast.x ? i : f), 0);
+    this.jib = jib ? { spar: { ...spars[fore], a: jib.a, b: jib.b, belly: { x: 0, y: -1 }, kind: 'gaff', main: false }, mast: fore } : null;
+    this.rig = scene.add.image(0, 0, art.rig).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.rig);
+    const ftex = scene.textures.get(art.ensign.key).getSourceImage();
+    const sw = Math.ceil(ftex.width / FLAG_STRIPS);
+    for (let i = 0; i < FLAG_STRIPS; i++) {
+      this.strips.push(scene.add.image(0, 0, art.ensign.key).setOrigin(0).setScale(1 / ART_SCALE).setCrop(i * sw, 0, sw + 1, ftex.height).setDepth(DEPTH.rig));
+    }
     this.ui = scene.add.graphics().setDepth(DEPTH.ui);
 
     if (showLabels) {
@@ -167,16 +214,19 @@ export class ShipView {
     return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
   }
 
-  /** Muzzle of the cannon that stands for gun `index`, and the way it points. */
+  /** Muzzle of the cannon that stands for gun `index`, run out through its port in the ship's side, and the way it points. */
   muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
     const guns = this.gunRoom;
+    const mid = this.ship.height / 2;
     if (!guns) {
-      const c = this.toScreen({ x: this.ship.width / 2, y: this.ship.height / 2 });
+      const c = this.toScreen({ x: this.ship.width / 2, y: mid });
       return { ...c, dx: 0, dy: -1 };
     }
     const col = index % guns.w;
     const top = Math.floor(index / guns.w) % 2 === 0 || guns.h === 1;
-    const p = this.toScreen({ x: guns.x + col + 0.5, y: top ? guns.y + 0.3 - 0.4 : guns.y + guns.h - 0.3 + 0.4 });
+    const x = guns.x + col + 0.5;
+    const side = this.geom.half(x) + 0.05;
+    const p = this.toScreen({ x, y: top ? mid - side : mid + side });
     return { x: p.x, y: p.y, dx: 0, dy: top ? -1 : 1 };
   }
 
@@ -217,10 +267,57 @@ export class ShipView {
     this.finale = { kind, t0: nowMs / 1000 };
     this.nameText?.setVisible(false);
     for (const b of this.badges.values()) b.setVisible(false);
+    if (kind === 'explode') this.breakUp();
+  }
+
+  /** Crack the hull in two at the waist: each half is cut out into a texture of its own, so the halves can part. */
+  private breakUp(): void {
+    const g = this.geom;
+    const src = this.base.texture.getSourceImage() as HTMLCanvasElement;
+    const cut = Math.round((this.ship.width * 0.55 + g.padL) * this.tile * ART_SCALE);
+    const half = (suffix: string, x: number, w: number) => {
+      const key = `${this.base.texture.key}-${suffix}`;
+      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+      const tex = this.scene.textures.createCanvas(key, w, src.height)!;
+      const ctx = tex.getContext();
+      ctx.drawImage(src, x, 0, w, src.height, 0, 0, w, src.height);
+      // Splintered timbers along the break, not a clean saw cut.
+      const edge = x === 0 ? w : 0;
+      const inward = x === 0 ? -1 : 1;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.moveTo(edge, 0);
+      for (let y = 0; y <= src.height; y += 9) ctx.lineTo(edge + inward * (2 + Math.random() * 16), y);
+      ctx.lineTo(edge, src.height);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      tex.refresh();
+      this.keys.push(key);
+      return key;
+    };
+    const sternKey = half('stern', 0, cut);
+    const bowKey = half('bow', cut, src.width - cut);
+    // Both halves pivot about the break, on the keel; flipped, each break edge is on the other side.
+    const oy = (g.padT + this.ship.height / 2) / (g.padT + this.ship.height + g.padB);
+    this.wreck = this.scene.add.image(0, 0, sternKey).setScale(1 / ART_SCALE).setFlipX(this.flip).setDepth(DEPTH.base).setOrigin(this.flip ? 0 : 1, oy);
+    this.base.setTexture(bowKey).setOrigin(this.flip ? 1 : 0, oy);
+    this.breakX = (this.flip ? src.width - cut : cut) / ART_SCALE;
+    this.marks?.setVisible(false);
+  }
+
+  /** Her own gun has fired out of the side facing `dy`: she gives a little the other way. */
+  recoil(dy: number): void {
+    this.kick = Math.max(-4, Math.min(4, this.kick - dy * 2.2));
+  }
+
+  /** A ball has torn through her canvas. */
+  tearSail(): void {
+    this.rips = Math.min(8, this.rips + 1);
   }
 
   destroy(): void {
-    for (const o of [this.wake, this.over, this.ui, this.base, this.rig, this.nameText, this.marks, this.marksPen, ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
+    for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
   }
 
@@ -229,32 +326,62 @@ export class ShipView {
     const T = this.tile;
     const left = (this.flip ? this.ox - g.padR * T : this.ox - g.padL * T) + this.fx;
     const top = this.oy + this.bob + this.fy - g.padT * T;
-    this.base.setPosition(left, top);
-    this.rig.setPosition(left, top);
+    if (this.wreck && this.finale) {
+      // Blown in two: the halves part and fold away from the break.
+      const k = Math.min(1, (this.scene.time.now / 1000 - this.finale.t0) / 3.2);
+      const bow = this.flip ? -1 : 1;
+      const px = left + this.breakX;
+      const py = top + this.base.originY * this.base.displayHeight;
+      const ease = 1 - Math.pow(1 - k, 2);
+      this.base.setPosition(px + bow * ease * 16, py).setRotation(bow * ease * 0.16);
+      this.wreck.setPosition(px - bow * ease * 14, py + ease * 4).setRotation(-bow * ease * 0.12);
+    } else this.base.setPosition(left, top);
+    this.rig.setPosition(left, top + this.roll);
+    const texW = this.rig.width;
+    for (const { img, piece } of this.furls) {
+      img.setPosition(left + (this.flip ? texW - piece.x - piece.w : piece.x) / ART_SCALE, top + this.roll + piece.y / ART_SCALE);
+    }
+  }
+
+  /** How much canvas mast `i` (main, fore, mizzen) should carry: the hands at the sails set the mainsail first. */
+  private sailTarget(i: number): number {
+    const fin = this.finale;
+    if (fin) return fin.kind === 'sail' ? 1 : 0;
+    const sails = this.ship.system('sails');
+    if (!sails) return 1;
+    const v = Math.max(0, Math.min(1, (this.ship.level('sails') / sails.max) * this.geom.spars.length - i));
+    return v > 0 ? 0.55 + 0.45 * v : 0;
   }
 
   draw(timeMs: number, state: ShipViewState = {}): void {
     const t = timeMs / 1000;
-    this.bob = Math.sin(t * 0.9 + this.phase) * 1.4;
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    this.kick *= Math.exp(-dt * 7);
+    this.bob = Math.sin(t * 0.9 + this.phase) * 1.4 + this.kick;
+    this.roll = Math.sin(t * 0.7 + this.phase * 1.7) * 2.2;
     const fin = this.finaleProgress(t);
     this.placeImages();
     if (this.nameText) this.nameText.setY(this.oy + this.bob - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
 
-    const sails = this.ship.system('sails');
     const fade = fin && fin.kind !== 'sail' ? 1 - fin.k * 0.92 : 1;
-    this.rig.setAlpha((sails ? 0.6 + 0.4 * (this.ship.capacity('sails') / sails.max) : 1) * (fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1));
+    const rigFade = fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1;
+    this.rig.setAlpha(rigFade);
     this.base.setAlpha(fade);
+    this.wreck?.setAlpha(fade);
     this.over.setAlpha(fade);
-    this.drawMarks(fade);
+    if (!this.wreck) this.drawMarks(fade);
     if (fin && fin.kind !== 'sail') {
       // Darken and drown the hull as she goes.
       const c = Math.round(255 - fin.k * 150);
       const tint = (c << 16) | (Math.round(255 - fin.k * 110) << 8) | Math.round(255 - fin.k * 70);
       this.base.setTint(tint);
+      this.wreck?.setTint(tint);
       this.rig.setTint(tint);
     }
 
     this.drawWake(t);
+    this.drawSails(t, dt, rigFade);
     this.drawOverlay(t, state);
     this.drawCrew(t, state, fade);
     if (fin) this.drawFinale(fin);
@@ -325,6 +452,135 @@ export class ShipView {
   }
 
   // --- Layers --------------------------------------------------------------
+
+  private readonly tmp = { x: 0, y: 0 };
+
+  /** Tile coordinates to screen, up among the rigging (riding the roll); reuses one point, so read it straight away. */
+  private aloft(x: number, y: number): Vec {
+    const p = this.tmp;
+    p.x = this.ox + this.fx + (this.flip ? this.ship.width - x : x) * this.tile;
+    p.y = this.oy + this.bob + this.fy + this.roll + y * this.tile;
+    return p;
+  }
+
+  /**
+   * Canvas set and drawing: a bellied crescent hanging from each spar, breathing with the wind, fluttering at the leech
+   * and holed where shot went through. Masts without hands furl their canvas; pennants stream from the mastheads and
+   * the ensign ripples at the stern.
+   */
+  private drawSails(t: number, dt: number, alpha: number): void {
+    const g = this.sails;
+    const geo = this.geom;
+    const mid = this.ship.height / 2;
+    g.clear();
+    const sys = this.ship.system('sails');
+    if (sys && sys.damage === 0) this.rips = Math.max(0, this.rips - dt * 0.05);
+    const holes = Math.floor(this.rips) + (sys?.damage ?? 0);
+    const shotAway = !!sys && this.ship.capacity('sails') === 0;
+    const n = geo.spars.length;
+
+    geo.spars.forEach((sp, i) => {
+      this.set[i] += (this.sailTarget(i) - this.set[i]) * Math.min(1, dt * 1.6);
+      const s = this.set[i];
+      const furl = this.furls[i].img;
+      furl.setAlpha(Math.max(0, 1 - s * 1.8) * alpha);
+      if (shotAway) furl.setTint(0x9a8a74);
+      else furl.clearTint();
+      if (s < 0.02 || alpha <= 0) return;
+      const ph = this.phase + i * 1.9;
+      const depth = BELLY[sp.kind] * (sp.main ? 1.15 : 1) * s * (1 + 0.07 * Math.sin(t * 1.6 + ph));
+      const a = Math.min(1, s * 3) * alpha;
+      this.crescent(g, sp, 1, depth, t, ph, a);
+      // Square rig: the topsail above the course, narrower and shallower.
+      if (sp.kind === 'square') this.crescent(g, sp, 0.74, depth * 0.62, t, ph + 1, a);
+      for (let j = i; j < holes; j += n) {
+        const u = 0.22 + ((j * 0.37) % 0.56);
+        const v = 0.35 + ((j * 0.29) % 0.4);
+        const d = depth * Math.pow(Math.sin(Math.PI * u), 0.75) * v;
+        const p = this.aloft(sp.a.x + (sp.b.x - sp.a.x) * u + sp.belly.x * d, sp.a.y + (sp.b.y - sp.a.y) * u + sp.belly.y * d);
+        g.fillStyle(0x3a2a18, 0.8 * a).fillEllipse(p.x, p.y, 5 + (j % 3), 4);
+        g.lineStyle(1, CLOTH_SEAM, 0.8 * a).strokeEllipse(p.x, p.y, 6 + (j % 3), 5);
+      }
+    });
+
+    // A headsail out to the bowsprit, set with the foremast.
+    if (this.jib && alpha > 0) {
+      const s = this.set[this.jib.mast];
+      if (s > 0.02) this.crescent(g, this.jib.spar, 1, 0.28 * s, t, this.phase + 4, Math.min(1, s * 3) * alpha);
+    }
+
+    // Pennants streaming aft from the mastheads.
+    const color = PENNANT[this.flag];
+    for (const sp of geo.spars) {
+      const len = sp.main ? 1.5 : 1.1;
+      let px = 0;
+      let py = 0;
+      for (let k = 0; k <= 8; k++) {
+        const f = k / 8;
+        const p = this.aloft(sp.mast.x - f * len, mid + Math.sin(t * 6.5 - k * 0.9 + sp.mast.x) * 0.07 * f - f * 0.12);
+        if (k > 0) g.lineStyle(2.6 * (1 - f) + 0.6, color, 0.95 * alpha).lineBetween(px, py, p.x, p.y);
+        px = p.x;
+        py = p.y;
+      }
+    }
+
+    // The ensign, cut in strips that each ride a travelling wave.
+    const staff = this.toScreen({ x: geo.stern + 0.1, y: mid });
+    const ftex = this.strips[0].texture.getSourceImage();
+    const sw = Math.ceil(ftex.width / FLAG_STRIPS);
+    const flyPx = ftex.width / ART_SCALE;
+    const left = staff.x - this.ensign.hoistX / ART_SCALE;
+    const top = staff.y - this.ensign.hoistY / ART_SCALE;
+    this.strips.forEach((img, i) => {
+      const d = Math.abs((i + 0.5) * sw - this.ensign.hoistX) / ART_SCALE;
+      img.setPosition(left, top + (d / flyPx) * 2.4 * Math.sin(t * 7.5 - d * 0.16 + this.phase)).setAlpha(alpha);
+    });
+  }
+
+  /** One bellied sail hanging from `sp`, over the middle `span` of its spar. */
+  private crescent(g: Phaser.GameObjects.Graphics, sp: Spar, span: number, depth: number, t: number, ph: number, alpha: number): void {
+    const N = 14;
+    const k0 = (1 - span) / 2;
+    const ax = sp.a.x + (sp.b.x - sp.a.x) * k0;
+    const ay = sp.a.y + (sp.b.y - sp.a.y) * k0;
+    const dx = (sp.b.x - sp.a.x) * span;
+    const dy = (sp.b.y - sp.a.y) * span;
+    const { x: nx, y: ny } = sp.belly;
+    const curve = (u: number, k: number) => {
+      // Fullest in the middle; the leech at either edge shivers.
+      const edge = Math.abs(u - 0.5) * 2;
+      const d = depth * k * Math.pow(Math.sin(Math.PI * u), 0.75) + 0.035 * edge * edge * Math.sin(t * 8 + u * 10 + ph) * Math.sin(Math.PI * u);
+      return this.aloft(ax + dx * u + nx * d, ay + dy * u + ny * d);
+    };
+    const path = (k: number) => {
+      g.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const p = curve(i / N, k);
+        if (i) g.lineTo(p.x, p.y);
+        else g.moveTo(p.x, p.y);
+      }
+      g.closePath();
+    };
+    g.fillStyle(CLOTH, 0.92 * alpha);
+    path(1);
+    g.fillPath();
+    // Sunlit where she bellies fullest.
+    g.fillStyle(CLOTH_LIT, 0.55 * alpha);
+    path(0.6);
+    g.fillPath();
+    g.lineStyle(1, CLOTH_SEAM, 0.45 * alpha);
+    for (let i = 1; i < 4; i++) {
+      const u = i / 4;
+      const r = this.aloft(ax + dx * u, ay + dy * u);
+      const rx = r.x;
+      const ry = r.y;
+      const p = curve(u, 1);
+      g.lineBetween(rx, ry, p.x, p.y);
+    }
+    g.lineStyle(1.4, 0x6b5a3a, 0.75 * alpha);
+    path(1);
+    g.strokePath();
+  }
 
   /**
    * Scorches and hull scars build up over a fight; redrawing dozens of ellipses every frame cost more than the rest of
