@@ -47,7 +47,7 @@ const HINT_TEXT: Record<HintId, string> = {
   shot: 'Try other shot: chain tears her sails, grape cuts down crew, hot shot starts fires. Shift+number cycles a gun’s shot.',
 };
 /** How long an informational hint stays up, in ms (aiming waits until it is done). */
-const HINT_MS: Partial<Record<HintId, number>> = { crew: 20000, pause: 9000, hands: 16000, shot: 16000 };
+const HINT_MS: Partial<Record<HintId, number>> = { crew: 14000, pause: 9000, hands: 16000, shot: 16000 };
 const HINTS_KEY = 'slower-than-light.hints';
 let hintsSeen: Set<string> | null = null;
 
