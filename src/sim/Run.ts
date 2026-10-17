@@ -625,6 +625,8 @@ export class Run {
     if (n.flag && !this.flags.has(n.flag)) return FLAG_LACKING[n.flag] ?? 'you lack something';
     if (n.noFlag && this.flags.has(n.noFlag)) return 'already done';
     if (n.gunPort && this.fit.guns.length >= MAX_GUNS) return 'no free gun port';
+    if (n.provisions && this.provisions < n.provisions) return `needs ${n.provisions} provisions`;
+    if (n.minSector !== undefined && this.sector < n.minSector) return 'too early';
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
     if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
     return null;
@@ -745,6 +747,13 @@ export class Run {
         this.gold += scrap;
         out.push(`No free gun port: the ${w.name} fetches ${scrap} gold`);
       }
+    }
+    if (e.provisions) {
+      const before = this.provisions;
+      this.provisions = Math.max(0, Math.min(this.maxProvisions, this.provisions + e.provisions));
+      const n = this.provisions - before;
+      if (n) out.push(`${n > 0 ? '+' : '−'}${Math.abs(n)} provision${Math.abs(n) === 1 ? '' : 's'}`);
+      else if (e.provisions > 0) out.push('No room in the hold');
     }
     if (e.navy) {
       this.navy += e.navy;

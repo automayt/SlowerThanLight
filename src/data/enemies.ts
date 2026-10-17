@@ -157,7 +157,20 @@ export const GALLEON: ShipDef = {
 };
 
 /** Spanish coastguard: a privateer-built schooner under the colours of Spain. */
-export const GUARDA_COSTA: ShipDef = { ...PRIVATEER, id: 'guarda', className: 'Guarda Costa', description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.' };
+export const GUARDA_COSTA: ShipDef = {
+  ...PRIVATEER,
+  id: 'guarda',
+  name: 'San Antonio',
+  className: 'Guarda Costa',
+  description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.',
+  crew: [
+    { name: 'Teniente Olivares', room: 'helm' },
+    { name: 'Artillero Campos', room: 'guns' },
+    { name: 'Cabo Ferrer', room: 'guns' },
+    { name: 'Gaviero Lucena', room: 'sails' },
+    { name: 'Contramaestre Iriarte', room: 'pumps' },
+  ],
+};
 
 /** A fast, shallow sloop running contraband between the islands. Light guns, a deep false hold, and no wish to fight. */
 export const SMUGGLER_SLOOP: ShipDef = {

@@ -80,6 +80,27 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     ],
   },
 
+  {
+    id: 'starving',
+    title: 'Starving Castaways',
+    text: 'A longboat crammed with the survivors of a wreck drifts across your bow. They have had nothing to eat for nine days, and they hold up their hands to you without a word.',
+    variants: [
+      'On a waterless cay a dozen sunburnt sailors wave a petticoat on an oar. Their ship went down a fortnight ago, and they have eaten the last of the crabs.',
+    ],
+    choices: [
+      {
+        label: 'Feed them and set them ashore',
+        needs: { provisions: 3 },
+        outcomes: [
+          { weight: 2, effect: { text: 'They eat like wolves. At the next landfall their cooper shakes your hand and asks to stay.', provisions: -3, recruit: 1 } },
+          { weight: 1, effect: { text: 'Their captain presses a purse on you as they go ashore. “For the biscuit. And for not asking questions.”', provisions: -3, gold: 15 } },
+        ],
+      },
+      { label: 'Take the strongest aboard to work for their keep', outcomes: [{ weight: 1, effect: { text: 'Two more mouths at the mess table, and one of them can hand, reef and steer.', provisions: -2, recruit: 1 } }] },
+      { label: 'Sail on', outcomes: [{ weight: 1, effect: { text: 'Nobody aboard meets your eye for a day.', crewHp: -5 } }] },
+    ],
+  },
+
   // --- Salvage and treasure ----------------------------------------------------
   {
     id: 'wreck',
@@ -181,7 +202,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       'A cluster of palm-thatched huts above a beach. Canoes, nets drying, and children running to see your sails.',
     ],
     choices: [
-      { label: 'Trade for fresh food', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Fresh water, fruit and turtle stew. The crew are new men.', crewHp: 100 } }] },
+      { label: 'Trade for fresh food', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Fresh water, fruit and turtle stew, and salt fish enough to fill the bread room. The crew are new men.', crewHp: 100, provisions: 3 } }] },
       { label: 'Raid the village', outcomes: [{ weight: 1, effect: { text: 'Easy pickings, but word of the raid will reach the Navy before nightfall.', gold: 30, navy: 1, crewHp: -5 } }] },
       { label: 'Leave them in peace', outcomes: [{ weight: 1, effect: { text: 'The fishermen wave as you pass.' } }] },
     ],
@@ -208,7 +229,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     ],
     choices: [
       { label: 'Careen her and scrape her clean', outcomes: [{ weight: 1, effect: { text: 'Two days’ hard work. She comes off the beach tight and fast.', hull: 6, repair: true, navy: 1 } }] },
-      { label: 'Fill the water casks and go', outcomes: [{ weight: 1, effect: { text: 'Sweet water, and an afternoon swim for the watch below.', crewHp: 15 } }] },
+      { label: 'Fill the water casks and go', outcomes: [{ weight: 1, effect: { text: 'Sweet water in every cask, and an afternoon swim for the watch below.', crewHp: 15, provisions: 2 } }] },
     ],
   },
   {
@@ -219,8 +240,8 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       'At dusk the beach comes alive with turtles, hauling themselves out of the surf by the hundred.',
     ],
     choices: [
-      { label: 'Stock the hold', outcomes: [{ weight: 1, effect: { text: 'Turtle soup every night. Nobody will get scurvy on this ship.', crewHp: 25, navy: 0.5 } }] },
-      { label: 'Take a few and sail on', outcomes: [{ weight: 1, effect: { text: 'A feast tonight, at least.', crewHp: 10 } }] },
+      { label: 'Stock the hold', outcomes: [{ weight: 1, effect: { text: 'Turtles by the dozen, kept alive on their backs in the hold. Turtle soup for weeks, and nobody will get scurvy on this ship.', crewHp: 25, navy: 0.5, provisions: 5 } }] },
+      { label: 'Take a few and sail on', outcomes: [{ weight: 1, effect: { text: 'A feast tonight, and a couple more for the pot.', crewHp: 10, provisions: 1 } }] },
     ],
   },
   {
@@ -313,7 +334,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     id: 'guarda',
     title: 'Guarda Costa',
     rarity: 'uncommon',
-    needs: { minCol: 2 },
+    needs: { minSector: 1 },
     text: 'A Spanish coastguard schooner fires a gun to leeward and signals you to heave to and be searched.',
     choices: [
       { label: 'Pay the customary bribe', cost: 20, outcomes: [{ weight: 1, effect: { text: 'The Spanish lieutenant pockets the gold and wishes you a pleasant voyage.' } }] },
@@ -364,10 +385,27 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     ],
   },
   {
+    id: 'victualler',
+    title: 'The Navy Victualler',
+    rarity: 'uncommon',
+    text: 'A deep-laden victualling ship wallows toward the squadron, her hold full of salt pork, biscuit and rum for the King’s sailors. One sloop of an escort, and that a long way off.',
+    choices: [
+      {
+        label: 'Cut her out',
+        outcomes: [
+          { weight: 2, effect: { text: 'Her master strikes before you fire a shot. You strip her hold and let her go, a good deal lighter.', provisions: 6, navy: 0.5 } },
+          { weight: 1, effect: { text: 'The escort was closer than she looked.', battle: 'cutter' } },
+        ],
+      },
+      { label: 'Buy from her purser under false colours', cost: 15, outcomes: [{ weight: 1, effect: { text: 'The purser sells the King’s biscuit to anybody who pays in coin. He does not look up at your flag.', provisions: 5 } }] },
+      { label: 'Let her pass', outcomes: [{ weight: 1, effect: { text: 'The squadron eats well tonight.' } }] },
+    ],
+  },
+  {
     id: 'galleon',
     title: 'Treasure Fleet Straggler',
     rarity: 'uncommon',
-    needs: { minCol: 2 },
+    needs: { minSector: 1 },
     text: 'A Spanish galleon, separated from the treasure fleet by the last storm, labours alone on the horizon.',
     choices: [
       { label: 'Give chase', outcomes: [{ weight: 1, effect: { text: 'You crowd on sail and close. She runs out her guns.', battle: 'galleon' } }] },

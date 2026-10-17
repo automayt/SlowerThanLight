@@ -90,6 +90,8 @@ describe('every choice of every event', () => {
           expect(run.condition.hull).toBeGreaterThanOrEqual(1);
           expect(run.condition.crew.length).toBeGreaterThanOrEqual(Math.min(1, crewBefore));
           expect(run.gold).toBeGreaterThanOrEqual(0);
+          expect(run.provisions).toBeGreaterThanOrEqual(0);
+          expect(run.provisions).toBeLessThanOrEqual(run.maxProvisions);
         }
       });
     });
@@ -246,6 +248,64 @@ describe('event mechanics', () => {
     run.chooseEvent(0);
     expect(run.gold).toBeGreaterThan(gold);
     expect(run.flags.has('treasure')).toBe(true);
+  });
+
+  it('events fill and empty the hold, within what it can carry', () => {
+    const run = richRun(3);
+    run.provisions = 5;
+    expect(run.applyEffect({ text: '', provisions: 3 })).toContain('+3 provisions');
+    expect(run.provisions).toBe(8);
+    expect(run.applyEffect({ text: '', provisions: -1 })).toContain('−1 provision');
+    run.provisions = run.maxProvisions - 1;
+    expect(run.applyEffect({ text: '', provisions: 5 })).toContain('+1 provision');
+    expect(run.provisions).toBe(run.maxProvisions);
+    expect(run.applyEffect({ text: '', provisions: 5 })).toContain('No room in the hold');
+    run.provisions = 2;
+    run.applyEffect({ text: '', provisions: -6 });
+    expect(run.provisions).toBe(0);
+  });
+
+  it('a choice can need provisions in the hold', () => {
+    const run = richRun(3);
+    run.startEvent(seaEvent('starving'));
+    run.provisions = 2;
+    expect(run.choiceBlocker(0)).toBe('needs 3 provisions');
+    run.provisions = 3;
+    expect(run.canChoose(0)).toBe(true);
+    run.chooseEvent(0);
+    expect(run.provisions).toBe(0);
+  });
+
+  it('events that are about the stores touch the stores', () => {
+    const touches = (id: string, label: string) =>
+      seaEvent(id)
+        .choices.find((c) => c.label === label)!
+        .outcomes.every((o) => o.effect.provisions);
+    expect(touches('rats', 'Throw out the spoiled stores')).toBe(true);
+    expect(touches('badwater', 'Put in for fresh water')).toBe(true);
+    expect(touches('cove', 'Fill the water casks and go')).toBe(true);
+    expect(touches('village', 'Trade for fresh food')).toBe(true);
+    expect(touches('turtles', 'Stock the hold')).toBe(true);
+  });
+
+  it('the Spanish turn up from the Spanish Main on, never in the Windward Isles', () => {
+    const spanish = SEA_EVENTS.filter((e) => effects(e).some((x) => x.battle === 'guarda' || x.battle === 'galleon'));
+    expect(spanish.length).toBeGreaterThan(0);
+    const run = richRun(4);
+    run.chart.columns = 6;
+    for (const col of [0, 3, 5]) {
+      run.nodeId = run.chart.nodes.find((n) => n.col === col)!.id;
+      for (const e of spanish) expect(run.unmet(e.needs), `${e.id} in sector 0 col ${col}`).not.toBeNull();
+    }
+    run.sector = 1;
+    for (const e of spanish) expect(run.unmet(e.needs), e.id).toBeNull();
+  });
+
+  it('the guarda costa is crewed by Spaniards, not the privateer’s men', () => {
+    const guarda = ENEMIES.guarda.ship.crew.map((c) => c.name);
+    const privateer = ENEMIES.privateer.ship.crew.map((c) => c.name);
+    expect(guarda.some((n) => privateer.includes(n))).toBe(false);
+    expect(guarda).toHaveLength(privateer.length);
   });
 
   it('flags and seen events survive a save', () => {

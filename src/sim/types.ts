@@ -124,6 +124,8 @@ export interface EventEffect {
   loseActor2?: boolean;
   /** Columns the Navy fleet gains on you (negative: you gain on them). */
   navy?: number;
+  /** Provisions added to (or taken from) the hold, up to what it can carry and never below empty. */
+  provisions?: number;
   /** Mend all system damage. */
   repair?: boolean;
   /** Damage points dealt to systems. */
@@ -158,7 +160,11 @@ export interface EventNeeds {
   noFlag?: string;
   /** A free gun port. */
   gunPort?: boolean;
-  /** Chart columns the event can turn up in. */
+  /** At least this many provisions in the hold. */
+  provisions?: number;
+  /** Only from this sector of the voyage on (0 = the Windward Isles, 1 = the Spanish Main). */
+  minSector?: number;
+  /** Chart columns the event can turn up in (on the voyage-wide 0..7 scale, see Run.progressCol). */
   minCol?: number;
   maxCol?: number;
 }
