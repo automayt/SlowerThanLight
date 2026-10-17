@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NAVY_CUTTER } from '../../src/data/enemies';
 import { playerShip } from '../../src/data/ships';
-import { applyHit, changeShot, hitChance, updateGuns, type CombatStats, type Projectile } from '../../src/sim/Combat';
+import { applyHit, changeShot, hitChance, UNCREWED_RELOAD, updateGuns, type CombatStats, type Projectile } from '../../src/sim/Combat';
 import { updateCrew } from '../../src/sim/Crew';
 import type { BattleEvent } from '../../src/sim/events';
 import { Rng } from '../../src/sim/rng';
@@ -71,12 +71,41 @@ describe('guns', () => {
     const cutter = new Ship(NAVY_CUTTER, 'enemy');
     const out: Projectile[] = [];
     const s = stats();
-    wren.guns[1].target = 'helm'; // 9-pounder, 2 balls, 11 s
-    for (let t = 0; t < 10.9; t += 0.05) updateGuns(wren, cutter, 0.05, out, [], s);
+    wren.guns[1].target = 'helm'; // 9-pounder, 2 balls, 11 s; one gunner loads at 1.15x
+    expect(wren.gunCrew()).toHaveLength(1);
+    for (let t = 0; t < 9.4; t += 0.05) updateGuns(wren, cutter, 0.05, out, [], s);
     expect(out).toHaveLength(0);
-    for (let t = 0; t < 0.3; t += 0.05) updateGuns(wren, cutter, 0.05, out, [], s);
+    for (let t = 0; t < 0.4; t += 0.05) updateGuns(wren, cutter, 0.05, out, [], s);
     expect(out).toHaveLength(2);
     expect(wren.guns[1].charge).toBeLessThan(1);
+  });
+
+  it('loads at a crawl with nobody at the guns', () => {
+    const wren = new Ship(playerShip('wren'), 'player');
+    const cutter = new Ship(NAVY_CUTTER, 'enemy');
+    for (const c of wren.crew) if (c.room === 'guns') c.room = 'fore';
+    expect(wren.gunCrew()).toHaveLength(0);
+    for (let t = 0; t < 5; t += 0.05) updateGuns(wren, cutter, 0.05, [], [], stats());
+    expect(wren.guns[1].charge).toBeCloseTo(5 * UNCREWED_RELOAD, 1);
+  });
+
+  it('light balls often glance off stout sides; chain shot does not', () => {
+    const rng = new Rng(11);
+    const armoured = new Ship({ ...NAVY_CUTTER, armour: 1 }, 'enemy');
+    let glanced = 0;
+    for (let i = 0; i < 200; i++) {
+      const ev: BattleEvent[] = [];
+      applyHit(armoured, 'fore', 'round', 1, rng, ev);
+      if (ev.some((e) => e.t === 'hit' && e.deflected)) glanced++;
+    }
+    expect(glanced).toBeGreaterThan(55);
+    expect(glanced).toBeLessThan(105);
+    const heavy: BattleEvent[] = [];
+    applyHit(armoured, 'fore', 'round', 2, rng, heavy);
+    expect(heavy.some((e) => e.t === 'hit' && e.deflected)).toBe(false);
+    const chained = new Ship({ ...NAVY_CUTTER, armour: 1 }, 'enemy');
+    for (let i = 0; i < 20; i++) applyHit(chained, 'sails', 'chain', 1, rng, []);
+    expect(chained.system('sails')!.damage).toBeGreaterThan(0);
   });
 
   it('switching shot costs some load', () => {

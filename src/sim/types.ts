@@ -71,6 +71,8 @@ export interface ShipDef {
   /** How well her people fight hand to hand (1 = ordinary sailors; marines and soldiers more, merchant hands less). */
   melee?: number;
   systems: Partial<Record<SystemId, number>>;
+  /** Stout oak sides: balls of this damage or less often glance off (see Combat.applyHit). */
+  armour?: number;
   rooms: RoomDef[];
   guns: GunMount[];
   crew: CrewDef[];
@@ -84,7 +86,7 @@ export interface EnemyDef {
   ship: ShipDef;
   faction: Faction;
   /** Captain temperament, passed to the AI (see AIOptions). */
-  ai: { fleeAt: number; surrenderChance: number; surrenderAt: number; boardWith?: number };
+  ai: { fleeAt: number; surrenderChance: number; surrenderAt: number; boardWith?: number; focus?: SystemId };
   /** Gold in her hold, as [min, max]. */
   plunder: [number, number];
   /** Names she might sail under; one is picked per encounter. */

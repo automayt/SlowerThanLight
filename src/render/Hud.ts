@@ -3,6 +3,7 @@ import type { Battle } from '../sim/Battle';
 import { SHOT_EFFECTS } from '../sim/Combat';
 import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
+import { UNCREWED_RELOAD } from '../sim/Combat';
 import type { Ship } from '../sim/Ship';
 import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/types';
 import { crewTextures } from './CrewArt';
@@ -66,6 +67,10 @@ export class Hud {
   private readonly logText: Phaser.GameObjects.Text;
   private readonly log: { text: string; color: string }[] = [];
   private readonly pauseBanner: Phaser.GameObjects.Text;
+  private readonly alert: Phaser.GameObjects.Text;
+  /** A short-lived headline (a crew death) that outranks the standing alerts. */
+  private flashText = '';
+  private flashUntil = 0;
   private readonly hoverText: Phaser.GameObjects.Text;
   private readonly tooltip: Phaser.GameObjects.Text;
   private readonly pointer: Phaser.Input.Pointer;
@@ -152,6 +157,11 @@ export class Hud {
 
     this.g = scene.add.graphics();
 
+    this.alert = scene.add
+      .text(SCREEN.w / 2, 486, '', { fontFamily: TITLE_FONT, fontSize: '18px', color: '#ffd8cc', backgroundColor: '#5a1410e6', padding: { x: 14, y: 5 }, stroke: '#000000', strokeThickness: 2 })
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setVisible(false);
     this.pauseBanner = scene.add
       .text(SCREEN.w / 2, 98, 'PAUSED  ·  Space to resume', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, backgroundColor: '#0b1622dd', padding: { x: 18, y: 7 }, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5)
@@ -166,6 +176,12 @@ export class Hud {
       .setOrigin(0, 1)
       .setDepth(30)
       .setVisible(false);
+  }
+
+  /** Headline something for a few seconds, above the standing alerts. */
+  flash(text: string, ms = 3500): void {
+    this.flashText = text;
+    this.flashUntil = performance.now() + ms;
   }
 
   addLog(text: string, color: string = COLORS.text): void {
@@ -245,20 +261,31 @@ export class Hud {
       const loaded = gun.charge / gun.def.loadTime;
       drawBar(g, card.x + 8, BOTTOM_Y + 80, CARD_W - 16, 12, loaded, loaded >= 1 ? 0x7fdc6a : 0xd0a040);
       const working = player.level('guns') > 0 || !gun.powered;
+      const deckFull = player.allocated('guns') + gun.def.hands > player.capacity('guns');
+      const crewless = player.gunCrew().length === 0;
       card.status.setText(
         !gun.powered
-          ? 'Needs hands to load'
+          ? player.capacity('guns') < gun.def.hands || (deckFull && player.system('guns')!.damage > 0)
+            ? '! Gun deck damaged — repair it'
+            : deckFull
+              ? 'No room on the gun deck'
+              : player.freeHands() < gun.def.hands
+                ? 'Needs free hands to man'
+                : 'Idle — click ⏻ to man'
           : !working
             ? '! Gun deck out of action'
             : loaded >= 1
               ? gun.target
                 ? 'Loaded — firing'
                 : 'Loaded — pick a target!'
-              : `Loading… ${(gun.def.loadTime - gun.charge).toFixed(1)}s`,
+              : crewless
+                ? `Slow: no gun crew  ${((gun.def.loadTime - gun.charge) / UNCREWED_RELOAD).toFixed(0)}s`
+                : `Loading… ${(gun.def.loadTime - gun.charge).toFixed(1)}s`,
       );
       card.target.setText(gun.target ? `→ ${enemy.room(gun.target).def.name}` : aiming ? '→ click an enemy room' : '→ no target');
       tint(card.target, gun.target ? COLORS.textWarn : COLORS.textDim);
-      tint(card.status, loadedIdle ? COLORS.gold : !working && gun.powered ? COLORS.textWarn : COLORS.textDim);
+      const warn = card.status.text.startsWith('!') || card.status.text.startsWith('Slow');
+      tint(card.status, loadedIdle ? COLORS.gold : warn ? COLORS.textWarn : COLORS.textDim);
       SHOT_TYPES.forEach((s: ShotType, j) => card.shots[j].setOn(gun.shot === s));
     });
 
@@ -268,6 +295,16 @@ export class Hud {
       this.logText.setText(this.log.map((l) => l.text).join('\n'));
     }
     this.pauseBanner.setVisible(battle.paused && !battle.outcome);
+    this.pauseBanner.setText(battle.time === 0 ? 'Aim your guns and set your crew  ·  Space to engage' : 'PAUSED  ·  Space to resume');
+
+    // The single most urgent problem aboard, and what to do about it.
+    const now = performance.now();
+    const alert = now < this.flashUntil ? this.flashText : battle.outcome ? '' : urgentAlert(battle);
+    this.alert.setVisible(!!alert);
+    if (alert) {
+      if (this.alert.text !== alert) this.alert.setText(alert);
+      this.alert.setAlpha(0.8 + 0.2 * Math.sin(now / 160));
+    }
     // Room info follows the pointer, kept on screen.
     this.hoverText.setText(state.hoverText).setVisible(!!state.hoverText);
     if (state.hoverText) {
@@ -381,4 +418,27 @@ function shotIcon(scene: Phaser.Scene, shot: ShotType): string {
   }
   tex.refresh();
   return key;
+}
+
+/** The most urgent trouble aboard the player's ship, phrased as an order. Empty when all is well. */
+function urgentAlert(battle: Battle): string {
+  const ship = battle.player;
+  const roomName = (id: string) => ship.room(id).def.name;
+  const flood = ship.floodFraction() / SINK_FRACTION;
+  if (flood >= 0.25) {
+    const leak = [...ship.rooms.values()].find((r) => r.breach);
+    const pumps = ship.system('pumps');
+    const pumpHelp = pumps && ship.capacity('pumps') === 0 ? 'repair the Pumps' : 'hands to the Pumps';
+    return `TAKING WATER (${Math.round(flood * 100)}%): ${pumpHelp}${leak ? `, patch the leak in the ${roomName(leak.def.id)}` : ''}`;
+  }
+  const boarders = ship.crew.find((c) => c.side !== ship.side && !c.waypoints.length);
+  if (boarders) return `BOARDERS in the ${roomName(boarders.room)}: send crew to repel them`;
+  const fire = [...ship.rooms.values()].filter((r) => r.fire > 0).sort((a, b) => b.fire - a.fire)[0];
+  if (fire && fire.fire > 30) return `FIRE in the ${roomName(fire.def.id)}: send crew to put it out`;
+  const helm = ship.system('helm');
+  if (helm && ship.capacity('helm') > 0 && !ship.isManned('helm')) return `HELM UNMANNED: evasion 0%. Send someone to the ${roomName(helm.room)}`;
+  const guns = ship.system('guns');
+  if (guns && ship.capacity('guns') === 0) return `GUN DECK WRECKED: send crew to repair the ${roomName(guns.room)}`;
+  if (guns && ship.guns.some((g) => g.powered) && ship.gunCrew().length === 0) return `NO GUN CREW: guns load slowly. Send someone to the ${roomName(guns.room)}`;
+  return '';
 }

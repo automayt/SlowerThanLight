@@ -1,4 +1,5 @@
 import { canGrapple } from './Boarding';
+import { changeShot } from './Combat';
 import { destination, orderMove } from './Crew';
 import { findRoute } from './pathfinding';
 import type { Rng } from './rng';
@@ -131,7 +132,15 @@ export class ShipAI {
   private manageGuns(): void {
     const rooms = [...this.opponent.rooms.values()];
     const focusRoom = this.opts.focus && this.opponent.system(this.opts.focus)?.room;
+    // She's making sail to escape: put chain into her rigging with the first gun.
+    const sails = this.opponent.system('sails')?.room;
+    const chaser = !this.fleeing && sails && this.opponent.escape >= 50 ? this.ship.guns.find((g) => g.powered) : undefined;
+    if (chaser && sails) {
+      changeShot(chaser, 'chain');
+      chaser.target = sails;
+    }
     for (const g of this.ship.guns) {
+      if (g === chaser) continue;
       if (focusRoom) {
         g.target = focusRoom;
         continue;

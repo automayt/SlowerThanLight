@@ -327,6 +327,17 @@ export class Ship {
   }
 
   /** The crew member manning a system's station, if anyone is. */
+  /** Own crew standing in the gun deck and free to serve the guns (not walking, fighting or fire-fighting). */
+  gunCrew(): Crew[] {
+    const s = this.systems.get('guns');
+    if (!s) return [];
+    return this.crew.filter((c) => c.side === this.side && c.room === s.room && !c.waypoints.length && (c.task === 'man' || c.task === 'idle'));
+  }
+
+  get armour(): number {
+    return this.def.armour ?? 0;
+  }
+
   stationed(id: SystemId): Crew | undefined {
     const s = this.systems.get(id);
     return s && this.crew.find((c) => c.side === this.side && c.room === s.room && c.task === 'man');

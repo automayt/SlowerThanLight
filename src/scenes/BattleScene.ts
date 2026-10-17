@@ -42,6 +42,8 @@ export class BattleScene extends Phaser.Scene {
   private band!: Phaser.GameObjects.Graphics;
   /** Scene time at which the fight actually starts, after the ships have sailed in. */
   private startAt = 0;
+  /** Whether the opening pause (orders before the first shot) has been applied. */
+  private armed = false;
 
   constructor() {
     super('Battle');
@@ -52,6 +54,7 @@ export class BattleScene extends Phaser.Scene {
     this.aimingGun = null;
     this.ending = false;
     this.startAt = 0;
+    this.armed = false;
     this.drag = null;
     this.swingers.clear();
   }
@@ -197,7 +200,14 @@ export class BattleScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     const b = this.battle;
     // Orders can be given while the ships close, but the clock only starts once they are alongside.
-    if (time >= this.startAt) b.update(delta / 1000);
+    if (time >= this.startAt) {
+      // Once alongside, hold fire until the captain has given orders.
+      if (!this.armed) {
+        this.armed = true;
+        b.paused = true;
+      }
+      b.update(delta / 1000);
+    }
     for (const ev of b.drainEvents()) this.onEvent(ev);
 
     // Drop selections of crew who died.
@@ -467,6 +477,7 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'death':
         this.hud.addLog(ours ? `${ev.name} has fallen.` : `Enemy ${ev.name} is down.`);
+        if (ours) this.hud.flash(`${ev.name.toUpperCase()} HAS FALLEN`);
         break;
       case 'log':
         this.hud.addLog(ev.text);

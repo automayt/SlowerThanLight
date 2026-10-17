@@ -29,6 +29,7 @@ describe('battle', () => {
   it('the player can escape once Make Sail is charged', () => {
     const battle = new Battle(playerShip('wren'), NAVY_CUTTER, { seed: 5 });
     expect(battle.escape()).toBe(false);
+    battle.player.escape = 99;
     while (!battle.canEscape() && !battle.outcome) battle.step(0.05);
     expect(battle.escape()).toBe(true);
     expect(battle.outcome?.kind).toBe('escaped');

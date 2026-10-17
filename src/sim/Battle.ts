@@ -69,6 +69,9 @@ export class Battle {
     this.allowEscape = opts.allowEscape ?? true;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
+    // Crew take up their stations before the first tick, so a paused opening already shows a manned helm.
+    updateCrew(this.player, 0);
+    updateCrew(this.enemy, 0);
     this.enemy.reloadRate = opts.enemyReload ?? 1;
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     const actions = (side: Side) => ({

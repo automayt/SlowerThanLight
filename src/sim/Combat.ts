@@ -30,8 +30,8 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
   },
   chain: {
     label: 'Chain',
-    blurb: 'Wrecks systems and shreds rigging. No hull damage.',
-    hull: () => 0,
+    blurb: 'Wrecks systems and shreds rigging, and ignores stout sides. Heavy chain splinters a little hull.',
+    hull: (d) => (d >= 2 ? 1 : 0),
     system: (d, sys) => d + (sys === 'sails' ? 1 : 0),
     crew: 5,
     fireChance: 0,
@@ -40,7 +40,7 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
   },
   grape: {
     label: 'Grape',
-    blurb: 'A hail of musket balls. Cuts down crew, barely scratches the ship.',
+    blurb: 'A hail of musket balls. Cuts down crew — kill her gun crews and her guns load at a crawl.',
     hull: () => 0,
     system: () => 0,
     crew: 35,
@@ -50,8 +50,8 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
   },
   hot: {
     label: 'Hot',
-    blurb: 'Heated shot. Light damage, but starts fires.',
-    hull: (d) => Math.max(1, d - 1),
+    blurb: 'Heated shot. Full hull damage and likely fire, but light on systems.',
+    hull: (d) => d,
     system: () => 1,
     crew: 10,
     fireChance: 0.7,
@@ -59,6 +59,11 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
     rigging: 0,
   },
 };
+
+/** Reload speed with nobody serving the guns: hands alone load slowly. */
+export const UNCREWED_RELOAD = 0.4;
+/** Chance a ball no heavier than the target's armour glances off her sides. */
+export const DEFLECT_CHANCE = 0.4;
 
 /** Seconds a ball is in flight. */
 export const TRAVEL_TIME = 1.1;
@@ -99,8 +104,11 @@ export function changeShot(gun: GunState, shot: ShotType): void {
 /** Load guns and fire any that are loaded and aimed. */
 export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile[], events: BattleEvent[], stats: CombatStats): void {
   const working = ship.level('guns') > 0;
-  const gunner = ship.stationed('guns');
-  const rate = (gunner ? 1.15 + rank(gunner, 'gunnery') * GUNNERY_RELOAD : 1) * ship.reloadRate;
+  // Guns need people at them: a gun captain lays them, more hands run them out faster.
+  const crew = ship.gunCrew();
+  const gunner = crew.reduce<(typeof crew)[number] | undefined>((best, c) => (!best || rank(c, 'gunnery') > rank(best, 'gunnery') ? c : best), undefined);
+  const crewed = crew.length === 0 ? UNCREWED_RELOAD : crew.length === 1 ? 1.15 : 1.3;
+  const rate = (crewed + (gunner ? rank(gunner, 'gunnery') * GUNNERY_RELOAD : 0)) * ship.reloadRate;
   ship.guns.forEach((g, i) => {
     if (!g.powered || !working) {
       g.charge = Math.max(0, g.charge - dt * 3);
@@ -160,6 +168,12 @@ export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: n
   const fx = SHOT_EFFECTS[shot];
   const room = target.room(roomId);
   const sysId = room.def.system;
+
+  // Light round and hot shot often glance off a heavy ship's sides; chain and grape fly above them.
+  if ((shot === 'round' || shot === 'hot') && damage <= target.armour && rng.chance(DEFLECT_CHANCE)) {
+    events.push({ t: 'hit', side: target.side, room: roomId, hull: 0, shot, deflected: true });
+    return 0;
+  }
 
   const hull = Math.min(target.hull, fx.hull(damage));
   target.hull -= hull;
