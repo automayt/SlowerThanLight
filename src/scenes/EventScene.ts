@@ -95,6 +95,7 @@ export class EventScene extends Phaser.Scene {
       hint?.setPosition(16, 10 + text.height + 2);
       b.add(hint ? [text, hint] : [text]);
       b.setEnabled(!blocked);
+      if (blocked) b.setTip(`Not open to you: ${blocked}.`);
       if (blocked) [text, hint].forEach((o) => o?.setAlpha(0.4));
       this.choiceButtons.push(b);
       cy += h + gap;
@@ -122,9 +123,9 @@ export class EventScene extends Phaser.Scene {
       if (target === 'Event') this.scene.restart();
       else this.scene.start(target);
     };
-    const label = { RunEnd: 'Voyage’s end →', Battle: 'Beat to quarters!', Event: 'Continue →', SeaMap: 'Continue' }[target];
-    new Button(this, SCREEN.w / 2 - 130, Y + H - 66, 260, 46, label, next, { size: 18 });
-    this.input.keyboard!.once('keydown-ENTER', next);
+    const label = { RunEnd: 'Voyage’s end →', Battle: 'Beat to quarters!', Event: 'Continue →', SeaMap: 'Back to the chart →' }[target];
+    const go = new Button(this, SCREEN.w / 2 - 140, Y + H - 66, 280, 46, label, next, { size: 18, hint: 'Enter' });
+    this.input.keyboard!.once('keydown-ENTER', () => go.press());
   }
 
   update(time: number): void {

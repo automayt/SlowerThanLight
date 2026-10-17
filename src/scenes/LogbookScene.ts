@@ -75,16 +75,16 @@ export class LogbookScene extends Phaser.Scene {
       this.drawPage();
     };
     // Page turning in the middle, the page number between the arrows; the way out at the left.
-    new Button(this, SCREEN.w / 2 - 150, SCREEN.h - 66, 60, 40, '◀', () => turn(-1), { size: 18 });
-    new Button(this, SCREEN.w / 2 + 90, SCREEN.h - 66, 60, 40, '▶', () => turn(1), { size: 18 });
+    const prev = new Button(this, SCREEN.w / 2 - 150, SCREEN.h - 66, 60, 40, '◀', () => turn(-1), { size: 18, tip: 'Previous page (←)' });
+    const next = new Button(this, SCREEN.w / 2 + 90, SCREEN.h - 66, 60, 40, '▶', () => turn(1), { size: 18, tip: 'Next page (→)' });
     this.pageLabel = this.add.text(SCREEN.w / 2, SCREEN.h - 46, '', textStyle(15, COLORS.text)).setOrigin(0.5);
 
-    const back = () => (this.overlay.length ? this.closeOverlay() : this.scene.start('Title'));
-    new Button(this, 48, SCREEN.h - 66, 160, 40, '← Back', back, { size: 16 });
+    const back = new Button(this, 48, SCREEN.h - 66, 160, 40, '← Back', () => this.scene.start('Title'), { size: 16, hint: 'Esc' });
     const kb = this.input.keyboard!;
-    kb.on('keydown-ESC', back);
-    kb.on('keydown-LEFT', () => turn(-1));
-    kb.on('keydown-RIGHT', () => turn(1));
+    kb.on('keydown-ESC', () => (this.overlay.length ? this.closeOverlay() : back.press()));
+    kb.on('keydown-ENTER', () => this.overlay.length && this.closeOverlay());
+    kb.on('keydown-LEFT', () => !this.overlay.length && prev.press());
+    kb.on('keydown-RIGHT', () => !this.overlay.length && next.press());
     this.drawPage();
   }
 
@@ -137,7 +137,7 @@ export class LogbookScene extends Phaser.Scene {
     const text = e.text.replaceAll('{crew2}', 'another hand').replaceAll('{crew}', 'one of the crew').replaceAll('{ship}', 'your ship');
     const body = this.add.text(x + 40, y + 62 + (w - 80) * 0.5625 + 14, text, textStyle(14, COLORS.text, { wordWrap: { width: w - 80 }, lineSpacing: 3 })).setDepth(32);
     this.overlay.push(body);
-    const close = new Button(this, SCREEN.w / 2 - 70, y + h - 54, 140, 38, 'Close', () => this.closeOverlay(), { size: 15 }).setDepth(32);
+    const close = new Button(this, SCREEN.w / 2 - 80, y + h - 54, 160, 38, 'Close', () => this.closeOverlay(), { size: 15, hint: 'Esc' }).setDepth(32);
     this.overlay.push(close);
   }
 

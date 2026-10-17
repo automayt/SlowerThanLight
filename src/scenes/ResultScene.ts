@@ -93,8 +93,8 @@ export class ResultScene extends Phaser.Scene {
           this.registry.set('chart-note', [o.text, ...report.lines].join(' '));
           this.scene.start('SeaMap');
         };
-    new Button(this, cx - 140, BOX.y + BOX.h - 62, 280, 44, run.over ? 'The voyage ends →' : 'Back to the chart →', next, { size: 18 });
-    this.input.keyboard!.once('keydown-ENTER', next);
+    const go = new Button(this, cx - 150, BOX.y + BOX.h - 62, 300, 44, run.over ? 'Voyage’s end →' : 'Back to the chart →', next, { size: 18, hint: 'Enter' });
+    this.input.keyboard!.once('keydown-ENTER', () => go.press());
   }
 
   /** One pick from a beaten ship: a gun, or a survivor for the crew. */
@@ -122,11 +122,13 @@ export class ResultScene extends Phaser.Scene {
         : []),
     ];
     if (!picks.length) return;
-    const label = this.add.text(x, y, 'SPOILS: pick one', { fontFamily: TITLE_FONT, fontSize: '15px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: w } });
+    const label = this.add.text(x, y, 'SPOILS: pick one (or press its number)', { fontFamily: TITLE_FONT, fontSize: '15px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: w } });
     const buttons: Button[] = [];
+    const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
     picks.forEach(([text, take], i) => {
+      if (keys[i]) this.input.keyboard!.on(`keydown-${keys[i]}`, () => buttons[i]?.active && buttons[i].press());
       buttons.push(
-        new Button(this, x, y + 26 + i * 38, w, 32, text, () => {
+        new Button(this, x, y + 26 + i * 38, w, 32, `${i + 1}. ${text}`, () => {
           const said = take();
           if (!said) {
             label.setText(i === picks.length - 1 && prize.recruits ? 'No bunk to spare for a prisoner.' : 'No room aboard for her guns.').setColor(COLORS.textWarn);
