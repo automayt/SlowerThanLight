@@ -23,24 +23,41 @@ export const COLORS = {
   select: 0xffe34d,
   aim: 0xff4040,
   panel: 0x0f1b26,
-  panelEdge: 0x7a6038,
+  panelEdge: 0x8a6a36,
   panelInner: 0x24384a,
   button: 0x1d3041,
   buttonHover: 0x2b4760,
   buttonActive: 0x8a6a2a,
   buttonDisabled: 0x1c2630,
+  /** Polished brass, for frames and ornaments. */
+  brass: 0xd9b467,
   text: '#efe6d0',
   textDim: '#9fb1bf',
   textWarn: '#ff7b5c',
   textGood: '#9be37f',
   gold: '#f2c45a',
+  /** Ink on parchment, and its red for warnings and the Navy. */
+  ink: '#2a170a',
+  inkRed: '#8a1c1c',
 } as const;
 
-export const FONT = '"Trebuchet MS", "Segoe UI", sans-serif';
-export const TITLE_FONT = 'Georgia, "Times New Roman", serif';
+/** Body text: a book face with lining figures, legible at 12px. Bundled from @fontsource (OFL). */
+export const FONT = '"Lora", "Trebuchet MS", Georgia, serif';
+/** Headings: IM Fell English, from types cut in the 1680s (OFL), with Lora's lining figures (see main.ts). */
+export const TITLE_FONT = '"STL Fell", Georgia, "Times New Roman", serif';
+/** Small capitals of the same Fell face, for labels and section heads. */
+export const CAPS_FONT = '"STL Fell SC", "STL Fell", Georgia, serif';
+
+/** Every face the screens draw with, for document.fonts.load before the first scene. */
+export const FONT_FACES = ['16px "Lora"', 'italic 16px "Lora"', 'bold 16px "Lora"', 'bold italic 16px "Lora"', '32px "STL Fell"', 'italic 32px "STL Fell"', '32px "STL Fell SC"'];
 
 export const SCREEN = { w: 1280, h: 720 } as const;
 
 export function textStyle(size: number, color: string = COLORS.text, extra: Phaser.Types.GameObjects.Text.TextStyle = {}) {
   return { fontFamily: FONT, fontSize: `${size}px`, color, ...extra };
+}
+
+/** A heading in the Fell face. */
+export function titleStyle(size: number, color: string = COLORS.gold, extra: Phaser.Types.GameObjects.Text.TextStyle = {}) {
+  return { fontFamily: TITLE_FONT, fontSize: `${size}px`, color, ...extra };
 }
