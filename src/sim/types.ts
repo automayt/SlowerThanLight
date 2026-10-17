@@ -81,11 +81,16 @@ export interface ShipDef {
 
 export type Faction = 'navy' | 'merchant' | 'privateer' | 'pirate';
 
+/** The powers at sea that keep an opinion of you (see data/powers.ts and sim/Diplomacy.ts). */
+export type PowerId = 'crown' | 'spain' | 'france' | 'brethren' | 'trade';
+
 /** An opponent: its ship, how its captain behaves and what it carries. */
 export interface EnemyDef {
   id: string;
   ship: ShipDef;
   faction: Faction;
+  /** Whose flag she flies: fighting her changes how that power (and its rivals) regard you. */
+  power: PowerId;
   /** Captain temperament, passed to the AI (see AIOptions). */
   ai: { fleeAt: number; surrenderChance: number; surrenderAt: number; boardWith?: number; focus?: SystemId };
   /** Gold in her hold, as [min, max]. */
@@ -143,6 +148,8 @@ export interface EventEffect {
   next?: string;
   /** End the voyage happily with this title (e.g. accepting a pardon). */
   ending?: string;
+  /** Change how powers regard you (no knock-on effect on their rivals: the event says exactly what happens). */
+  standing?: Partial<Record<PowerId, number>>;
 }
 
 /** Conditions an event or a choice needs. All given conditions must hold. */
@@ -167,6 +174,8 @@ export interface EventNeeds {
   /** Chart columns the event can turn up in (on the voyage-wide 0..7 scale, see Run.progressCol). */
   minCol?: number;
   maxCol?: number;
+  /** Standing with a power at least this (a negative number), or at most this when written as `{ max: n }`. */
+  standing?: Partial<Record<PowerId, number | { max: number }>>;
 }
 
 export type EventRarity = 'common' | 'uncommon' | 'rare' | 'legendary';

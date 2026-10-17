@@ -39,7 +39,7 @@ export function loadRun(): Run | null {
   }
 }
 
-const RESUMABLE = ['chart', 'battle', 'event', 'port'];
+const RESUMABLE = ['chart', 'hail', 'battle', 'event', 'port'];
 
 /**
  * Throws if a loaded voyage is damaged or refers to anything the current game data no longer has, including
@@ -50,7 +50,8 @@ function checkRun(run: Run): void {
   const numbers = [run.gold, run.navy, run.provisions, run.jumps, run.condition.hull, ...run.condition.crew.map((c) => c.hp)];
   if (!numbers.every(Number.isFinite)) throw new Error('Save has a broken number');
   void run.node.col;
-  if (run.status === 'battle') run.currentEnemy();
+  if (run.status === 'battle' || run.status === 'hail') run.currentEnemy();
+  if (!Object.values(run.standing).every(Number.isFinite)) throw new Error('Save has a broken standing');
   if (run.status === 'event') run.currentEvent();
   for (const id of run.prize?.guns ?? []) weapon(id);
   for (const node of run.chart.nodes) {
@@ -136,6 +137,8 @@ export function sceneFor(run: Run): string {
   switch (run.status) {
     case 'battle':
       return 'Battle';
+    case 'hail':
+      return 'Hail';
     case 'event':
       return 'Event';
     case 'port':

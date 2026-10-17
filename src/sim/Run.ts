@@ -3,11 +3,13 @@ import { playerShip } from '../data/ships';
 import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
 import { PORT_NAMES, RECRUIT_NAMES, SEA_EVENTS, SECTORS, seaEvent } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
+import { POWER_IDS, portPower, power, relation } from '../data/powers';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
+import { AGGRESSION, atLeast, BETRAYAL, describeShift, freshStanding, OUTCOME_STANDING, PORT_PRICE, shiftStanding, tierOf, type Standing } from './Diplomacy';
 import { Rng } from './rng';
 import { generateChart, nodeById, SECTOR_COLUMNS, type SeaChart, type SeaNode } from './SeaChart';
 import { Ship, type ShipCondition } from './Ship';
-import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
+import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, PowerId, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
 
 /** Where the Navy fleet starts, in chart columns (the player starts in column 0). */
@@ -118,6 +120,27 @@ export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon
 const FLAG_LACKING: Record<string, string> = { cat: 'no ship’s cat', 'map-half': 'no map', 'map-whole': 'no map', cursed: 'not cursed' };
 /** Weight multiplier for events that follow on from a story flag. */
 export const STORY_BOOST = 2;
+/** What a friendly ship asks for her spare stores, and how many she sells. */
+export const HAIL_TRADE_PRICE = 12;
+export const HAIL_TRADE_PROVISIONS = 4;
+/** Chance a false flag fools her, and what her flag thinks of the trick when it does not. */
+export const FALSE_COLOURS_CHANCE = 0.45;
+export const FALSE_COLOURS_PENALTY = 8;
+/** Columns the fleet loses when a friendly captain tells you where it is searching. */
+export const NEWS_SETBACK = 0.5;
+/** A consort's broadside: every so many seconds, a ball of this weight into a random room of the enemy. */
+export const CONSORT_EVERY = 9;
+export const CONSORT_DAMAGE = 2;
+/** Gift to a port's masters, before sector prices, and what it buys. */
+export const GIFT_PRICE = 30;
+export const GIFT_STANDING = 10;
+/** A commission's rewards: gold before sector scaling, and the patron's gratitude. */
+export const HUNT_REWARD = 45;
+export const DISPATCH_REWARD = 25;
+export const COMMISSION_STANDING = 15;
+/** How much of the blockade frigate's hull the Brethren shoot away when they come to your aid. */
+export const BRETHREN_AID = 0.2;
+
 /** Chance that crossing open sea brings an incident aboard. */
 export const INCIDENT_CHANCE = 0.6;
 
@@ -174,6 +197,9 @@ export interface RunSave {
   sector?: number;
   provisions?: number;
   fittings?: string[];
+  standing?: Standing;
+  escort?: Escort | null;
+  commission?: Commission | null;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -184,12 +210,79 @@ export const PLUNDER_SHARE: Partial<Record<OutcomeKind, number>> = {
   enemySunk: 0.4,
 };
 
-export type RunStatus = 'chart' | 'battle' | 'event' | 'port' | 'won' | 'lost';
+export type RunStatus = 'chart' | 'hail' | 'battle' | 'event' | 'port' | 'won' | 'lost';
+
+/** What a sighted ship means to do: fight you, keep clear of you, greet you, or (the blockade) hear you out. */
+export type Intent = 'hostile' | 'wary' | 'friendly' | 'commodore';
+
+/** A friendly captain sailing in company for your next fight. */
+export interface Escort {
+  name: string;
+  power: PowerId;
+}
+
+/** Work for a power: take one of its enemies' ships, or carry its dispatches to the next port. */
+export interface Commission {
+  patron: PowerId;
+  kind: 'hunt' | 'dispatch';
+  /** For a hunt: whose ship to take or sink. */
+  target?: PowerId;
+  /** The port that gave it (a dispatch is delivered at any other). */
+  port: string;
+  gold: number;
+  standing: number;
+}
+
+export type HailId = 'attack' | 'parley' | 'bribe' | 'colours' | 'tribute' | 'pass' | 'news' | 'trade' | 'escort' | 'pardon';
+
+export interface HailOption {
+  id: HailId;
+  label: string;
+  detail: string;
+  available: boolean;
+  /** Why it is not available. */
+  blocker?: string;
+  /** Odds of it working, when it can fail. */
+  chance?: number;
+  cost?: number;
+  /** Choosing it starts (or may start) a fight. */
+  fight: 'yes' | 'maybe' | 'no';
+}
+
+export interface HailResult {
+  text: string;
+  changes: string[];
+  fight: boolean;
+}
 
 export type Encounter =
-  | { kind: 'battle'; enemy: string; name: string; boss: boolean; ambush: boolean; text: string }
+  | {
+      kind: 'battle';
+      enemy: string;
+      name: string;
+      boss: boolean;
+      ambush: boolean;
+      text: string;
+      /** How she greeted you, when she was hailed first (battle nodes and the blockade). */
+      intent?: Intent;
+      /** You started it with a ship that would have let you be; `betrayal` if she was a friend. */
+      aggressor?: boolean;
+      betrayal?: boolean;
+    }
   | { kind: 'event'; event: string; actor?: string; actor2?: string; variant?: number }
-  | { kind: 'port'; name: string; rested: boolean; stock: string[]; fittings?: string[] }
+  | {
+      kind: 'port';
+      name: string;
+      rested: boolean;
+      stock: string[];
+      fittings?: string[];
+      /** Paid our respects to the harbour's masters this visit. */
+      gifted?: boolean;
+      /** Work the harbour offers (taken or not). */
+      commission?: Commission | null;
+      /** What happened as you came in, e.g. a dispatch delivered. */
+      welcome?: string[];
+    }
   | { kind: 'empty'; text: string; title?: string }
   | { kind: 'start' };
 
@@ -257,6 +350,12 @@ export class Run {
   provisions: number;
   /** Chandler's fittings aboard. */
   fittings: string[] = [];
+  /** How each power regards you. */
+  standing: Standing = freshStanding();
+  /** A friendly ship sailing in company for the next fight. */
+  escort: Escort | null = null;
+  /** Work taken on for a power, until done. */
+  commission: Commission | null = null;
   /** What the last jump cost you on short rations, for the chart to report (not saved). */
   hungerNote = '';
   private usedNames = new Set<string>();
@@ -314,9 +413,27 @@ export class Run {
     return this.fittings.includes(fittingId);
   }
 
-  /** Columns the fleet advances per jump on this difficulty. */
+  /**
+   * Columns the fleet advances per jump: set by difficulty, slowed when the Crown is friendly (admirals look
+   * the other way) and by each of Spain and France that counts you an ally (their squadrons draw it off).
+   */
   get navySpeed(): number {
-    return DIFFICULTY[this.difficulty].navySpeed;
+    let v = DIFFICULTY[this.difficulty].navySpeed;
+    if (atLeast(this.tier('crown'), 'friendly')) v -= 0.1;
+    for (const p of ['spain', 'france'] as PowerId[]) if (this.tier(p) === 'allied') v -= 0.1;
+    return v;
+  }
+
+  // --- Standing ----------------------------------------------------------------
+
+  tier(p: PowerId) {
+    return tierOf(this.standing[p]);
+  }
+
+  /** Change a power's opinion (and with `ripple`, its friends' and enemies'), and say what changed. */
+  shift(p: PowerId, amount: number, ripple: boolean): string[] {
+    const before = { ...this.standing };
+    return describeShift(before, shiftStanding(this.standing, p, amount, ripple));
   }
 
   /** The ship as currently fitted out. */
@@ -378,7 +495,10 @@ export class Run {
     if (node.kind === 'exit') return this.enterSector(this.sector + 1);
     if (node.kind === 'boss') {
       const foe = enemy(node.enemy ?? 'frigate');
-      return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: true, ambush: false, text: foe.sighting });
+      const aid = this.tier('brethren') === 'allied' ? ' But the Brethren have kept faith: a swarm of pirate sloops comes down on her flanks, and her hull is already holed when you come in range.' : '';
+      // A friend of the Crown may be offered terms before the first gun.
+      const intent: Intent | undefined = atLeast(this.tier('crown'), 'friendly') ? 'commodore' : undefined;
+      return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: true, ambush: false, text: foe.sighting + aid, intent });
     }
     if (overrun) {
       const foe = enemy(this.sectorDef.ambush);
@@ -388,7 +508,8 @@ export class Run {
     switch (node.kind) {
       case 'battle': {
         const foe = enemy(node.enemy ?? 'cutter');
-        return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: this.rng.pick([foe.sighting, ...(foe.sightings ?? [])]) });
+        const text = this.rng.pick([foe.sighting, ...(foe.sightings ?? [])]);
+        return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text, intent: this.intentOf(foe) });
       }
       case 'event': {
         const ev = this.drawEvent('encounter') ?? this.drawEvent('incident');
@@ -396,7 +517,7 @@ export class Run {
         break;
       }
       case 'port':
-        return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false, stock: [...(node.stock ?? [])], fittings: this.stockFittings() });
+        return this.enterPort(node.name ?? 'Nassau', [...(node.stock ?? [])]);
     }
     // Open sea: often something happens aboard on the way.
     const incident = this.rng.chance(INCIDENT_CHANCE) ? this.drawEvent('incident') : null;
@@ -446,9 +567,20 @@ export class Run {
     return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} ${fleet}` });
   }
 
-  /** Shipwright, chandler and armoury prices in this sector. */
+  /** Shipwright, chandler and armoury prices in this sector, and in this harbour by how its masters regard you. */
   price(base: number): number {
-    return Math.round(base * (1 + SECTOR_PRICE * this.sector));
+    return Math.round(base * (1 + SECTOR_PRICE * this.sector) * this.portRate);
+  }
+
+  /** Who holds the port you are in (null at sea). */
+  get portPower(): PowerId | null {
+    return this.encounter.kind === 'port' ? portPower(this.encounter.name) : null;
+  }
+
+  /** Price multiplier in this harbour. */
+  get portRate(): number {
+    const p = this.portPower;
+    return p ? PORT_PRICE[this.tier(p)] : 1;
   }
 
   /** A name for the ship you meet: one you have not fought before, if it can be helped. */
@@ -461,8 +593,161 @@ export class Run {
 
   private begin(enc: Encounter): Encounter {
     this.encounter = enc;
-    this.status = enc.kind === 'battle' ? 'battle' : enc.kind === 'event' ? 'event' : enc.kind === 'port' ? 'port' : 'chart';
+    // A ship that was sighted rather than sprung on you is hailed first.
+    this.status = enc.kind === 'battle' ? (enc.intent ? 'hail' : 'battle') : enc.kind === 'event' ? 'event' : enc.kind === 'port' ? 'port' : 'chart';
     return enc;
+  }
+
+  // --- Hailing a sighted ship ------------------------------------------------------
+
+  /** Whether she means to fight: by how her flag regards you, and merchants never pick a fight. */
+  private intentOf(foe: EnemyDef): Intent {
+    const tier = this.tier(foe.power);
+    if (atLeast(tier, 'friendly')) return 'friendly';
+    if (foe.ai.fleeAt >= 1) return 'wary';
+    if (tier === 'wary') return this.rng.chance(0.5) ? 'hostile' : 'wary';
+    return 'hostile';
+  }
+
+  /** The ship being hailed, and how she greeted you. */
+  private get hailing(): { foe: EnemyDef; intent: Intent; name: string } {
+    if (this.status !== 'hail' || this.encounter.kind !== 'battle' || !this.encounter.intent) throw new Error('No ship to hail');
+    return { foe: enemy(this.encounter.enemy), intent: this.encounter.intent, name: this.encounter.name };
+  }
+
+  /** How she answers your colours, in a line. */
+  hailText(): string {
+    const { foe, intent } = this.hailing;
+    const flag = power(foe.power);
+    switch (intent) {
+      case 'hostile':
+        return this.tier(foe.power) === 'wary'
+          ? `She flies the colours of ${flag.short}. Her captain does not like the look of you, and her guns are run out.`
+          : `She flies the colours of ${flag.short}, and ${flag.short} wants you taken. Her guns are run out.`;
+      case 'wary':
+        return foe.ai.fleeAt >= 1 ? 'She has seen your flag and is crowding on sail to get clear.' : `She flies the colours of ${flag.short} and holds her course, watching you. She will not start a fight.`;
+      case 'friendly':
+        return `She flies the colours of ${flag.short} and dips her ensign to you: a friend.`;
+      case 'commodore':
+        return 'A boat puts off from the flagship under a flag of truce. The Commodore has heard you are no enemy of the King, and offers terms.';
+    }
+  }
+
+  /** What a bribe to let you pass costs. */
+  bribePrice(): number {
+    const { foe } = this.hailing;
+    return Math.round((20 + 15 * this.sector) * (this.tier(foe.power) === 'hostile' ? 1.5 : 1));
+  }
+
+  /** Odds that a captain who meant to fight hears you out instead. */
+  parleyChance(): number {
+    return Math.max(0.05, Math.min(0.85, 0.4 + this.standing[this.hailing.foe.power] / 150));
+  }
+
+  /** Odds she pays toll rather than fight: your guns against hers, and how her flag regards you. */
+  tributeChance(): number {
+    const { foe } = this.hailing;
+    const mine = this.fit.guns.length;
+    const hers = foe.ship.guns.length;
+    return Math.max(0.15, Math.min(0.85, 0.35 + 0.1 * (mine - hers) + this.standing[foe.power] / 200));
+  }
+
+  /** Gold a ship pays as toll: half what her hold would give up after a fight. */
+  tributeGold(): number {
+    const { foe } = this.hailing;
+    return Math.round(((foe.plunder[0] + foe.plunder[1]) / 4) * PLUNDER_MULT * (1 + SECTOR_PLUNDER * this.sector));
+  }
+
+  /** What you can say to her. */
+  hailOptions(): HailOption[] {
+    const { foe, intent } = this.hailing;
+    const tier = this.tier(foe.power);
+    const flag = power(foe.power);
+    const out: HailOption[] = [];
+    const add = (o: Omit<HailOption, 'available'>) => out.push({ ...o, available: !o.blocker });
+    if (intent === 'commodore') {
+      add({ id: 'pardon', label: 'Accept the King’s pardon', detail: 'Strike your colours, swear the oath and go home free. The voyage ends.', fight: 'no' });
+      add({ id: 'attack', label: 'Refuse, and fight', detail: 'Break the blockade the hard way.', fight: 'yes' });
+      return out;
+    }
+    if (intent === 'hostile') {
+      add({ id: 'attack', label: 'Run out the guns', detail: 'Fight her.', fight: 'yes' });
+      add({ id: 'parley', label: 'Hail her and parley', detail: 'Talk her out of it. If she will not listen, she fights.', chance: this.parleyChance(), fight: 'maybe', blocker: tier === 'feud' ? `${flag.name} will not parley` : undefined });
+      const cost = this.bribePrice();
+      add({ id: 'bribe', label: 'Buy her off', detail: 'Gold for her captain to look the other way.', cost, fight: 'no', blocker: tier === 'feud' ? 'blood cannot be bought off' : this.gold < cost ? `needs ${cost} gold` : undefined });
+      add({ id: 'colours', label: 'Run up false colours', detail: `Pass as a friend. If she sees through it she fights, and ${flag.short} remembers.`, chance: FALSE_COLOURS_CHANCE, fight: 'maybe' });
+    } else if (intent === 'wary') {
+      add({ id: 'attack', label: 'Attack her', detail: foe.ai.fleeAt >= 1 ? 'Run her down before she gets away.' : `She would have let you be: ${flag.short} will not forget it.`, fight: 'yes' });
+      add({ id: 'tribute', label: 'Demand toll', detail: 'Fire a gun across her bow and ask for gold. If she refuses, you fight.', chance: this.tributeChance(), fight: 'maybe' });
+      add({ id: 'pass', label: 'Let her go by', detail: `${flag.name} will hear you kept the peace.`, fight: 'no' });
+    } else {
+      add({ id: 'news', label: 'Exchange news', detail: 'Her captain has seen the fleet and knows where it is searching.', fight: 'no' });
+      const full = this.provisions + HAIL_TRADE_PROVISIONS > this.maxProvisions;
+      add({ id: 'trade', label: 'Buy from her stores', detail: `${HAIL_TRADE_PROVISIONS} provisions from her spare stores.`, cost: HAIL_TRADE_PRICE, fight: 'no', blocker: full ? 'hold is full' : this.gold < HAIL_TRADE_PRICE ? `needs ${HAIL_TRADE_PRICE} gold` : undefined });
+      add({ id: 'escort', label: 'Ask her to sail in company', detail: 'She fights beside you in your next battle.', fight: 'no', blocker: tier !== 'allied' ? 'only an ally will' : this.escort ? `${this.escort.name} already sails with you` : undefined });
+      add({ id: 'pass', label: 'Dip your colours and sail on', detail: 'Fair winds.', fight: 'no' });
+      add({ id: 'attack', label: 'Betray her', detail: 'Every flag at sea will hear of it.', fight: 'yes' });
+    }
+    return out;
+  }
+
+  /** Answer her: talk, pay, trick, threaten, or fight. */
+  hail(id: HailId): HailResult {
+    const { foe, intent, name } = this.hailing;
+    const option = this.hailOptions().find((o) => o.id === id);
+    if (!option?.available) throw new Error(`Cannot ${id} now`);
+    const p = foe.power;
+    const enc = this.encounter as Extract<Encounter, { kind: 'battle' }>;
+    const fight = (text: string, changes: string[] = [], aggressor = false): HailResult => {
+      enc.aggressor = aggressor;
+      enc.betrayal = aggressor && intent === 'friendly';
+      this.status = 'battle';
+      return { text, changes, fight: true };
+    };
+    const pass = (text: string, changes: string[] = []): HailResult => {
+      this.status = 'chart';
+      return { text, changes, fight: false };
+    };
+    switch (id) {
+      case 'pardon':
+        this.end('won', 'You accepted the King’s pardon under the guns of the blockade, and sailed home free.', 'The King’s Pardon');
+        return { text: 'You strike your colours to the Commodore and swear the oath. The blockade parts to let you through.', changes: [], fight: false };
+      case 'attack':
+        if (intent === 'hostile' || intent === 'commodore') return fight('You run out the guns.');
+        return fight(intent === 'friendly' ? `You run out the guns on ${name} while her people are still waving.` : 'You run out the guns and bear down on her.', [], true);
+      case 'parley':
+        if (this.rng.chance(this.parleyChance())) return pass(`Her captain hears you out over a glass of wine, and ${name} bears away.`, this.shift(p, 3, false));
+        return fight('Her captain has no time for pirates. Her first gun answers you.');
+      case 'bribe': {
+        const cost = this.bribePrice();
+        this.gold -= cost;
+        return pass(`Her captain pockets ${cost} gold and finds something interesting on the far horizon.`, [`−${cost} gold`, ...this.shift(p, 2, false)]);
+      }
+      case 'colours':
+        if (this.rng.chance(FALSE_COLOURS_CHANCE)) return pass('You run up a friendly ensign and exchange the right signals. She takes you for one of her own and sails on.');
+        return fight('Her captain is not fooled. She runs out her guns, and her flag will remember the trick.', this.shift(p, -FALSE_COLOURS_PENALTY, false));
+      case 'tribute': {
+        if (this.rng.chance(this.tributeChance())) {
+          const gold = this.tributeGold();
+          this.gold += gold;
+          this.plunderTaken += gold;
+          return pass(`She heaves to and sends over a boat with ${gold} gold. Cheaper than a fight, her master says.`, [`+${gold} gold`, ...this.shift(p, -4, true)]);
+        }
+        return fight('She answers your gun with her own. So be it.', [], true);
+      }
+      case 'pass':
+        return pass(intent === 'friendly' ? 'Fair winds, and she is gone.' : `You let ${name} go about her business.`, this.shift(p, 2, false));
+      case 'news':
+        this.navy -= NEWS_SETBACK;
+        return pass('Her captain marks the fleet’s search on your chart. You can keep clear of it.', ['You gain on the Navy', ...this.shift(p, 1, false)]);
+      case 'trade':
+        this.gold -= HAIL_TRADE_PRICE;
+        this.provisions += HAIL_TRADE_PROVISIONS;
+        return pass('Casks and biscuit come across in her boat.', [`−${HAIL_TRADE_PRICE} gold`, `+${HAIL_TRADE_PROVISIONS} provisions`]);
+      case 'escort':
+        this.escort = { name, power: p };
+        return pass(`${name} falls in astern. Her captain will stand by you in the next fight.`);
+    }
   }
 
   /** Between nodes: wounds mend a little (not on empty stores) and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
@@ -494,7 +779,11 @@ export class Run {
     // Deeper sectors field better-found ships; the blockade frigate has her own fit.
     const ship = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : this.sector);
     const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull);
+    // The Brethren's sloops have already been at the blockade frigate.
+    const aided = this.encounter.boss && this.tier('brethren') === 'allied';
     return new Battle(this.ship, { ...ship, name: this.encounter.name, hull }, {
+      enemyHull: aided ? Math.round(hull * (1 - BRETHREN_AID)) : undefined,
+      consort: this.escort ? { name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE } : undefined,
       seed: this.rng.int(2 ** 31),
       enemyAI: foe.ai,
       playerCondition: this.condition,
@@ -542,6 +831,18 @@ export class Run {
     } else if (o.kind === 'enemyEscaped' && foe.faction !== 'navy') {
       this.navy += ALARM_DELAY;
       lines.push('She will raise the alarm. The fleet closes in.');
+    }
+
+    if (!enc.boss) {
+      // Her flag remembers how you treated her, and its friends and enemies hear of it.
+      const d = (OUTCOME_STANDING[o.kind] ?? 0) - (enc.aggressor ? (enc.betrayal ? BETRAYAL : AGGRESSION) : 0);
+      if (d) lines.push(...this.shift(foe.power, d, true));
+      const job = this.commission;
+      if (o.won && job?.kind === 'hunt' && job.target === foe.power) lines.push(...this.fulfil(job));
+    }
+    if (this.escort) {
+      lines.push(`${this.escort.name} dips her ensign and parts company.`);
+      this.escort = null;
     }
 
     if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') {
@@ -658,6 +959,10 @@ export class Run {
     if (n.minSector !== undefined && this.sector < n.minSector) return 'too early';
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
     if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
+    for (const [p, v] of Object.entries(n.standing ?? {}) as [PowerId, number | { max: number }][]) {
+      if (typeof v === 'number' && this.standing[p] < v) return `${power(p).name} must think better of you`;
+      if (typeof v === 'object' && this.standing[p] > v.max) return `${power(p).name} like you too well`;
+    }
     return null;
   }
 
@@ -790,6 +1095,7 @@ export class Run {
       this.navy += e.navy;
       out.push(e.navy > 0 ? 'The Navy gains on you' : 'You gain on the Navy');
     }
+    for (const [p, d] of Object.entries(e.standing ?? {}) as [PowerId, number][]) out.push(...this.shift(p, d, false));
     return out;
   }
 
@@ -836,7 +1142,76 @@ export class Run {
   }
 
   canHire(): boolean {
-    return this.status === 'port' && this.gold >= CREW_PRICE && this.condition.crew.length < this.maxCrew;
+    return this.status === 'port' && this.gold >= CREW_PRICE && this.condition.crew.length < this.maxCrew && !this.portFeud;
+  }
+
+  /** A harbour whose masters want you dead: nobody will sign on, and nobody offers work. */
+  get portFeud(): boolean {
+    const p = this.portPower;
+    return !!p && this.tier(p) === 'feud';
+  }
+
+  /** Come into harbour: the armoury and chandler's stock, a dispatch delivered, and work on offer. */
+  private enterPort(name: string, stock: string[]): Encounter {
+    const welcome: string[] = [];
+    const job = this.commission;
+    if (job?.kind === 'dispatch' && job.port !== name) welcome.push(...this.fulfil(job));
+    const enc: Extract<Encounter, { kind: 'port' }> = { kind: 'port', name, rested: false, stock, fittings: this.stockFittings(), welcome };
+    this.begin(enc);
+    enc.commission = this.offerCommission(name);
+    return enc;
+  }
+
+  /** What a gift to the harbour's masters costs. */
+  giftPrice(): number {
+    return Math.round(GIFT_PRICE * (1 + SECTOR_PRICE * this.sector));
+  }
+
+  canGift(): boolean {
+    return this.inPort && this.encounter.kind === 'port' && !this.encounter.gifted && this.gold >= this.giftPrice();
+  }
+
+  /** Pay your respects to whoever holds the port: gold for goodwill, once a visit. */
+  gift(): string[] {
+    const p = this.portPower;
+    if (!this.canGift() || !p || this.encounter.kind !== 'port') return [];
+    const cost = this.giftPrice();
+    this.gold -= cost;
+    this.encounter.gifted = true;
+    return [`−${cost} gold`, ...this.shift(p, GIFT_STANDING, false)];
+  }
+
+  /** Work the port's masters would give you: hunting their enemies, or carrying their letters on. */
+  private offerCommission(port: string): Commission | null {
+    if (this.portFeud) return null;
+    const patron = portPower(port);
+    const ahead = new Set(SECTORS.slice(this.sector).flatMap((s) => s.enemies.map(([id]) => enemy(id).power)));
+    const targets = POWER_IDS.filter((p) => p !== patron && relation(patron, p) < 0 && ahead.has(p));
+    const scale = 1 + SECTOR_PLUNDER * this.sector;
+    if (targets.length && this.rng.chance(0.7)) {
+      const target = this.rng.weighted(targets, (p) => -relation(patron, p));
+      return { patron, kind: 'hunt', target, port, gold: Math.round(HUNT_REWARD * scale), standing: COMMISSION_STANDING };
+    }
+    return { patron, kind: 'dispatch', port, gold: Math.round(DISPATCH_REWARD * scale), standing: Math.round(COMMISSION_STANDING * 0.7) };
+  }
+
+  canTakeCommission(): boolean {
+    return this.inPort && this.encounter.kind === 'port' && !!this.encounter.commission && !this.commission;
+  }
+
+  takeCommission(): boolean {
+    if (!this.canTakeCommission() || this.encounter.kind !== 'port') return false;
+    this.commission = this.encounter.commission!;
+    this.encounter.commission = null;
+    return true;
+  }
+
+  /** Pay out a finished commission. */
+  private fulfil(job: Commission): string[] {
+    this.commission = null;
+    this.gold += job.gold;
+    const what = job.kind === 'hunt' ? 'Commission fulfilled' : 'Letters delivered';
+    return [`${what}: +${job.gold} gold from ${power(job.patron).short}.`, ...this.shift(job.patron, job.standing, false)];
   }
 
   hireCrew(): string | null {
@@ -1018,6 +1393,9 @@ export class Run {
       sector: this.sector,
       provisions: this.provisions,
       fittings: this.fittings,
+      standing: this.standing,
+      escort: this.escort,
+      commission: this.commission,
     });
   }
 
@@ -1050,6 +1428,9 @@ export class Run {
     run.sector = s.sector ?? (s.chart.columns === SECTOR_COLUMNS ? 0 : SECTORS.length - 1);
     run.provisions = s.provisions ?? DIFFICULTY[run.difficulty].provisions;
     run.fittings = s.fittings ?? [];
+    run.standing = { ...freshStanding(), ...s.standing };
+    run.escort = s.escort ?? null;
+    run.commission = s.commission ?? null;
     return run;
   }
 }
@@ -1069,3 +1450,10 @@ const FORAGE_LINES = [
   'A sea turtle, sleeping on the swell, is hoisted aboard. (+1 provision)',
   'A drifting crate of ship’s biscuit, barely damp. Somebody’s loss. (+1 provision)',
 ];
+
+/** A commission in a line, for the port and the ledger. */
+export function describeCommission(c: Commission): string {
+  return c.kind === 'hunt'
+    ? `Take or sink a ship of ${power(c.target!).short} for ${power(c.patron).short}: ${c.gold} gold.`
+    : `Carry ${power(c.patron).short}’s letters from ${c.port} to any other port: ${c.gold} gold.`;
+}

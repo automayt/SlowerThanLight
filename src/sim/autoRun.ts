@@ -1,5 +1,5 @@
 import { STEP, type Battle } from './Battle';
-import { Run, type BattleReport, type UpgradeId } from './Run';
+import { Run, type BattleReport, type HailId, type UpgradeId } from './Run';
 import type { SystemId } from './types';
 
 export interface AutoRunOptions {
@@ -11,6 +11,8 @@ export interface AutoRunOptions {
   shop?: boolean;
   /** Send boarding parties of this size in battle. */
   boardWith?: number;
+  /** Talk before fighting: buy off or parley with warships, sail with allies, take commissions and court ports. */
+  diplomacy?: boolean;
   /** Called after every simulation step of every battle (for tests that check the fight as it goes). */
   onTick?: (battle: Battle) => void;
 }
@@ -77,6 +79,9 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
       }
       break;
     }
+    case 'hail':
+      run.hail(hailChoice(run, opts));
+      break;
     case 'event': {
       const ev = run.currentEvent();
       const i = ev.choices.findIndex((_, j) => run.canChoose(j));
@@ -90,11 +95,33 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
       if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
       // Victuals first: enough for the rest of the sector and a little over.
       while (run.provisions < 10 && run.buyProvisions(1));
+      if (opts.diplomacy) {
+        run.takeCommission();
+        if (run.gold > 120) run.gift();
+      }
       if (opts.shop !== false) shop(run);
       run.leavePort();
       break;
     }
   }
+}
+
+/**
+ * What to say to a sighted ship. A plain captain fights anything that isn't a friend, as before diplomacy;
+ * a diplomat sails with allies, pays off warships when the purse allows and parleys when the odds are fair.
+ */
+function hailChoice(run: Run, opts: AutoRunOptions): HailId {
+  const options = run.hailOptions().filter((o) => o.available);
+  const has = (id: HailId) => options.some((o) => o.id === id);
+  if (has('pardon')) return opts.diplomacy ? 'pardon' : 'attack';
+  if (has('news') || has('escort')) {
+    if (opts.diplomacy && has('escort')) return 'escort';
+    return opts.diplomacy && has('news') ? 'news' : 'pass';
+  }
+  if (!opts.diplomacy || has('tribute')) return 'attack';
+  if (has('bribe') && run.gold >= run.bribePrice() + 40) return 'bribe';
+  if (has('parley') && run.parleyChance() >= 0.4) return 'parley';
+  return 'attack';
 }
 
 /** Fittings a simple captain values, best first. */

@@ -311,7 +311,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'The escort was waiting for exactly that.', battle: 'cutter' } },
         ],
       },
-      { label: 'Let them pass', outcomes: [{ weight: 1, effect: { text: 'Not today.' } }] },
+      { label: 'Let them pass', outcomes: [{ weight: 1, effect: { text: 'Not today. The merchant houses will hear of your restraint.', standing: { trade: 3 } } }] },
     ],
   },
   {
@@ -323,7 +323,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       {
         label: 'Chase her down',
         outcomes: [
-          { weight: 1, effect: { text: 'You run her down. Her orders tell you exactly where the squadron means to search.', navy: -1, gold: 10 } },
+          { weight: 1, effect: { text: 'You run her down. Her orders tell you exactly where the squadron means to search.', navy: -1, gold: 10, standing: { crown: -4 } } },
           { weight: 1, effect: { text: 'She is faster than you. Now the squadron knows your position too.', navy: 0.5 } },
         ],
       },
@@ -337,7 +337,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     needs: { minSector: 1 },
     text: 'A Spanish coastguard schooner fires a gun to leeward and signals you to heave to and be searched.',
     choices: [
-      { label: 'Pay the customary bribe', cost: 20, outcomes: [{ weight: 1, effect: { text: 'The Spanish lieutenant pockets the gold and wishes you a pleasant voyage.' } }] },
+      { label: 'Pay the customary bribe', cost: 20, outcomes: [{ weight: 1, effect: { text: 'The Spanish lieutenant pockets the gold and wishes you a pleasant voyage.', standing: { spain: 5 } } }] },
       { label: 'Run out the guns', outcomes: [{ weight: 1, effect: { text: 'Spain will have to search you the hard way.', battle: 'guarda' } }] },
       { label: 'Show them your heels', outcomes: [
         { weight: 1, effect: { text: 'You outrun her by dusk.', navy: 0.5 } },
@@ -355,7 +355,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       {
         label: 'Board her by night and free them',
         outcomes: [
-          { weight: 2, effect: { text: 'Her sleepy guard surrenders without a shot. Two of the freed men ask to stay.', recruit: 2, navy: 0.5 } },
+          { weight: 2, effect: { text: 'Her sleepy guard surrenders without a shot. Two of the freed men ask to stay.', recruit: 2, navy: 0.5, standing: { crown: -8, trade: 4 } } },
           { weight: 1, effect: { text: 'A sentry fires. Her crew are awake and armed.', battle: 'cutter' } },
         ],
       },
@@ -369,8 +369,8 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     needs: { minCol: 2 },
     text: 'A Navy sloop has run hard onto a reef. Her crew are throwing guns overboard to lighten her.',
     choices: [
-      { label: 'Plunder her stores while she is helpless', outcomes: [{ weight: 1, effect: { text: 'Powder, shot, and the purser’s strongbox. The Navy will be furious.', gold: 30, navy: 0.5 } }] },
-      { label: 'Help haul her off', outcomes: [{ weight: 1, effect: { text: 'Her captain is speechless. He swears his report will mention a ship that looked nothing like yours.', navy: -1, flag: 'gallant' } }] },
+      { label: 'Plunder her stores while she is helpless', outcomes: [{ weight: 1, effect: { text: 'Powder, shot, and the purser’s strongbox. The Navy will be furious.', gold: 30, navy: 0.5, standing: { crown: -8 } } }] },
+      { label: 'Help haul her off', outcomes: [{ weight: 1, effect: { text: 'Her captain is speechless. He swears his report will mention a ship that looked nothing like yours.', navy: -1, flag: 'gallant', standing: { crown: 12 } } }] },
       { label: 'Laugh and sail on', outcomes: [{ weight: 1, effect: { text: 'One less ship hunting you, for a while.', crewHp: 5 } }] },
     ],
   },
@@ -379,9 +379,9 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     title: 'Brethren of the Coast',
     text: 'Another pirate sloop heaves to under the black flag and invites your officers across for rum.',
     choices: [
-      { label: 'Trade rum for their charts', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Their charts mark every Navy patrol for fifty leagues.', navy: -1 } }] },
-      { label: 'Buy out a malcontent', cost: 20, outcomes: [{ weight: 1, effect: { text: 'One of their gunners fancies a change of captain.', recruit: 1 } }] },
-      { label: 'Exchange courtesies and part', outcomes: [{ weight: 1, effect: { text: 'Fair winds, brothers.' } }] },
+      { label: 'Trade rum for their charts', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Their charts mark every Navy patrol for fifty leagues.', navy: -1, standing: { brethren: 3 } } }] },
+      { label: 'Buy out a malcontent', cost: 20, outcomes: [{ weight: 1, effect: { text: 'One of their gunners fancies a change of captain.', recruit: 1, standing: { brethren: -5 } } }] },
+      { label: 'Exchange courtesies and part', outcomes: [{ weight: 1, effect: { text: 'Fair winds, brothers.', standing: { brethren: 8 } } }] },
     ],
   },
   {
@@ -393,7 +393,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       {
         label: 'Cut her out',
         outcomes: [
-          { weight: 2, effect: { text: 'Her master strikes before you fire a shot. You strip her hold and let her go, a good deal lighter.', provisions: 6, navy: 0.5 } },
+          { weight: 2, effect: { text: 'Her master strikes before you fire a shot. You strip her hold and let her go, a good deal lighter.', provisions: 6, navy: 0.5, standing: { crown: -5 } } },
           { weight: 1, effect: { text: 'The escort was closer than she looked.', battle: 'cutter' } },
         ],
       },
@@ -423,7 +423,7 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       { label: 'Buy medicines', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Laudanum, bark and clean linen.', crewHp: 40 } }] },
       { label: 'Buy timber and cordage', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Enough to patch her properly.', hull: 5 } }] },
       { label: 'Buy his old 6-pounder', cost: 18, needs: { gunPort: true }, outcomes: [{ weight: 1, effect: { text: 'A bit pitted, but she shoots.', gun: 'pdr6' } }] },
-      { label: 'Trade news over gin', outcomes: [{ weight: 1, effect: { text: 'He has seen the Navy squadron, and tells you which way it was heading.', navy: -0.5 } }] },
+      { label: 'Trade news over gin', outcomes: [{ weight: 1, effect: { text: 'He has seen the Navy squadron, and tells you which way it was heading.', navy: -0.5, standing: { trade: 3 } } }] },
     ],
   },
   {

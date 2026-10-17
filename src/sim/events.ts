@@ -13,5 +13,7 @@ export type BattleEvent =
   | { t: 'log'; side: Side; text: string }
   /** The boss rallies for her second phase. */
   | { t: 'rally'; side: Side; text: string }
+  /** A friendly ship in company fires into the enemy (`side`); the hit follows as its own event. */
+  | { t: 'consort'; side: Side; name: string; room: string }
   /** `side` is the side sending boarders. */
   | { t: 'board'; side: Side; count: number; room: string };

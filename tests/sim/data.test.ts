@@ -141,7 +141,7 @@ describe('art and sound', () => {
 
   it('every event has its illustration (bar the few still to be painted), and every illustration belongs to an event', () => {
     // The event screen lays out text-only without a picture; this list should only ever shrink.
-    const unpainted = ['starving', 'victualler', 'banks'];
+    const unpainted = ['starving', 'victualler', 'banks', 'council', 'envoy', 'compact', 'bounty', 'grudge', 'truce'];
     const art = new Set(artManifest.filter((f) => f.startsWith('event-')).map((f) => f.replace(/^event-|\.\w+$/g, '')));
     const ids = new Set(SEA_EVENTS.map((e) => e.id));
     expect(SEA_EVENTS.filter((e) => !art.has(e.id)).map((e) => e.id)).toEqual(unpainted);

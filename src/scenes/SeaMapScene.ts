@@ -500,6 +500,11 @@ export class SeaMapScene extends Phaser.Scene {
     this.refreshChart();
     switch (enc.kind) {
       case 'battle': {
+        // A ship sighted rather than sprung on you is hailed before anyone fires.
+        if (run.status === 'hail') {
+          this.scene.start('Hail');
+          break;
+        }
         const foe = run.currentEnemy();
         const title = enc.boss ? 'The Blockade' : enc.ambush ? 'Overrun!' : 'Sail Ho!';
         const hunger = run.hungerNote ? `${run.hungerNote}\n\n` : '';

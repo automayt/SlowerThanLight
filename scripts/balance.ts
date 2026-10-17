@@ -18,6 +18,8 @@ interface Captain {
   label: string;
   focus?: SystemId;
   board?: number;
+  /** Talk before fighting (see AutoRunOptions.diplomacy). Voyages only. */
+  diplomacy?: boolean;
 }
 
 const CAPTAINS: Captain[] = [
@@ -25,6 +27,7 @@ const CAPTAINS: Captain[] = [
   { label: 'focus guns', focus: 'guns' },
   { label: 'focus helm', focus: 'helm' },
   { label: 'boarder', focus: 'guns', board: 2 },
+  { label: 'diplomat', focus: 'guns', diplomacy: true },
 ];
 
 function fight(def: ShipDef, foe: EnemyDef, cap: Captain) {
@@ -63,7 +66,7 @@ for (const foe of ONLY === 'voyages' ? [] : ENEMY_LIST.filter((e) => !ONLY || ON
 const VOYAGES = Math.max(10, Math.round(RUNS / 4));
 if (!ONLY || ONLY === 'voyages') {
   console.log(`\n== Whole voyages (${VOYAGES} per ship) ==`);
-  for (const { label, focus, board } of CAPTAINS) {
+  for (const { label, focus, board, diplomacy } of CAPTAINS) {
     for (const def of PLAYER_SHIPS) {
       let won = 0;
       let legs = 0;
@@ -73,7 +76,7 @@ if (!ONLY || ONLY === 'voyages') {
       let fights = 0;
       const killers: Record<string, number> = {};
       for (let seed = 1; seed <= VOYAGES; seed++) {
-        const { run, battles } = autoRun(new Run(def.id, seed), { focus, boardWith: board });
+        const { run, battles } = autoRun(new Run(def.id, seed), { focus, boardWith: board, diplomacy });
         if (run.status === 'won') won++;
         legs += run.legs.sailed;
         gold += run.plunderTaken;

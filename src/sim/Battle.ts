@@ -1,5 +1,5 @@
 import { BOARD_TIME, canGrapple, land, updateBoarding, type Transit } from './Boarding';
-import { changeShot, NO_HELM_RELOAD, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
+import { applyHit, changeShot, NO_HELM_RELOAD, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
 import { orderMove, updateCrew } from './Crew';
 import { ShipAI, type AIOptions } from './EnemyAI';
 import type { BattleEvent } from './events';
@@ -41,6 +41,16 @@ export interface BattleOptions {
   playerNets?: boolean;
   /** The final battle: low on hull, the enemy rallies once (repairs, fires out, loads faster). */
   boss?: boolean;
+  /** The enemy comes into the fight already this battered (allies have been at her). */
+  enemyHull?: number;
+  /** A friendly ship in company: every `every` seconds her broadside puts a ball of `damage` into the enemy. */
+  consort?: Consort;
+}
+
+export interface Consort {
+  name: string;
+  every: number;
+  damage: number;
 }
 
 /** Hull fraction at which a boss rallies, and how much faster she then loads. */
@@ -96,6 +106,9 @@ export class Battle {
   readonly seed: number;
   readonly allowEscape: boolean;
   readonly boss: boolean;
+  readonly consort: Consort | null;
+  /** Seconds since the consort last fired. */
+  private consortTimer = 0;
   /** Whether the boss has rallied yet. */
   rallied = false;
   /** The enemy runs from the first moment (a merchant or smuggler): only crippling her stops her. */
@@ -124,6 +137,7 @@ export class Battle {
     this.rng = new Rng(this.seed);
     this.allowEscape = opts.allowEscape ?? true;
     this.boss = opts.boss ?? false;
+    this.consort = opts.consort ?? null;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
     manStations(this.player);
@@ -134,6 +148,7 @@ export class Battle {
     this.enemy.reloadRate = opts.enemyReload ?? 1;
     this.player.reloadRate = opts.playerReload ?? 1;
     this.player.boardingNets = opts.playerNets ?? false;
+    if (opts.enemyHull !== undefined) this.enemy.hull = Math.max(1, Math.min(this.enemy.hull, opts.enemyHull));
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     const actions = (side: Side) => ({
       board: (crew: Crew[], room: string) => this.board(side, crew, room),
@@ -222,6 +237,7 @@ export class Battle {
       else updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
+    if (this.consort) this.updateConsort(dt);
     // Steering under fire is how helmsmen learn.
     const helmsman = this.player.stationed('helm');
     if (helmsman) train(helmsman, 'seamanship', dt * 0.5, this.events);
@@ -254,6 +270,17 @@ export class Battle {
     if (hold) for (const g of this.player.guns) g.target = null;
     updateGuns(this.player, this.enemy, dt, this.projectiles, this.events, this.stats.player);
     if (hold) this.player.guns.forEach((g, i) => (g.target = targets[i]));
+  }
+
+  /** The consort's broadside, now and then, into a random room of the enemy (held while our boarders are over there). */
+  private updateConsort(dt: number): void {
+    const c = this.consort!;
+    this.consortTimer += dt;
+    if (this.consortTimer < c.every || this.boardersOut) return;
+    this.consortTimer = 0;
+    const room = this.rng.pick([...this.enemy.rooms.keys()]);
+    this.events.push({ t: 'consort', side: 'enemy', name: c.name, room });
+    applyHit(this.enemy, room, 'round', c.damage, this.rng, this.events);
   }
 
   /** The boss's second wind: every system repaired, fires out, bulwarks up, her guns served a little faster. */

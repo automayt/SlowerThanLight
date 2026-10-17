@@ -23,7 +23,7 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
         label: 'Accept, though your pockets are light',
         outcomes: [{ weight: 1, effect: { text: 'You take the pardon and a berth as mate on a logwood trader. It is honest work. You hate every minute of it.', ending: 'Pardoned and Penniless' } }],
       },
-      { label: 'Tear it up in front of the crew', outcomes: [{ weight: 1, effect: { text: 'The crew roar their approval. No king owns this ship.', crewHp: 20 } }] },
+      { label: 'Tear it up in front of the crew', outcomes: [{ weight: 1, effect: { text: 'The crew roar their approval. No king owns this ship.', crewHp: 20, standing: { brethren: 10, crown: -10 } } }] },
     ],
   },
 
@@ -53,7 +53,7 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'The candle is relit. He grins. "You have nerve." He sends you back with a fine 18-pounder and his compliments.', gun: 'pdr18' } },
         ],
       },
-      { label: 'Offer him a share of your plunder', cost: 30, outcomes: [{ weight: 1, effect: { text: 'He laughs and pockets it. "I will lead the King’s ships a merry dance for you." He does.', navy: -2, flag: 'blackbeard' } }] },
+      { label: 'Offer him a share of your plunder', cost: 30, outcomes: [{ weight: 1, effect: { text: 'He laughs and pockets it. "I will lead the King’s ships a merry dance for you." He does.', navy: -2, flag: 'blackbeard', standing: { brethren: 10 } } }] },
       { label: 'Find an excuse to leave', outcomes: [{ weight: 1, effect: { text: 'You back out of the cabin and row hard. Behind you he is roaring with laughter.' } }] },
     ],
   },
@@ -132,8 +132,8 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
     needs: { minCol: 2 },
     text: 'A pleasure barge drifts with a broken rudder. Aboard is Lady Arabella Fairfax, daughter of the Governor of Jamaica, with a parasol and a remarkably steady gaze.',
     choices: [
-      { label: 'Hold her for ransom', outcomes: [{ weight: 1, effect: { text: 'The Governor pays, and then sends every ship he has after you.', gold: 80, navy: 1.5 } }] },
-      { label: 'Return her with your compliments', outcomes: [{ weight: 1, effect: { text: 'The Governor, mortified and grateful, finds reasons to keep the squadron in port for a week.', navy: -1.5, flag: 'gallant' } }] },
+      { label: 'Hold her for ransom', outcomes: [{ weight: 1, effect: { text: 'The Governor pays, and then sends every ship he has after you.', gold: 80, navy: 1.5, standing: { crown: -15 } } }] },
+      { label: 'Return her with your compliments', outcomes: [{ weight: 1, effect: { text: 'The Governor, mortified and grateful, finds reasons to keep the squadron in port for a week.', navy: -1.5, flag: 'gallant', standing: { crown: 15 } } }] },
       { label: 'Ask what she wants', outcomes: [{ weight: 1, effect: { text: 'She closes the parasol. "What I want, Captain, is to never go back."', next: 'governor-wish' } }] },
     ],
   },
@@ -144,8 +144,8 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
     unique: true,
     text: 'She can navigate by the stars, keep accounts, and fire a pistol, and she would rather hang than marry the old admiral her father has chosen for her.',
     choices: [
-      { label: 'Sign her on', outcomes: [{ weight: 1, effect: { text: 'She signs the articles in a neat hand. The Governor will be apoplectic, and the Navy doubly keen.', recruitName: 'Arabella Fairfax', navy: 1 } }] },
-      { label: 'Take her home anyway', outcomes: [{ weight: 1, effect: { text: 'She does not speak to you again. Her father, however, is grateful.', navy: -1 } }] },
+      { label: 'Sign her on', outcomes: [{ weight: 1, effect: { text: 'She signs the articles in a neat hand. The Governor will be apoplectic, and the Navy doubly keen.', recruitName: 'Arabella Fairfax', navy: 1, standing: { crown: -10 } } }] },
+      { label: 'Take her home anyway', outcomes: [{ weight: 1, effect: { text: 'She does not speak to you again. Her father, however, is grateful.', navy: -1, standing: { crown: 10 } } }] },
     ],
   },
 
@@ -157,7 +157,7 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
     unique: true,
     text: 'A French agent with a lace cravat comes aboard from a fishing boat. France will issue you a letter of marque against English shipping. You would be a privateer, not a pirate.',
     choices: [
-      { label: 'Accept the commission', outcomes: [{ weight: 1, effect: { text: 'Navy captains hesitate to hang a man with French papers. The squadron’s orders are suddenly less clear.', navy: -1.5, flag: 'marque' } }] },
+      { label: 'Accept the commission', outcomes: [{ weight: 1, effect: { text: 'Navy captains hesitate to hang a man with French papers. The squadron’s orders are suddenly less clear.', navy: -1.5, flag: 'marque', standing: { france: 30, crown: -10 } } }] },
       { label: 'Decline politely', outcomes: [{ weight: 1, effect: { text: 'He shrugs in a very French way and leaves you a bottle of brandy.', crewHp: 5 } }] },
     ],
   },
@@ -170,8 +170,8 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
     unique: true,
     text: 'You pull a half-drowned boy of fourteen out of the sea, still clinging to a spar. His uniform says midshipman. He tells you, proudly, that his uncle is an admiral.',
     choices: [
-      { label: 'Ransom him', outcomes: [{ weight: 1, effect: { text: 'The admiral pays handsomely, and swears to see you hang.', gold: 50, navy: 1 } }] },
-      { label: 'Put him ashore near a Navy station', outcomes: [{ weight: 1, effect: { text: 'He salutes you from the beach. His report, you hear later, is very confused about your heading.', navy: -1, flag: 'gallant' } }] },
+      { label: 'Ransom him', outcomes: [{ weight: 1, effect: { text: 'The admiral pays handsomely, and swears to see you hang.', gold: 50, navy: 1, standing: { crown: -10 } } }] },
+      { label: 'Put him ashore near a Navy station', outcomes: [{ weight: 1, effect: { text: 'He salutes you from the beach. His report, you hear later, is very confused about your heading.', navy: -1, flag: 'gallant', standing: { crown: 10 } } }] },
       { label: 'Teach him a real sailor’s trade', outcomes: [{ weight: 1, effect: { text: 'He takes to piracy like a duck to water.', recruitName: 'Midshipman Pell' } }] },
     ],
   },

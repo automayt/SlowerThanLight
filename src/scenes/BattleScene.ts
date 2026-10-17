@@ -642,6 +642,14 @@ export class BattleScene extends Phaser.Scene {
       case 'log':
         this.hud.addLog(ev.text);
         break;
+      case 'consort': {
+        // Our consort's broadside comes in from beyond her far side.
+        playSfx(this, 'cannon', 0.35);
+        const c = view.roomCenter(ev.room);
+        this.floatText(c.x, c.y - 40, ev.name.toUpperCase(), '#9be37f');
+        this.hud.addLog(`${ev.name} fires into her!`, COLORS.textGood);
+        break;
+      }
       case 'rally':
         playSfx(this, 'bell', 0.6);
         this.cameras.main.shake(400, 0.005);
