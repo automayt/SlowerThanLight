@@ -707,6 +707,26 @@
         "stem": "event-guarda",
         "seed": 6048,
         "prompt": "Spanish coastguard schooner firing a warning gun, smoke, red and gold flag, people shown as small or mid-distance figures"
+      },
+      {
+        "stem": "event-guarda_r2",
+        "seed": 9131,
+        "prompt": "A Spanish guarda costa coastguard schooner with two masts and a red and gold Spanish flag fires a single warning gun from her bow, a puff of white gunpowder smoke drifting over the water, a small white splash of the shot falling short in the foreground, green Caribbean sea, distant coastline, a lone ship, three-quarter bow view"
+      },
+      {
+        "stem": "event-guarda_r3",
+        "seed": 9132,
+        "prompt": "A lean Spanish coastguard patrol schooner bearing down under full sail on a bright sea, a cloud of white smoke rolling from a gun port near her bow as she fires a warning shot, red and gold flag streaming, a low green island behind"
+      },
+      {
+        "stem": "event-guarda_r4",
+        "seed": 9133,
+        "prompt": "A Spanish guarda costa coastguard schooner with two raked masts and a single red and gold Spanish flag at the masthead, a big round cloud of white gunsmoke drifting from one of her bow gun ports, ahead of her a tall white plume of water thrown up where her warning shot fell into the sea, bright Caribbean sea and a low green island, a lone ship, three-quarter bow view"
+      },
+      {
+        "stem": "event-guarda_r5",
+        "seed": 9134,
+        "prompt": "An armed Spanish patrol schooner flying one red and gold Spanish flag sails straight toward the viewer across a turquoise sea, a puff of grey-white cannon smoke rolling away from her side, a column of white spray rising from the water in the foreground where a cannonball has landed, palm-covered coast behind, a lone ship"
       }
     ],
     "event-pressgang": [
@@ -781,6 +801,16 @@
         "stem": "event-pardon_r1",
         "seed": 7020,
         "prompt": "On a ship's deck a naval officer holds up a large rolled parchment with a dangling red wax seal, seen from behind, beside a small sloop flying a plain white flag of truce"
+      },
+      {
+        "stem": "event-pardon_r2",
+        "seed": 9141,
+        "prompt": "On the quarterdeck of a pirate ship a ragged pirate captain reads a royal proclamation, a large unrolled parchment sheet with a heavy red wax seal hanging from a ribbon, his crew crowded around listening, a small naval sloop flying a plain white flag of truce alongside, bright morning light"
+      },
+      {
+        "stem": "event-pardon_r3",
+        "seed": 9142,
+        "prompt": "A naval officer in a blue coat standing in a rowing boat holds up an unrolled royal parchment with a red wax seal toward a pirate ship, a plain white flag of truce on the boat staff, pirates leaning over the rail above, calm blue sea"
       }
     ],
     "event-blackbeard": [
@@ -1159,6 +1189,42 @@
         "stem": "enemy-sloop",
         "seed": 8104,
         "prompt": "An early 18th century Royal Navy ship-rigged sloop of war with three masts and square sails, a single row of open gun ports with cannons run out, red-coated marines in the fighting tops, a long red ensign streaming from the stern, smartly handled in a fresh breeze on a bright blue sea, a lone warship, broadside view"
+      }
+    ],
+    "event-starving": [
+      {
+        "stem": "event-starving",
+        "seed": 9101,
+        "prompt": "A battered open wooden longboat crammed with gaunt, sunburnt, ragged shipwreck survivors drifting on a flat glassy tropical sea, the men holding up their empty hands in silent appeal, a tattered petticoat tied to an oar as a flag, the bow of a sailing ship looming in the foreground, harsh midday glare"
+      },
+      {
+        "stem": "event-starving_r1",
+        "seed": 9102,
+        "prompt": "Seen from the deck of a sailing ship, a small crowded longboat of starving shipwrecked sailors in torn shirts drifts alongside on a calm turquoise sea, thin bearded men reaching up with outstretched hands, an oar raised with a white rag, pale hot sky"
+      }
+    ],
+    "event-victualler": [
+      {
+        "stem": "event-victualler",
+        "seed": 9111,
+        "prompt": "A broad deep-laden three-masted Royal Navy victualling store ship riding low in the water, her deck stacked with barrels and casks of salt pork, biscuit and rum, a red ensign at her stern, wallowing slowly through a long swell, a single tiny escort sloop far away on the horizon, afternoon light, a lone ship, three-quarter bow view"
+      },
+      {
+        "stem": "event-victualler_r1",
+        "seed": 9112,
+        "prompt": "A heavy slow merchant store ship with a fat round hull and three masts under plain sails, riding very low under a full cargo of barrels and crates lashed on deck, a red ensign, sailing alone through rolling grey-green sea, a tiny distant sail on the horizon, warm late light, broadside view"
+      }
+    ],
+    "event-banks": [
+      {
+        "stem": "event-banks",
+        "seed": 9121,
+        "prompt": "Sailors leaning over the rail of a wooden sailing ship hauling up fish on hand lines, a big silver snapper flapping on deck in a bucket, the green shoal water below boiling with fish, seabirds wheeling and diving all around, bright sunny tropical sky, cheerful"
+      },
+      {
+        "stem": "event-banks_r1",
+        "seed": 9122,
+        "prompt": "A sailing ship hove to over a patch of pale green shallow water teeming with leaping fish, flocks of white seabirds diving into the sea, sailors in striped shirts dangling fishing lines from the rail and the bowsprit, brilliant afternoon sunlight on the sea"
       }
     ]
   }

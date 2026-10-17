@@ -135,7 +135,9 @@ def finalize(name, stem):
     man["model"] = MODEL
     if name + ".ogg" not in man["files"]:
         man["files"].append(name + ".ogg")
-    json.dump(man, open(MAN + ".tmp", "w"), indent=2); os.replace(MAN + ".tmp", MAN)
+    with open(MAN + ".tmp", "w", newline="\n") as f:
+        json.dump(man, f, indent=2); f.write("\n")
+    os.replace(MAN + ".tmp", MAN)
     return info
 
 

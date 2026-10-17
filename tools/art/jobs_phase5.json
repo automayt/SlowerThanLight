@@ -88,5 +88,23 @@
     "h": 768,
     "kw": { "lora_s": 0.45 },
     "prompt": "A naval officer in a blue coat standing in a rowing boat holds up an unrolled royal parchment with a red wax seal toward a pirate ship, a plain white flag of truce on the boat staff, pirates leaning over the rail above, calm blue sea"
+  },
+  {
+    "name": "event-guarda_r4",
+    "model": "flux",
+    "seed": 9133,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A Spanish guarda costa coastguard schooner with two raked masts and a single red and gold Spanish flag at the masthead, a big round cloud of white gunsmoke drifting from one of her bow gun ports, ahead of her a tall white plume of water thrown up where her warning shot fell into the sea, bright Caribbean sea and a low green island, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "event-guarda_r5",
+    "model": "flux",
+    "seed": 9134,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "An armed Spanish patrol schooner flying one red and gold Spanish flag sails straight toward the viewer across a turquoise sea, a puff of grey-white cannon smoke rolling away from her side, a column of white spray rising from the water in the foreground where a cannonball has landed, palm-covered coast behind, a lone ship"
   }
 ]

@@ -147,12 +147,11 @@ describe('art and sound', () => {
     for (const name of ['title', 'port', 'blockade', 'victory', 'defeat', 'tex-sea', 'tex-chart', 'tex-hull', 'tex-deck']) expect(art.has(name), name).toBe(true);
   });
 
-  it('every event has its illustration (bar the few still to be painted), and every illustration belongs to an event', () => {
-    // The event screen lays out text-only without a picture; this list should only ever shrink.
-    const unpainted = ['starving', 'victualler', 'banks'];
+  it('every event has its illustration, and every illustration belongs to an event', () => {
+    // The event screen can lay out text-only, but every event is painted: a new event needs event-<id>.jpg.
     const art = new Set(artManifest.filter((f) => f.startsWith('event-')).map((f) => f.replace(/^event-|\.\w+$/g, '')));
     const ids = new Set(SEA_EVENTS.map((e) => e.id));
-    expect(SEA_EVENTS.filter((e) => !art.has(e.id)).map((e) => e.id)).toEqual(unpainted);
+    expect(SEA_EVENTS.filter((e) => !art.has(e.id)).map((e) => e.id)).toEqual([]);
     expect([...art].filter((id) => !ids.has(id))).toEqual([]);
   });
 });
