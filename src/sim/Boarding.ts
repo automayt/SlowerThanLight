@@ -36,6 +36,16 @@ export function canGrapple(from: Ship, to: Ship): boolean {
   return grappleSpeed(to) <= grappleSpeed(from) || !to.isManned('helm');
 }
 
+/** How hard one fighter hits hand to hand: their ship's fighting stock and their brawling rank. */
+export function meleeStrength(c: Crew): number {
+  return c.melee * (1 + rank(c, 'combat') * COMBAT_BONUS);
+}
+
+/** A rough measure of a party's fighting worth for the odds shown to the player: strength weighted by health. */
+export function partyStrength(crew: Crew[], defending = false): number {
+  return crew.reduce((sum, c) => sum + meleeStrength(c) * Math.max(0, c.hp / c.maxHp), 0) * (defending ? DEFENDER_BONUS : 1);
+}
+
 /** Crew standing (not walking) in a room, split into the ship's own people and boarders. */
 export function roomParties(ship: Ship, roomId: string): { own: Crew[]; boarders: Crew[] } {
   const here = ship.crew.filter((c) => c.room === roomId && c.waypoints.length === 0);
@@ -56,7 +66,7 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): v
         [boarders, own, 1],
       ] as const) {
         const target = foes.reduce((a, b) => (b.hp < a.hp ? b : a));
-        const strength = attackers.reduce((sum, c) => sum + c.melee * (1 + rank(c, 'combat') * COMBAT_BONUS), 0);
+        const strength = attackers.reduce((sum, c) => sum + meleeStrength(c), 0);
         hits.set(target, (hits.get(target) ?? 0) + strength * MELEE_DPS * bonus * dt);
       }
       for (const [c, dmg] of hits) c.hp -= dmg;

@@ -1,11 +1,11 @@
 import { BOARD_TIME, canGrapple, land, updateBoarding, type Transit } from './Boarding';
-import { changeShot, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
+import { changeShot, NO_HELM_RELOAD, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
 import { orderMove, updateCrew } from './Crew';
 import { ShipAI, type AIOptions } from './EnemyAI';
 import type { BattleEvent } from './events';
 import { isSinking, updateHazards } from './Hazards';
 import { Rng } from './rng';
-import { train } from './Skills';
+import { GUNNERY_RELOAD, rank, train } from './Skills';
 import { Ship, type Crew, type ShipCondition } from './Ship';
 import type { ShipDef, ShotType, Side, SystemId } from './types';
 
@@ -50,6 +50,45 @@ export const BOSS_RALLY_RELOAD = 1.1;
 /** Fixed simulation step in seconds. */
 export const STEP = 0.05;
 
+/** Stations every fight should open with someone at, in order of need. */
+const KEY_STATIONS: SystemId[] = ['helm', 'guns', 'sails'];
+
+/**
+ * Seconds of load gained per second by a ship's guns right now: the same rate Combat.updateGuns applies
+ * (gun crew, the best gunner's rank, a manned helm to bring her to bear, and drill or difficulty).
+ */
+export function gunLoadRate(ship: Ship): number {
+  const crew = ship.gunCrew();
+  const best = crew.reduce((n, c) => Math.max(n, rank(c, 'gunnery')), 0);
+  const crewed = crew.length === 0 ? UNCREWED_RELOAD : crew.length === 1 ? 1.15 : 1.3;
+  const bearing = ship.level('helm') > 0 && ship.isManned('helm') ? 1 : NO_HELM_RELOAD;
+  return (crewed + (crew.length ? best * GUNNERY_RELOAD : 0)) * bearing * ship.reloadRate;
+}
+
+/**
+ * Before the first shot, send spare crew (nobody's station, or doubled up on one) to any of helm, guns and sails
+ * left empty, so a fresh hire or a dead gunner's place doesn't open the fight with an unmanned station.
+ */
+export function manStations(ship: Ship): void {
+  const stationOf = (c: Crew) => ship.room(c.room).def.system;
+  for (const id of KEY_STATIONS) {
+    const sys = ship.system(id);
+    if (!sys || ship.own().some((c) => c.room === sys.room)) continue;
+    const count = (room: string) => ship.own().filter((c) => c.room === room).length;
+    // Idle hands first, then the spare from a crowded station (the gun deck last: a second gunner loads faster).
+    const spare =
+      ship.own().find((c) => !stationOf(c)) ??
+      ship.own().find((c) => stationOf(c) !== 'guns' && count(c.room) > 1) ??
+      ship.own().find((c) => count(c.room) > 1);
+    const slot = spare && ship.freeSlot(sys.room, spare);
+    if (!spare || !slot) continue;
+    spare.room = spare.home = sys.room;
+    spare.slot = slot;
+    spare.pos = { x: slot.x + 0.5, y: slot.y + 0.5 };
+    spare.waypoints = [];
+  }
+}
+
 export class Battle {
   readonly player: Ship;
   readonly enemy: Ship;
@@ -59,6 +98,10 @@ export class Battle {
   readonly boss: boolean;
   /** Whether the boss has rallied yet. */
   rallied = false;
+  /** The enemy runs from the first moment (a merchant or smuggler): only crippling her stops her. */
+  readonly enemyRuns: boolean;
+  /** The player's guns are holding fire because her own boarders are over there. */
+  holdingFire = false;
   /** Crew aboard each ship when the battle began. */
   readonly crewAtStart: Record<Side, number>;
   time = 0;
@@ -83,6 +126,8 @@ export class Battle {
     this.boss = opts.boss ?? false;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
+    manStations(this.player);
+    this.enemyRuns = (opts.enemyAI?.fleeAt ?? 0) >= 1;
     // Crew take up their stations before the first tick, so a paused opening already shows a manned helm.
     updateCrew(this.player, 0);
     updateCrew(this.enemy, 0);
@@ -124,6 +169,11 @@ export class Battle {
   /** True while anyone is aboard the other ship or crossing: the ships are lashed together and neither can sail away. */
   get grappled(): boolean {
     return this.transit.length > 0 || this.player.boarders().length > 0 || this.enemy.boarders().length > 0;
+  }
+
+  /** Whether any of your crew are aboard her or crossing to her. */
+  get boardersOut(): boolean {
+    return this.enemy.crew.some((c) => c.side === 'player') || this.transit.some((t) => t.crew.side === 'player' && t.to === 'enemy');
   }
 
   /** Every living crew member of one side, wherever they are. */
@@ -168,7 +218,8 @@ export class Battle {
       const sailing = (ship === this.player && this.allowEscape) || (ship === this.enemy && this.enemyAI.fleeing);
       if (sailing && !grappled) ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
       updateBulwarks(ship, dt);
-      updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
+      if (ship === this.player) this.updatePlayerGuns(dt);
+      else updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
     // Steering under fire is how helmsmen learn.
@@ -189,6 +240,20 @@ export class Battle {
     if (this.enemy.hull <= 0) return this.finish('victory');
     if (isSinking(this.enemy)) return this.finish('enemySunk');
     if (!this.crewOf('enemy').length) return this.finish('captured');
+  }
+
+  /**
+   * The player's guns load as usual, but hold fire while her own people are aboard the enemy or crossing:
+   * a lucky ball could sink the prize under them. Targets are lifted for the tick so loaded guns simply wait.
+   */
+  private updatePlayerGuns(dt: number): void {
+    const hold = this.boardersOut;
+    if (hold && !this.holdingFire) this.events.push({ t: 'log', side: 'player', text: 'Our boarders are aboard her: the guns hold fire until they are back or she is taken.' });
+    this.holdingFire = hold;
+    const targets = this.player.guns.map((g) => g.target);
+    if (hold) for (const g of this.player.guns) g.target = null;
+    updateGuns(this.player, this.enemy, dt, this.projectiles, this.events, this.stats.player);
+    if (hold) this.player.guns.forEach((g, i) => (g.target = targets[i]));
   }
 
   /** The boss's second wind: every system repaired, fires out, bulwarks up, her guns served a little faster. */

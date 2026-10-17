@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { enemy, MERCHANT_BRIG, NAVY_CUTTER } from '../../src/data/enemies';
 import { playerShip } from '../../src/data/ships';
 import { Battle } from '../../src/sim/Battle';
-import { BOARD_TIME, canGrapple, grappleSpeed, land, SABOTAGE_RATE, updateBoarding } from '../../src/sim/Boarding';
+import { BOARD_TIME, canGrapple, DEFENDER_BONUS, grappleSpeed, land, partyStrength, SABOTAGE_RATE, updateBoarding } from '../../src/sim/Boarding';
 import type { BattleEvent } from '../../src/sim/events';
 import { Ship } from '../../src/sim/Ship';
 
@@ -138,6 +138,43 @@ describe('boarding', () => {
     const before = b.enemy.escape;
     run(b, 3);
     expect(b.enemy.escape).toBe(before);
+  });
+});
+
+describe('boarding odds', () => {
+  it('party strength weighs fighting stock, health and the defenders\' edge', () => {
+    const merchants = new Ship(MERCHANT_BRIG, 'enemy').crew.slice(0, 2);
+    const raiders = new Ship(playerShip('maw'), 'player').crew.slice(0, 2);
+    expect(partyStrength(raiders)).toBeCloseTo(2, 6);
+    raiders[0].hp = 50;
+    expect(partyStrength(raiders)).toBeCloseTo(1.5, 6);
+    const m = MERCHANT_BRIG.melee ?? 1;
+    expect(partyStrength(merchants, true)).toBeCloseTo(2 * m * DEFENDER_BONUS, 6);
+  });
+});
+
+describe('holding fire while boarding', () => {
+  it("the player's guns load but do not fire while her boarders are crossing or aboard, then fire once they are back", () => {
+    const b = new Battle(playerShip('maw'), MERCHANT_BRIG, { seed: 4, enemyAI: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 } });
+    for (const g of b.enemy.guns) g.powered = g.wanted = false;
+    b.player.guns.forEach((g, i) => {
+      b.aimGun(i, 'hold');
+      g.charge = g.def.loadTime - 1;
+    });
+    const c = b.player.crew[1];
+    b.board('player', [c], 'hold');
+    run(b, BOARD_TIME + 2);
+    expect(b.enemy.crew).toContain(c);
+    expect(b.holdingFire).toBe(true);
+    expect(b.stats.player.shotsFired).toBe(0);
+    expect(b.player.guns.filter((g) => g.powered).every((g) => g.charge >= g.def.loadTime && g.target === 'hold')).toBe(true);
+    const logs = b.drainEvents().filter((e) => e.t === 'log' && e.text.includes('hold fire'));
+    expect(logs).toHaveLength(1);
+    // Call the boarder back: once she is aboard her own ship again, the waiting guns fire.
+    b.moveCrew(c.id, c.home, 'player');
+    run(b, BOARD_TIME + 0.2);
+    expect(b.holdingFire).toBe(false);
+    expect(b.stats.player.shotsFired).toBeGreaterThan(0);
   });
 });
 
