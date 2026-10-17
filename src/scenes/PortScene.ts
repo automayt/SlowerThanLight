@@ -121,7 +121,7 @@ export class PortScene extends Phaser.Scene {
     this.button(x, y, w, n > 1 ? `Patch ${n} hull (${n * HULL_PRICE}g)` : 'Patch all you can', n > 1, () => run.repairHull(n) && this.say('The hull is made good.'));
     y += ROW + 6;
     const full = run.condition.crew.length >= run.maxCrew;
-    this.button(x, y, w, full ? 'No bunks to spare' : `Hire a sailor (${CREW_PRICE}g)`, run.canHire(), () => {
+    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${CREW_PRICE}g)`, run.canHire(), () => {
       const who = run.hireCrew();
       if (who) this.say(`${who} signs the articles.`);
     }, `Bunks for ${run.maxCrew}`);

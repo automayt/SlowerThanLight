@@ -113,6 +113,11 @@ export class Hud {
     // --- Bottom-left: hands ---
     panel(scene, 8, BOTTOM_Y, 330, 200);
     this.handsTitle = heading(scene, 18, BOTTOM_Y + 7, '', 15);
+    this.handsTitle.setInteractive({ useHandCursor: false });
+    this.handsTitle.on('pointerover', () =>
+      this.showTooltip('Deckhands are your ship’s working hands: put them on stations like power. Your named crew (left) are separate: officers who walk the decks, man stations, repair and fight.', 18, BOTTOM_Y - 8),
+    );
+    this.handsTitle.on('pointerout', () => this.tooltip.setVisible(false));
     const systems: SystemId[] = ['helm', 'bulwarks', 'sails', 'pumps', 'surgeon', 'guns'];
     systems.filter((id) => player.system(id)).forEach((id, i) => {
       const y = BOTTOM_Y + 38 + i * 26;
@@ -248,7 +253,7 @@ export class Hud {
 
     // Hands.
     const free = player.freeHands();
-    this.handsTitle.setText(`HANDS  ${free} free of ${player.def.hands}`);
+    this.handsTitle.setText(`DECKHANDS  ${free} free of ${player.def.hands}`);
     drawPips(g, 18, BOTTOM_Y + 26, free, player.def.hands, 0, 8, 2);
     for (const [id, label] of this.sysLabels) {
       const sys = player.system(id)!;

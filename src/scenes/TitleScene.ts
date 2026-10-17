@@ -51,7 +51,7 @@ export class TitleScene extends Phaser.Scene {
       'Space — pause (you can still give orders)',
       'Click crew, then a room — move them. Shift-click selects several.',
       'Click a gun card, then an enemy room — aim. Right-click a card — hold fire.',
-      'Hands are your power: put them on Sails, Pumps, the Surgeon and the guns.',
+      'Deckhands are your power: put them on Bulwarks, Sails, Pumps, the Surgeon and the guns.',
       'Select crew, then click an enemy room to BOARD her (if you are as fast as she is).',
     ];
     this.add

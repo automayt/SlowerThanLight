@@ -854,7 +854,7 @@ export class Run {
     offers.push({
       id: 'hands',
       label: 'Sign on deckhands',
-      detail: extra >= EXTRA_HANDS ? 'No hammocks to spare' : `Hands ${f.hands} → ${f.hands + 1}`,
+      detail: extra >= EXTRA_HANDS ? 'No hammocks to spare' : `Deckhands ${f.hands} → ${f.hands + 1}`,
       price: 30 + 10 * extra,
       maxed: extra >= EXTRA_HANDS,
       available: extra < EXTRA_HANDS,

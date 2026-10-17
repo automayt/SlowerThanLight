@@ -84,7 +84,7 @@ export class ShipSelectScene extends Phaser.Scene {
       const guns = def.guns.map((g) => weapon(g.weapon).name).join(', ');
       const evasion = def.speedBonus > 0 ? `+${def.speedBonus}%` : def.speedBonus < 0 ? `${def.speedBonus}%` : '±0%';
       const melee = def.melee && def.melee !== 1 ? `   Boarders ×${def.melee}` : '';
-      const stats = [`Hull ${def.hull}   Hands ${def.hands}   Crew ${def.crew.length}${melee}`, `Hull speed ${evasion} evasion`, `Guns: ${guns}`];
+      const stats = [`Hull ${def.hull}   Deckhands ${def.hands}   Crew ${def.crew.length}${melee}`, `Hull speed ${evasion} evasion`, `Guns: ${guns}`];
       this.add.text(x + 14, CARD_Y + 370, stats.join('\n'), textStyle(12, COLORS.text, { lineSpacing: 4, wordWrap: { width: CARD_W - 28 } }));
 
       SYSTEMS.forEach((id, j) => {
