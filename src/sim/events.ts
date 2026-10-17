@@ -5,6 +5,8 @@ export type BattleEvent =
   | { t: 'shot'; side: Side; gun: number; shot: ShotType }
   | { t: 'hit'; side: Side; room: string; hull: number; shot: ShotType; deflected?: boolean }
   | { t: 'miss'; side: Side; room: string }
+  /** A ball stopped by the target's bulwarks. */
+  | { t: 'block'; side: Side; room: string }
   | { t: 'fire'; side: Side; room: string }
   | { t: 'breach'; side: Side; room: string }
   | { t: 'death'; side: Side; name: string }

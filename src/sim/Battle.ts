@@ -1,5 +1,5 @@
 import { BOARD_TIME, canGrapple, land, updateBoarding, type Transit } from './Boarding';
-import { changeShot, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
+import { changeShot, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
 import { orderMove, updateCrew } from './Crew';
 import { ShipAI, type AIOptions } from './EnemyAI';
 import type { BattleEvent } from './events';
@@ -151,6 +151,7 @@ export class Battle {
       // The enemy only starts making sail once it decides to run, and nobody gets away while grappled.
       const sailing = (ship === this.player && this.allowEscape) || (ship === this.enemy && this.enemyAI.fleeing);
       if (sailing && !grappled) ship.escape = Math.min(100, ship.escape + ship.escapeRate() * dt);
+      updateBulwarks(ship, dt);
       updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
@@ -276,6 +277,11 @@ export class Battle {
   aimGun(index: number, roomId: string | null): void {
     const g = this.player.guns[index];
     if (g && (roomId === null || this.enemy.rooms.has(roomId))) g.target = roomId;
+  }
+
+  /** Hold the guns and fire them together once all are loaded. */
+  setBroadside(on: boolean): void {
+    this.player.broadside = on;
   }
 
   setShot(index: number, shot: ShotType): void {

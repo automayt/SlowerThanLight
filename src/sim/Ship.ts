@@ -104,6 +104,12 @@ export class Ship {
   hull: number;
   /** Loading speed multiplier for every gun (difficulty scales the enemy's). */
   reloadRate = 1;
+  /** Bulwark layers standing ready; each stops one ball. */
+  layers = 0;
+  /** 0..1 progress toward restoring the next layer. */
+  layerCharge = 0;
+  /** Hold every gun until all are loaded, then fire together (to swamp bulwarks). */
+  broadside = false;
   /** "Make sail" escape charge, 0..100. */
   escape = 0;
   /** Bounding size in tiles. */
@@ -160,6 +166,7 @@ export class Ship {
 
     // Allocate as if whole, then apply carried damage: the allocation stays 'wanted' and comes back with repairs.
     this.autoAssignHands();
+    this.layers = this.level('bulwarks');
     if (condition) {
       for (const [id, dmg] of Object.entries(condition.damage) as [SystemId, number][]) {
         const sys = this.systems.get(id);
@@ -180,10 +187,10 @@ export class Ship {
     };
   }
 
-  /** Starting allocation: power guns in order, then fill sails, then pumps. */
+  /** Starting allocation: power guns in order, then bulwarks, then fill sails, then pumps. */
   autoAssignHands(): void {
     for (let i = 0; i < this.guns.length; i++) this.toggleGun(i, true);
-    for (const id of ['sails', 'pumps'] as SystemId[]) {
+    for (const id of ['bulwarks', 'sails', 'pumps'] as SystemId[]) {
       while (this.addHands(id, 1)) {
         /* keep adding */
       }

@@ -78,6 +78,6 @@ function shop(run: Run): void {
     .filter((o) => o.available)
     .sort((a, b) => b.price - a.price)[0];
   if (gun) run.buyGun(gun.weapon.id);
-  const priority: UpgradeId[] = ['guns', 'hull', 'hands', 'sails', 'pumps', 'helm', 'surgeon'];
+  const priority: UpgradeId[] = ['guns', 'hull', 'hands', 'bulwarks', 'sails', 'pumps', 'helm', 'surgeon'];
   for (const id of priority) while (run.buyUpgrade(id));
 }

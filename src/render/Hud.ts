@@ -59,6 +59,7 @@ export class Hud {
   private readonly enemyStats: Phaser.GameObjects.Text;
   private readonly enemyTitle: Phaser.GameObjects.Text;
   private readonly escapeBtn: Button;
+  private readonly broadsideBtn: Button;
   private readonly handsTitle: Phaser.GameObjects.Text;
   private readonly sysLabels = new Map<SystemId, Phaser.GameObjects.Text>();
   private readonly sysStatus = new Map<SystemId, Phaser.GameObjects.Text>();
@@ -112,18 +113,23 @@ export class Hud {
     // --- Bottom-left: hands ---
     panel(scene, 8, BOTTOM_Y, 330, 200);
     this.handsTitle = heading(scene, 18, BOTTOM_Y + 7, '', 15);
-    const systems: SystemId[] = ['helm', 'sails', 'pumps', 'surgeon', 'guns'];
-    systems.forEach((id, i) => {
-      if (!player.system(id)) return;
-      const y = BOTTOM_Y + 40 + i * 31;
+    const systems: SystemId[] = ['helm', 'bulwarks', 'sails', 'pumps', 'surgeon', 'guns'];
+    systems.filter((id) => player.system(id)).forEach((id, i) => {
+      const y = BOTTOM_Y + 38 + i * 26;
       if (scene.textures.exists(`sysicon:${id}`)) scene.add.image(27, y + 8, `sysicon:${id}`).setScale(0.48);
       this.sysLabels.set(id, scene.add.text(42, y, SYSTEM_NAMES[id], textStyle(13)));
       this.sysStatus.set(id, scene.add.text(264, y + 1, '', textStyle(11, COLORS.textDim)));
-      if (id === 'sails' || id === 'pumps' || id === 'surgeon') {
+      if (id === 'bulwarks' || id === 'sails' || id === 'pumps' || id === 'surgeon') {
         new Button(scene, 112, y - 2, 22, 22, '−', () => battle.addHands(id, -1), { size: 15 });
         new Button(scene, 236, y - 2, 22, 22, '+', () => battle.addHands(id, 1), { size: 15 });
       }
     });
+
+    this.broadsideBtn = new Button(scene, 222, BOTTOM_Y + 6, 108, 22, '', () => battle.setBroadside(!battle.player.broadside), { size: 12 });
+    this.broadsideBtn.bg.on('pointerover', () =>
+      this.showTooltip('Broadside (B): hold every aimed gun until all are loaded, then fire together. Swamps bulwarks, which stop one ball per layer.', 222, BOTTOM_Y - 8),
+    );
+    this.broadsideBtn.bg.on('pointerout', () => this.tooltip.setVisible(false));
 
     // --- Bottom-centre: gun cards ---
     player.guns.forEach((gun, i) => {
@@ -202,6 +208,7 @@ export class Hud {
 
     // Top bars.
     this.drawHull(player, 64, 14);
+    this.drawLayers(player, 64, 36);
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
     tint(this.playerStats, battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
@@ -209,10 +216,13 @@ export class Hud {
     this.escapeBtn.setEnabled(battle.canEscape()).setText(escapeLabel);
 
     this.drawHull(enemy, SCREEN.w - 414, 14);
+    this.drawLayers(enemy, SCREEN.w - 414, 36);
     this.enemyTitle.setText('HULL');
     const fleeing = battle.enemyFleeing ? '   FLEEING!' : '';
     this.enemyStats.setText(`${enemy.def.className}  ·  Evasion ${Math.round(enemy.evasion())}%  ·  Flood ${floodPct(enemy)}${fleeing}`);
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
+
+    this.broadsideBtn.setText(player.broadside ? 'Broadside: ON' : 'Broadside: off').setOn(player.broadside);
 
     // Crew list: your people wherever they are, aboard, crossing, or on her deck.
     const mine = battle.crewOf('player');
@@ -314,6 +324,31 @@ export class Hud {
     }
   }
 
+  /** Bulwark layers under the hull bar: solid when ready, filling while they recharge. */
+  private drawLayers(ship: Ship, x: number, y: number): void {
+    const g = this.g;
+    const max = ship.level('bulwarks');
+    const cap = ship.system('bulwarks')?.max ?? 0;
+    for (let i = 0; i < cap; i++) {
+      const sx = x + i * 16;
+      const shield = (fill: number, alpha: number) => {
+        g.fillStyle(fill, alpha);
+        g.beginPath();
+        g.moveTo(sx, y);
+        g.lineTo(sx + 12, y);
+        g.lineTo(sx + 12, y + 5);
+        g.lineTo(sx + 6, y + 10);
+        g.lineTo(sx, y + 5);
+        g.closePath();
+        g.fillPath();
+      };
+      shield(0x000000, 0.6);
+      if (i < ship.layers) shield(0xf0dca0, 1);
+      else if (i === ship.layers && i < max) shield(0xf0dca0, 0.15 + 0.5 * ship.layerCharge);
+      else if (i >= max) shield(0x6a2020, 0.6);
+    }
+  }
+
   private drawHull(ship: Ship, x: number, y: number): void {
     const g = this.g;
     const n = ship.def.hull;
@@ -347,6 +382,7 @@ function systemStatus(ship: Ship, id: SystemId): string {
   if (id === 'guns') return `${ship.allocated('guns')}/${ship.capacity('guns')} on guns`;
   if (id === 'sails' && ship.isManned('sails')) return 'Manned';
   if (id === 'surgeon' && ship.level('surgeon') > 0) return 'Treating';
+  if (id === 'bulwarks') return ship.level('bulwarks') > 0 ? `${ship.layers}/${ship.level('bulwarks')} ready` : '';
   if (id === 'pumps' && ship.level('pumps') > 0) return ship.isSwamped('pumps') ? '! Half rate' : 'Bailing';
   return '';
 }

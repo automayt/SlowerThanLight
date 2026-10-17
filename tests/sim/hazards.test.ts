@@ -49,6 +49,7 @@ describe('flooding', () => {
     const ship = emptyShip();
     ship.room('guns').water = 80;
     ship.addHands('sails', -1);
+    while (ship.addHands('bulwarks', -1));
     while (ship.addHands('pumps', 1));
     expect(ship.level('pumps')).toBe(2);
     run(ship, 30);
@@ -76,6 +77,7 @@ describe('surgeon', () => {
   it('heals crew standing in the cabin', () => {
     const ship = new Ship(playerShip('gull'), 'player');
     while (ship.addHands('pumps', -1));
+    while (ship.addHands('bulwarks', -1));
     ship.addHands('surgeon', 1);
     const c = ship.crew[0];
     c.room = 'surgeon';

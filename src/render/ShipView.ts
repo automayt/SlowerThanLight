@@ -59,6 +59,8 @@ export class ShipView {
   private readonly scorches: Scorch[] = [];
   private readonly scars: Scorch[] = [];
   private moveMarks: { at: Vec; t0: number }[] = [];
+  /** When a bulwark last stopped a ball, for the flash. */
+  private blockedAt = -10;
   private finale: { kind: Finale; t0: number } | null = null;
   /** When the ship started sailing into view, if she is still arriving. */
   private arrival: number | null = null;
@@ -331,6 +333,27 @@ export class ShipView {
       g.lineStyle(2 - ring * 0.5, 0xe8f4f8, 0.32 - ring * 0.09);
       g.strokePoints(pts, true);
     }
+    // Bulwark layers: pale rings standing off the hull, one per layer, the next one filling as it recharges.
+    const flash = Math.max(0, 1 - (t - this.blockedAt) / 0.5);
+    const max = this.ship.level('bulwarks');
+    if (!this.finale) {
+      for (let i = 0; i < max; i++) {
+        const ready = i < this.ship.layers;
+        const charging = i === this.ship.layers;
+        const alpha = ready ? 0.42 + 0.08 * Math.sin(t * 2 + i) : charging ? 0.25 * this.ship.layerCharge : 0;
+        if (alpha <= 0 && flash <= 0) continue;
+        const off = 0.42 + i * 0.16;
+        const ring = geo.outline.map((p) => {
+          const nx = p.x - (geo.stern + geo.tip) / 2;
+          const ny = p.y - mid;
+          const len = Math.hypot(nx * 0.35, ny) || 1;
+          return this.toScreen({ x: p.x + ((nx * 0.35) / len) * off, y: p.y + (ny / len) * off });
+        });
+        g.lineStyle(2.5 + flash * 2, flash > 0 ? 0xffffff : 0xf0dca0, Math.min(1, alpha + flash * 0.6));
+        g.strokePoints(ring, true);
+      }
+    }
+
     // Foam boiling off the bow, and a wake trailing astern.
     const dir = this.flip ? -1 : 1;
     for (const side of [-1, 1]) {
@@ -608,6 +631,11 @@ export class ShipView {
     this.moveMarks = this.moveMarks.filter((mk) => t - mk.t0 < 0.9);
   }
 
+  /** Light up the bulwark rings: a ball was stopped. */
+  flashBlock(): void {
+    this.blockedAt = this.scene.time.now / 1000;
+  }
+
   /** Flash a marker where a crew member has been sent. */
   markMove(at: Vec): void {
     this.moveMarks.push({ at: { x: at.x + 0.5, y: at.y + 0.5 }, t0: this.scene.time.now / 1000 });
@@ -709,6 +737,26 @@ function systemIcon(scene: Phaser.Scene, id: SystemId): string {
       ctx.fillStyle = '#b3261e';
       ctx.fillRect(c - 3.5, 9, 7, 22);
       ctx.fillRect(c - 11, c - 3.5, 22, 7);
+      break;
+    case 'bulwarks':
+      ctx.beginPath();
+      ctx.moveTo(c - 10, 9);
+      ctx.lineTo(c + 10, 9);
+      ctx.lineTo(c + 10, 20);
+      ctx.quadraticCurveTo(c + 9, 28, c, 32);
+      ctx.quadraticCurveTo(c - 9, 28, c - 10, 20);
+      ctx.closePath();
+      ctx.fillStyle = '#8a5a30';
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#e9dcb8';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(c - 7, 15);
+      ctx.lineTo(c + 7, 15);
+      ctx.moveTo(c - 7, 21);
+      ctx.lineTo(c + 7, 21);
+      ctx.stroke();
       break;
   }
   tex.refresh();

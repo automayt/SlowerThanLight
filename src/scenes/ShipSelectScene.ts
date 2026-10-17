@@ -17,7 +17,7 @@ const MARGIN = 22;
 const CARD_W = Math.floor((SCREEN.w - 2 * MARGIN - (PLAYER_SHIPS.length - 1) * GAP) / PLAYER_SHIPS.length);
 const CARD_H = 540;
 const CARD_Y = 84;
-const SYSTEMS: SystemId[] = ['helm', 'sails', 'guns', 'pumps', 'surgeon'];
+const SYSTEMS: SystemId[] = ['helm', 'sails', 'guns', 'bulwarks', 'pumps', 'surgeon'];
 
 /** Why a ship is still locked (with progress), or null if it can be sailed. */
 function lockReason(def: ShipDef): string | null {

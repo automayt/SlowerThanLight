@@ -111,6 +111,7 @@ export class BattleScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown-SPACE', () => battle.togglePause());
+    kb.on('keydown-B', () => battle.setBroadside(!battle.player.broadside));
     kb.on('keydown-M', () => toggleMute(this.game));
     playLoop(this, 'waves', 0.25);
     kb.on('keydown-ESC', () => {
@@ -455,6 +456,14 @@ export class BattleScene extends Phaser.Scene {
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
         if (ours) this.hud.addLog(`We're hit in the ${name}${kind}${ev.hull ? `, ${ev.hull} hull` : ''}!`);
         else this.hud.addLog(`Hit their ${name}${kind}${ev.hull ? `, ${ev.hull} hull` : ''}.`);
+        break;
+      }
+      case 'block': {
+        playSfx(this, 'hit-wood', 0.2);
+        view.flashBlock();
+        const c = view.roomCenter(ev.room);
+        this.burst(c.x, c.y, 0xf0dca0, 12, 260);
+        this.floatText(c.x, c.y - 6, 'BLOCKED', '#f0dca0');
         break;
       }
       case 'miss': {

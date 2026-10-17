@@ -40,7 +40,7 @@ export const JUMP_HEAL = 15;
 /** Gun ports on every ship. */
 export const MAX_GUNS = 4;
 /** Most bars a shipwright can give each system. */
-export const SYSTEM_CAP: Record<SystemId, number> = { helm: 3, sails: 6, guns: 8, pumps: 4, surgeon: 3 };
+export const SYSTEM_CAP: Record<SystemId, number> = { helm: 3, sails: 6, guns: 8, pumps: 4, surgeon: 3, bulwarks: 4 };
 /** Deckhands you can sign on above the ship's own. */
 export const EXTRA_HANDS = 3;
 /** Max hull added by each round of oak planking, and how many rounds a ship can take. */
@@ -669,7 +669,7 @@ export class Run {
       maxed: extra >= EXTRA_HANDS,
       available: extra < EXTRA_HANDS,
     });
-    for (const id of ['sails', 'guns', 'pumps', 'helm', 'surgeon'] as SystemId[]) {
+    for (const id of ['sails', 'guns', 'bulwarks', 'pumps', 'helm', 'surgeon'] as SystemId[]) {
       const now = f.systems[id] ?? 0;
       if (!now) continue;
       offers.push({

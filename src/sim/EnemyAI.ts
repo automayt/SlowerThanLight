@@ -34,11 +34,11 @@ const BOARDER_RETREAT_HP = 40;
 /** A party must be at least this strong relative to her whole crew before it boards. */
 const BOARD_ODDS = 0.6;
 /** Which systems boarders go for first. */
-const SABOTAGE_ORDER: SystemId[] = ['guns', 'helm', 'sails', 'pumps', 'surgeon'];
+const SABOTAGE_ORDER: SystemId[] = ['guns', 'helm', 'bulwarks', 'sails', 'pumps', 'surgeon'];
 
 export type AIDecision = 'none' | 'escape' | 'surrender';
 
-const TARGET_WEIGHT: Partial<Record<SystemId, number>> = { guns: 3, helm: 2, sails: 2, pumps: 1, surgeon: 1 };
+const TARGET_WEIGHT: Partial<Record<SystemId, number>> = { guns: 3, helm: 2, sails: 2, bulwarks: 2, pumps: 1, surgeon: 1 };
 
 /** Simple captain that runs one ship: hands, crew, targeting, fleeing and surrender. */
 export class ShipAI {
@@ -83,9 +83,10 @@ export class ShipAI {
     const hurt = ship.own().some((c) => c.hp < 70);
 
     // Target hands per system, filled greedily in priority order.
-    const order: SystemId[] = this.fleeing ? ['sails', 'pumps', 'surgeon', 'guns'] : ['guns', 'pumps', 'sails', 'surgeon'];
+    const order: SystemId[] = this.fleeing ? ['sails', 'pumps', 'bulwarks', 'surgeon', 'guns'] : ['guns', 'bulwarks', 'pumps', 'sails', 'surgeon'];
     const want: Partial<Record<SystemId, number>> = {
       guns: ship.capacity('guns'),
+      bulwarks: ship.capacity('bulwarks'),
       sails: ship.capacity('sails'),
       pumps: leaking ? ship.capacity('pumps') : 0,
       surgeon: hurt ? ship.capacity('surgeon') : 0,
@@ -139,8 +140,17 @@ export class ShipAI {
       changeShot(chaser, 'chain');
       chaser.target = sails;
     }
+    // Against bulwarks: fire together, and put chain into the station that raises them.
+    const powered = this.ship.guns.filter((g) => g.powered);
+    this.ship.broadside = this.opponent.level('bulwarks') > 0 && powered.length >= 2;
+    const bulwarks = this.opponent.system('bulwarks')?.room;
+    const breaker = bulwarks && this.opponent.capacity('bulwarks') > 0 && powered.length >= 2 ? powered.find((g) => g !== chaser) : undefined;
+    if (breaker && bulwarks) {
+      changeShot(breaker, 'chain');
+      breaker.target = bulwarks;
+    }
     for (const g of this.ship.guns) {
-      if (g === chaser) continue;
+      if (g === chaser || g === breaker) continue;
       if (focusRoom) {
         g.target = focusRoom;
         continue;

@@ -1,13 +1,14 @@
-export type SystemId = 'helm' | 'sails' | 'guns' | 'pumps' | 'surgeon';
+export type SystemId = 'helm' | 'sails' | 'guns' | 'pumps' | 'surgeon' | 'bulwarks';
 export type ShotType = 'round' | 'chain' | 'grape' | 'hot';
 export type Side = 'player' | 'enemy';
 
 export const SHOT_TYPES: ShotType[] = ['round', 'chain', 'grape', 'hot'];
 
 /** Systems that draw from the ship's pool of hands via +/- (guns draw hands per powered gun). */
-export const HANDS_SYSTEMS: SystemId[] = ['sails', 'pumps', 'surgeon'];
+export const HANDS_SYSTEMS: SystemId[] = ['bulwarks', 'sails', 'pumps', 'surgeon'];
 
 export const SYSTEM_NAMES: Record<SystemId, string> = {
+  bulwarks: 'Bulwarks',
   helm: 'Helm',
   sails: 'Sails',
   guns: 'Gun Deck',

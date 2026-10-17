@@ -23,6 +23,7 @@ interface Captain {
 const CAPTAINS: Captain[] = [
   { label: 'spread' },
   { label: 'focus guns', focus: 'guns' },
+  { label: 'focus helm', focus: 'helm' },
   { label: 'boarder', focus: 'guns', board: 2 },
 ];
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NAVY_CUTTER } from '../../src/data/enemies';
 import { playerShip } from '../../src/data/ships';
-import { applyHit, changeShot, hitChance, UNCREWED_RELOAD, updateGuns, type CombatStats, type Projectile } from '../../src/sim/Combat';
+import { applyHit, BULWARK_RECHARGE, changeShot, hitChance, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from '../../src/sim/Combat';
 import { updateCrew } from '../../src/sim/Crew';
 import type { BattleEvent } from '../../src/sim/events';
 import { Rng } from '../../src/sim/rng';
@@ -29,9 +29,9 @@ describe('shot types', () => {
 
   it('round shot damages hull and the system in the room', () => {
     const ship = new Ship(NAVY_CUTTER, 'enemy');
-    applyHit(ship, 'guns', 'round', 2, rng, []);
+    applyHit(ship, 'sails', 'round', 2, rng, []);
     expect(ship.hull).toBe(NAVY_CUTTER.hull - 2);
-    expect(ship.system('guns')!.damage).toBe(2);
+    expect(ship.system('sails')!.damage).toBe(2);
   });
 
   it('chain shot spares the hull but wrecks sails and rigging', () => {
@@ -72,6 +72,7 @@ describe('guns', () => {
     const out: Projectile[] = [];
     const s = stats();
     wren.guns[1].target = 'helm'; // 9-pounder, 2 balls, 11 s; one gunner loads at 1.15x
+    updateCrew(wren, 0); // helm manned, so the guns can be brought to bear
     expect(wren.gunCrew()).toHaveLength(1);
     for (let t = 0; t < 9.4; t += 0.05) updateGuns(wren, cutter, 0.05, out, [], s);
     expect(out).toHaveLength(0);
@@ -84,6 +85,7 @@ describe('guns', () => {
     const wren = new Ship(playerShip('wren'), 'player');
     const cutter = new Ship(NAVY_CUTTER, 'enemy');
     for (const c of wren.crew) if (c.room === 'guns') c.room = 'fore';
+    updateCrew(wren, 0);
     expect(wren.gunCrew()).toHaveLength(0);
     for (let t = 0; t < 5; t += 0.05) updateGuns(wren, cutter, 0.05, [], [], stats());
     expect(wren.guns[1].charge).toBeCloseTo(5 * UNCREWED_RELOAD, 1);
@@ -113,5 +115,44 @@ describe('guns', () => {
     wren.guns[0].charge = 5;
     changeShot(wren.guns[0], 'hot');
     expect(wren.guns[0].charge).toBe(3);
+  });
+});
+
+describe('bulwarks', () => {
+  it('stop one ball per layer, recharge, and let chain shot through', () => {
+    const rng = new Rng(3);
+    const gull = new Ship(playerShip('gull'), 'player');
+    const cutter = new Ship(NAVY_CUTTER, 'enemy');
+    cutter.crew = [];
+    expect(cutter.layers).toBe(1);
+    const ships = { player: gull, enemy: cutter };
+    const st = { player: stats(), enemy: stats() };
+    const ball = (shot: 'round' | 'chain'): Projectile => ({ from: 'player', gun: 0, shot, room: 'helm', damage: 1, inaccuracy: -100, t: 5, delay: 0 });
+    const ev: BattleEvent[] = [];
+    updateProjectiles([ball('round'), ball('round')], ships, 0.05, rng, ev, st);
+    expect(ev.filter((e) => e.t === 'block')).toHaveLength(1);
+    expect(cutter.layers).toBe(0);
+    expect(cutter.hull).toBe(NAVY_CUTTER.hull - 1);
+    for (let t = 0; t < BULWARK_RECHARGE + 0.1; t += 0.05) updateBulwarks(cutter, 0.05);
+    expect(cutter.layers).toBe(1);
+    const ev2: BattleEvent[] = [];
+    updateProjectiles([ball('chain')], ships, 0.05, rng, ev2, st);
+    expect(ev2.some((e) => e.t === 'block')).toBe(false);
+    expect(cutter.layers).toBe(1);
+  });
+
+  it('a broadside holds every gun until all are loaded', () => {
+    const gull = new Ship(playerShip('gull'), 'player');
+    const cutter = new Ship(NAVY_CUTTER, 'enemy');
+    gull.broadside = true;
+    gull.guns.forEach((g) => (g.target = 'guns'));
+    const out: Projectile[] = [];
+    let firstVolley = -1;
+    for (let t = 0; t < 30 && firstVolley < 0; t += 0.05) {
+      updateGuns(gull, cutter, 0.05, out, [], stats());
+      if (out.length) firstVolley = t;
+    }
+    // Every gun's balls leave in the same tick.
+    expect(out.length).toBe(gull.guns.filter((g) => g.powered).reduce((n, g) => n + g.def.shots, 0));
   });
 });
