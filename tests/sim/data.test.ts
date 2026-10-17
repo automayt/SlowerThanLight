@@ -10,9 +10,11 @@ import type { EventEffect, ShipDef, SystemId } from '../../src/sim/types';
 // File names under public/ (globs list them without loading anything) and the two manifests the game reads.
 const artFiles = Object.keys(import.meta.glob('../../public/art/*.*')).map((p) => p.split('/').pop()!);
 const audioFiles = Object.keys(import.meta.glob('../../public/audio/*.*')).map((p) => p.split('/').pop()!);
-const manifests = import.meta.glob<{ files: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
+const manifests = import.meta.glob<{ files: string[]; music?: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
 const artManifest = manifests['../../public/art/manifest.json'].files;
-const audioManifest = manifests['../../public/audio/manifest.json'].files;
+// Sound effects load up front; music beds (listed apart) stream in later.
+const audioMusic = manifests['../../public/audio/manifest.json'].music ?? [];
+const audioManifest = [...manifests['../../public/audio/manifest.json'].files, ...audioMusic];
 
 const SYSTEM_IDS = Object.keys(SYSTEM_CAP) as SystemId[];
 const effects = SEA_EVENTS.flatMap((e) => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect)));

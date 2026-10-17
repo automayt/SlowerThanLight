@@ -9,12 +9,14 @@
     "fire.ogg",
     "bell.ogg",
     "waves.ogg",
-    "shanty.ogg",
     "click.ogg",
     "coins.ogg",
     "breach.ogg",
     "explosion.ogg",
     "boarders.ogg",
     "creak.ogg"
+  ],
+  "music": [
+    "shanty.ogg"
   ]
 }
