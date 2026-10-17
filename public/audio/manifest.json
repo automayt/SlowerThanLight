@@ -17,6 +17,9 @@
     "creak.ogg"
   ],
   "music": [
-    "shanty.ogg"
+    "shanty.ogg",
+    "music-sea.ogg",
+    "music-battle.ogg",
+    "music-port.ogg"
   ]
 }

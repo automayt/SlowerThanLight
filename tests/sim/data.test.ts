@@ -134,6 +134,12 @@ describe('art and sound', () => {
     for (const f of audioFiles) if (f !== 'manifest.json') expect(audioManifest, `audio/${f} is not in the manifest`).toContain(f);
   });
 
+  it('the music director has a bed for the title, the chart, port and battle, and none is also loaded up front', () => {
+    for (const bed of ['shanty', 'music-sea', 'music-port', 'music-battle']) expect(audioMusic, bed).toContain(`${bed}.ogg`);
+    const sfx = manifests['../../public/audio/manifest.json'].files;
+    for (const f of audioMusic) expect(sfx, `${f} would load on the loading screen`).not.toContain(f);
+  });
+
   it('every enemy and player ship has a picture, and the backdrops and textures the scenes use exist', () => {
     const art = new Set(artManifest.map((f) => f.replace(/\.\w+$/, '')));
     for (const e of ENEMY_LIST) if (e.id !== 'frigate') expect(art.has(`enemy-${e.id}`), `enemy-${e.id}`).toBe(true);
