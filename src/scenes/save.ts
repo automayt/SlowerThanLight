@@ -1,3 +1,5 @@
+import { enemy } from '../data/enemies';
+import { fitting } from '../data/fittings';
 import { weapon } from '../data/weapons';
 import { Run } from '../sim/Run';
 import { Ship } from '../sim/Ship';
@@ -37,12 +39,29 @@ export function loadRun(): Run | null {
   }
 }
 
-/** Throws if a loaded voyage refers to anything the current game data no longer has. */
+const RESUMABLE = ['chart', 'battle', 'event', 'port'];
+
+/**
+ * Throws if a loaded voyage is damaged or refers to anything the current game data no longer has, including
+ * enemies and wares further along the chart that would otherwise only crash the game when reached.
+ */
 function checkRun(run: Run): void {
+  if (!RESUMABLE.includes(run.status)) throw new Error(`Cannot resume a voyage in status ${run.status}`);
+  const numbers = [run.gold, run.navy, run.provisions, run.jumps, run.condition.hull, ...run.condition.crew.map((c) => c.hp)];
+  if (!numbers.every(Number.isFinite)) throw new Error('Save has a broken number');
   void run.node.col;
   if (run.status === 'battle') run.currentEnemy();
   if (run.status === 'event') run.currentEvent();
   for (const id of run.prize?.guns ?? []) weapon(id);
+  for (const node of run.chart.nodes) {
+    if (node.enemy) enemy(node.enemy);
+    for (const id of node.stock ?? []) weapon(id);
+  }
+  if (run.encounter.kind === 'port') {
+    for (const id of run.encounter.stock) weapon(id);
+    for (const id of run.encounter.fittings ?? []) fitting(id);
+  }
+  for (const id of run.fittings) fitting(id);
   new Ship(run.ship, 'player', run.condition);
 }
 

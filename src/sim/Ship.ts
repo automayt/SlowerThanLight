@@ -335,7 +335,6 @@ export class Ship {
     return !!this.stationed(id);
   }
 
-  /** The crew member manning a system's station, if anyone is. */
   /** Own crew standing in the gun deck and free to serve the guns (not walking, fighting or fire-fighting). */
   gunCrew(): Crew[] {
     const s = this.systems.get('guns');
@@ -347,6 +346,7 @@ export class Ship {
     return this.def.armour ?? 0;
   }
 
+  /** The crew member manning a system's station, if anyone is. */
   stationed(id: SystemId): Crew | undefined {
     const s = this.systems.get(id);
     return s && this.crew.find((c) => c.side === this.side && c.room === s.room && c.task === 'man');

@@ -1,3 +1,4 @@
+import { STEP, type Battle } from './Battle';
 import { Run, type BattleReport, type UpgradeId } from './Run';
 import type { SystemId } from './types';
 
@@ -10,6 +11,8 @@ export interface AutoRunOptions {
   shop?: boolean;
   /** Send boarding parties of this size in battle. */
   boardWith?: number;
+  /** Called after every simulation step of every battle (for tests that check the fight as it goes). */
+  onTick?: (battle: Battle) => void;
 }
 
 export interface AutoRunResult {
@@ -18,68 +21,80 @@ export interface AutoRunResult {
   battles: { enemy: string; sector: number; ambush: boolean; report: BattleReport }[];
 }
 
+/** Decisions a voyage may take before autoRun gives up on it (a voyage is about 25 jumps and their encounters). */
+export const MAX_DECISIONS = 100;
+
 /**
  * Play a whole voyage with simple captain's choices: steer clear of the fleet, put into port when hurt,
  * take the first affordable event choice, and let the AI fight every battle.
  */
 export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
   const battles: AutoRunResult['battles'] = [];
-  for (let guard = 0; guard < 100 && !run.over; guard++) {
-    switch (run.status) {
-      case 'chart': {
-        const options = run.reachable();
-        const hurt = run.condition.hull < run.fit.hull * 0.6;
-        const hungry = run.provisions <= 2;
-        // Press on rather than explore sideways, unless the detour is a port you need.
-        const score = (n: (typeof options)[number]) =>
-          (run.willBeOverrun(n) ? -10 : 0) +
-          (run.isLateral(n) ? (n.kind === 'port' && (hurt || hungry) ? 1 : -4) : 0) +
-          (n.kind === 'port' && (hurt || hungry) ? 5 : 0) +
-          (n.kind === 'battle' && hurt ? -2 : 0) +
-          run.rng.next();
-        const pick = [...options].sort((a, b) => score(b) - score(a))[0];
-        run.jump(pick.id);
-        break;
-      }
-      case 'battle': {
-        const enemy = run.currentEnemy().id;
-        const { sector } = run;
-        const ambush = run.encounter.kind === 'battle' && run.encounter.ambush;
-        const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus, playerBoardWith: opts.boardWith });
-        battle.runToEnd(opts.battleLimit ?? 900);
-        if (!battle.outcome) {
-          run.concede('The battle dragged on to a stalemate.');
-          break;
+  for (let guard = 0; guard < MAX_DECISIONS && !run.over; guard++) autoStep(run, opts, battles);
+  return { run, battles };
+}
+
+/** Make one captain's decision: a jump, a whole battle, an event choice or a visit to port. */
+export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunResult['battles'] = []): void {
+  switch (run.status) {
+    case 'chart': {
+      const options = run.reachable();
+      const hurt = run.condition.hull < run.fit.hull * 0.6;
+      const hungry = run.provisions <= 2;
+      // Press on rather than explore sideways, unless the detour is a port you need.
+      const score = (n: (typeof options)[number]) =>
+        (run.willBeOverrun(n) ? -10 : 0) +
+        (run.isLateral(n) ? (n.kind === 'port' && (hurt || hungry) ? 1 : -4) : 0) +
+        (n.kind === 'port' && (hurt || hungry) ? 5 : 0) +
+        (n.kind === 'battle' && hurt ? -2 : 0) +
+        run.rng.next();
+      const pick = [...options].sort((a, b) => score(b) - score(a))[0];
+      run.jump(pick.id);
+      break;
+    }
+    case 'battle': {
+      const enemy = run.currentEnemy().id;
+      const { sector } = run;
+      const ambush = run.encounter.kind === 'battle' && run.encounter.ambush;
+      const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus, playerBoardWith: opts.boardWith });
+      const limit = opts.battleLimit ?? 900;
+      if (opts.onTick) {
+        while (!battle.outcome && battle.time < limit) {
+          battle.step(STEP);
+          opts.onTick(battle);
         }
-        battles.push({ enemy, sector, ambush, report: run.finishBattle(battle) });
-        // Spoils: a hand if short-crewed, else her best gun.
-        const prize = run.prize;
-        if (prize && !prize.taken) {
-          if (prize.recruits && run.condition.crew.length < run.def.crew.length) run.pressPrizeCrew();
-          else if (prize.guns.length) run.takePrizeGun(prize.guns[prize.guns.length - 1]);
-        }
+      } else battle.runToEnd(limit);
+      if (!battle.outcome) {
+        run.concede('The battle dragged on to a stalemate.');
         break;
       }
-      case 'event': {
-        const ev = run.currentEvent();
-        const i = ev.choices.findIndex((_, j) => run.canChoose(j));
-        run.chooseEvent(i);
-        break;
+      battles.push({ enemy, sector, ambush, report: run.finishBattle(battle) });
+      // Spoils: a hand if short-crewed, else her best gun.
+      const prize = run.prize;
+      if (prize && !prize.taken) {
+        if (prize.recruits && run.condition.crew.length < run.def.crew.length) run.pressPrizeCrew();
+        else if (prize.guns.length) run.takePrizeGun(prize.guns[prize.guns.length - 1]);
       }
-      case 'port': {
-        const hurt = run.condition.crew.some((c) => c.hp < 70) || Object.keys(run.condition.damage).length > 0;
-        if (hurt) run.rest();
-        while (run.repairHull(1));
-        if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
-        // Victuals first: enough for the rest of the sector and a little over.
-        while (run.provisions < 10 && run.buyProvisions(1));
-        if (opts.shop !== false) shop(run);
-        run.leavePort();
-        break;
-      }
+      break;
+    }
+    case 'event': {
+      const ev = run.currentEvent();
+      const i = ev.choices.findIndex((_, j) => run.canChoose(j));
+      run.chooseEvent(i);
+      break;
+    }
+    case 'port': {
+      const hurt = run.condition.crew.some((c) => c.hp < 70) || Object.keys(run.condition.damage).length > 0;
+      if (hurt) run.rest();
+      while (run.repairHull(1));
+      if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
+      // Victuals first: enough for the rest of the sector and a little over.
+      while (run.provisions < 10 && run.buyProvisions(1));
+      if (opts.shop !== false) shop(run);
+      run.leavePort();
+      break;
     }
   }
-  return { run, battles };
 }
 
 /** Fittings a simple captain values, best first. */

@@ -668,3 +668,20 @@ describe('sectors, provisions and the chandler', () => {
     expect(back.upgradeOffers().some((o) => o.id === 'bulwarks')).toBe(true);
   });
 });
+
+describe('auto runs that stall', () => {
+  it('a fight that runs past the time limit is called a stalemate and ends the voyage', () => {
+    const { run, battles } = autoRun(new Run('gull', 21), { battleLimit: 1 });
+    expect(run.status).toBe('lost');
+    expect(run.ending).toContain('stalemate');
+    expect(battles).toHaveLength(0);
+  });
+});
+
+describe('weighted picks', () => {
+  it('never pick a weightless item, and fall back to the last when nothing has weight', () => {
+    const rng = new Rng(5);
+    for (let i = 0; i < 200; i++) expect(rng.weighted(['a', 'b', 'c'], (x) => (x === 'b' ? 0 : 1))).not.toBe('b');
+    expect(rng.weighted(['a', 'b'], () => 0)).toBe('b');
+  });
+});

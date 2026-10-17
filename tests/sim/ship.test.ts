@@ -199,3 +199,38 @@ describe('carried damage', () => {
     expect(ship.condition().crew[0].hp).toBe(1);
   });
 });
+
+describe('ship lookups', () => {
+  it('finds the room under a tile, and none off the deck', () => {
+    const ship = new Ship(playerShip('gull'), 'player');
+    expect(ship.roomAt(0, 1)?.def.id).toBe('helm');
+    expect(ship.roomAt(7, 2)?.def.id).toBe('fore');
+    expect(ship.roomAt(0, 0)).toBeNull();
+    expect(ship.roomAt(-1, 1)).toBeNull();
+    expect(() => ship.room('crow-nest')).toThrow('No room');
+    expect(ship.systemInRoom('quarters')).toBeUndefined();
+  });
+
+  it('powering a gun that is already on only records the wish; a gun that does not exist refuses', () => {
+    const ship = new Ship(playerShip('gull'), 'player');
+    ship.guns[0].wanted = false;
+    expect(ship.toggleGun(0, true)).toBe(true);
+    expect(ship.guns[0].wanted).toBe(true);
+    expect(ship.toggleGun(9)).toBe(false);
+    expect(ship.addHands('guns', 1)).toBe(false);
+  });
+
+  it('refuses a crew too big for every bunk aboard', () => {
+    const def = playerShip('wren');
+    const crowd = Array.from({ length: 40 }, (_, i) => ({ name: `Sailor ${i}`, hp: 100, home: 'helm' }));
+    expect(() => new Ship(def, 'player', { hull: def.hull, crew: crowd, damage: {} })).toThrow('No room');
+  });
+
+  it('has no route between rooms that share no door', () => {
+    const doors = buildDoors([
+      { id: 'a', name: 'A', x: 0, y: 0, w: 1, h: 1 },
+      { id: 'b', name: 'B', x: 5, y: 5, w: 1, h: 1 },
+    ]);
+    expect(findRoute(doors, 'a', 'b')).toBeNull();
+  });
+});

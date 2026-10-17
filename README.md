@@ -14,7 +14,9 @@ Then open http://localhost:5173.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start the dev server |
-| `npm test` | Run the simulation unit tests |
+| `npm test` | Run the simulation tests: unit tests, data checks, save/load and determinism, and one fuzzed voyage per ship and difficulty with invariants checked every step |
+| `npm run test:fuzz` | The fuzzed voyages again with 12 seeds each (or `FUZZ_SEEDS=n npx vitest run tests/sim/fuzz.test.ts`) |
+| `npm run coverage` | Run the tests with V8 coverage of `src/sim`, `src/data` and the save code |
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run balance [runs] [battles\|voyages]` | Simulate AI-vs-AI battles against every enemy and whole voyages, and print win rates |
 
