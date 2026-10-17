@@ -159,7 +159,181 @@ export const GALLEON: ShipDef = {
 /** Spanish coastguard: a privateer-built schooner under the colours of Spain. */
 export const GUARDA_COSTA: ShipDef = { ...PRIVATEER, id: 'guarda', className: 'Guarda Costa', description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.' };
 
+/** A fast, shallow sloop running contraband between the islands. Light guns, a deep false hold, and no wish to fight. */
+export const SMUGGLER_SLOOP: ShipDef = {
+  id: 'smuggler',
+  name: 'The Night Heron',
+  className: 'Smuggler Sloop',
+  description: 'A low, fast sloop with a false hold and a crew who would rather run than bleed.',
+  hull: 16,
+  hands: 7,
+  speedBonus: 15,
+  melee: 0.8,
+  systems: { helm: 2, sails: 4, guns: 2, pumps: 1, surgeon: 1, bulwarks: 1 },
+  rooms: [
+    { id: 'helm', name: 'Tiller', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
+    { id: 'surgeon', name: "Master's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
+    { id: 'sails', name: 'Mast', x: 2, y: 1, w: 2, h: 2, system: 'sails' },
+    { id: 'pumps', name: 'Bilge', x: 2, y: 3, w: 2, h: 1, system: 'pumps' },
+    { id: 'hold', name: 'False Hold', x: 4, y: 0, w: 2, h: 1 },
+    { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 2, h: 2, system: 'guns' },
+    { id: 'fore', name: 'Foredeck', x: 6, y: 1, w: 1, h: 2, system: 'bulwarks' },
+  ],
+  guns: [{ weapon: 'pdr6', shot: 'chain' }, { weapon: 'pdr6', shot: 'round' }],
+  crew: [
+    { name: 'Silky Moss', room: 'helm' },
+    { name: 'Joss Ridley', room: 'sails' },
+    { name: 'Old Pegg', room: 'guns' },
+  ],
+};
+
+/** A French corsair lugger: long, narrow and quick, with chain shot for your rigging and a boarding party ready. */
+export const CORSAIR_LUGGER: ShipDef = {
+  id: 'corsair',
+  name: 'La Mouette',
+  className: 'Corsair Lugger',
+  description: 'A narrow Breton lugger under a letter of marque, all sail and cutlasses.',
+  hull: 20,
+  hands: 9,
+  speedBonus: 10,
+  melee: 1.2,
+  systems: { helm: 2, sails: 4, guns: 3, pumps: 1, surgeon: 1, bulwarks: 1 },
+  rooms: [
+    { id: 'helm', name: 'Poop Deck', x: 0, y: 0, w: 2, h: 3, system: 'helm' },
+    { id: 'sails', name: 'Mainmast', x: 2, y: 0, w: 2, h: 3, system: 'sails' },
+    { id: 'surgeon', name: "Chirurgien's Berth", x: 4, y: 0, w: 2, h: 1, system: 'surgeon' },
+    { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 2, h: 2, system: 'guns' },
+    { id: 'pumps', name: 'Bilge', x: 6, y: 0, w: 2, h: 1, system: 'pumps' },
+    { id: 'berth', name: 'Prize Crew Berth', x: 6, y: 1, w: 2, h: 2 },
+    { id: 'fore', name: 'Foremast', x: 8, y: 0, w: 1, h: 3, system: 'bulwarks' },
+  ],
+  guns: [{ weapon: 'pdr9', shot: 'chain' }, { weapon: 'pdr6', shot: 'grape' }, { weapon: 'pdr6', shot: 'round' }],
+  crew: [
+    { name: 'Capitaine Duguay', room: 'helm' },
+    { name: 'Maître Kervella', room: 'sails' },
+    { name: 'Canonnier Le Bihan', room: 'guns' },
+    { name: 'Matelot Riou', room: 'berth' },
+    { name: 'Matelot Morvan', room: 'berth' },
+  ],
+};
+
+/** Another crew of the brethren who want your prizes, your guns and your neck. They come over the side. */
+export const RIVAL_BRIGANTINE: ShipDef = {
+  id: 'rival',
+  name: 'The Crimson Gull',
+  className: 'Pirate Brigantine',
+  description: 'A rival crew of the brethren. No quarter asked, none given, and every one of them a boarder.',
+  hull: 22,
+  hands: 10,
+  speedBonus: 5,
+  melee: 1.2,
+  systems: { helm: 2, sails: 3, guns: 4, pumps: 2, surgeon: 1, bulwarks: 1 },
+  rooms: [
+    { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
+    { id: 'surgeon', name: "Sawbones' Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
+    { id: 'sails', name: 'Mainmast', x: 2, y: 1, w: 2, h: 2, system: 'sails' },
+    { id: 'quarters', name: 'Crew Quarters', x: 2, y: 3, w: 2, h: 1 },
+    { id: 'magazine', name: 'Powder Room', x: 4, y: 0, w: 3, h: 1 },
+    { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 3, h: 2, system: 'guns' },
+    { id: 'pumps', name: 'Bilge', x: 4, y: 3, w: 3, h: 1, system: 'pumps' },
+    { id: 'fore', name: 'Forecastle', x: 7, y: 1, w: 1, h: 2, system: 'bulwarks' },
+  ],
+  guns: [{ weapon: 'pdr9', shot: 'grape' }, { weapon: 'pdr9', shot: 'round' }, { weapon: 'pdr12', shot: 'round' }],
+  crew: [
+    { name: 'Captain Ned Lowe', room: 'helm' },
+    { name: 'Quartermaster Rack', room: 'guns' },
+    { name: 'Bloody Annie', room: 'guns' },
+    { name: 'Cutter Briggs', room: 'quarters' },
+    { name: 'Long Tom Hart', room: 'sails' },
+    { name: 'Mad Jemmy', room: 'fore' },
+  ],
+};
+
+/** A Royal Navy sloop-of-war: the best of the King's small ships, well drilled and well gunned. */
+export const NAVY_SLOOP: ShipDef = {
+  id: 'sloop',
+  name: 'HMS Swallow',
+  className: 'Sloop-of-War',
+  description: "A ship-rigged sloop of the Royal Navy, with a full gun deck and marines in her tops.",
+  hull: 28,
+  hands: 12,
+  speedBonus: 5,
+  melee: 1.2,
+  systems: { helm: 2, sails: 3, guns: 6, pumps: 2, surgeon: 2, bulwarks: 1 },
+  rooms: [
+    { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 3, system: 'helm' },
+    { id: 'surgeon', name: "Surgeon's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
+    { id: 'sails', name: 'Mainmast', x: 2, y: 1, w: 2, h: 3, system: 'sails' },
+    { id: 'marines', name: 'Marine Mess', x: 2, y: 4, w: 2, h: 1 },
+    { id: 'magazine', name: 'Powder Magazine', x: 4, y: 0, w: 3, h: 1 },
+    { id: 'guns', name: 'Gun Deck', x: 4, y: 1, w: 3, h: 3, system: 'guns' },
+    { id: 'pumps', name: 'Bilge', x: 4, y: 4, w: 3, h: 1, system: 'pumps' },
+    { id: 'fore', name: 'Forecastle', x: 7, y: 1, w: 2, h: 3, system: 'bulwarks' },
+  ],
+  guns: [{ weapon: 'pdr12', shot: 'round' }, { weapon: 'pdr9', shot: 'chain' }, { weapon: 'pdr9', shot: 'round' }, { weapon: 'pdr6', shot: 'hot' }],
+  crew: [
+    { name: 'Commander Ashe', room: 'helm' },
+    { name: 'Gunner Vosper', room: 'guns' },
+    { name: 'Marine Gage', room: 'guns' },
+    { name: 'Bosun Lacey', room: 'sails' },
+    { name: 'Marine Doyle', room: 'marines' },
+    { name: 'Carpenter Penrose', room: 'pumps' },
+  ],
+};
+
 export const ENEMIES: Record<string, EnemyDef> = {
+  smuggler: {
+    id: 'smuggler',
+    ship: SMUGGLER_SLOOP,
+    faction: 'merchant',
+    ai: { fleeAt: 1, surrenderChance: 0.5, surrenderAt: 0.4 },
+    plunder: [45, 70],
+    names: ['The Night Heron', 'The Quiet Lady', 'The Lantern Moth', 'The Fogbound', 'The Tidewaiter', 'The Silver Eel'],
+    sighting: 'A low, fast sloop showing no colours, crowding on sail the moment she sees you. Smugglers, and they have something to hide.',
+    sightings: [
+      'A sloop with no colours and a deck stacked with casks bears away before the wind.',
+      'Smugglers! A fast sloop running for the reefs, her hold full of somebody else’s duty.',
+    ],
+  },
+  corsair: {
+    id: 'corsair',
+    ship: CORSAIR_LUGGER,
+    faction: 'privateer',
+    ai: { fleeAt: 0.25, surrenderChance: 0.3, surrenderAt: 0.2, boardWith: 3 },
+    plunder: [40, 60],
+    names: ['La Mouette', 'Le Furet', "L'Hirondelle", 'La Belle Poule', 'Le Requin', 'La Sorcière'],
+    sighting: 'A French corsair lugger, lean as a knife, runs up the white ensign and comes on hard.',
+    sightings: [
+      'A Breton lugger under a letter of marque. Her rail is lined with men holding cutlasses.',
+      'Corsairs out of Saint-Malo: a long low lugger closing fast, chain shot in her guns.',
+    ],
+  },
+  rival: {
+    id: 'rival',
+    ship: RIVAL_BRIGANTINE,
+    faction: 'pirate',
+    ai: { fleeAt: 0.2, surrenderChance: 0.2, surrenderAt: 0.15, boardWith: 2 },
+    plunder: [60, 90],
+    names: ['The Crimson Gull', "The Devil's Due", 'The Red Hand', 'The Whydah’s Ghost', 'The Gallows Bird', 'The Black Joke'],
+    sighting: 'A brigantine flying the black. Another crew of the brethren, and they want what you have.',
+    sightings: [
+      'A black flag on a brigantine as hard-used as your own. No honour among thieves today.',
+      'A rival crew of the brethren bears down, howling and beating cutlasses on the rail.',
+    ],
+  },
+  sloop: {
+    id: 'sloop',
+    ship: NAVY_SLOOP,
+    faction: 'navy',
+    ai: { fleeAt: 0.2, surrenderChance: 0.25, surrenderAt: 0.2 },
+    plunder: [35, 50],
+    names: ['HMS Swallow', 'HMS Kingfisher', 'HMS Hazard', 'HMS Scarborough', 'HMS Shark', 'HMS Weazle'],
+    sighting: 'A Royal Navy sloop-of-war, ship-rigged and smartly handled, runs out a full gun deck.',
+    sightings: [
+      'A sloop-of-war of the Royal Navy: marines in her tops and a commander with something to prove.',
+      'The King’s sloop comes about with the precision of a parade ground. Her gun ports open together.',
+    ],
+  },
   cutter: {
     id: 'cutter',
     ship: NAVY_CUTTER,

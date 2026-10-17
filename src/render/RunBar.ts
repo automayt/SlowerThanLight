@@ -32,6 +32,8 @@ export class RunBar {
   private readonly gold: Phaser.GameObjects.Text;
   private readonly damage: Phaser.GameObjects.Text;
   private readonly fleet: Phaser.GameObjects.Text;
+  private readonly food: Phaser.GameObjects.Text;
+  private readonly sector: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, private readonly run: Run) {
     panel(scene, 8, 8, SCREEN.w - 16, 62).setDepth(5);
@@ -42,7 +44,9 @@ export class RunBar {
     this.crew = scene.add.text(230, 44, '', textStyle(13)).setDepth(6);
     this.gold = scene.add.text(560, 14, '', textStyle(18, COLORS.gold, { fontStyle: 'bold' })).setDepth(6);
     this.damage = scene.add.text(560, 44, '', textStyle(12, COLORS.textWarn)).setDepth(6);
-    this.fleet = scene.add.text(SCREEN.w - 22, 24, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(6);
+    this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(6);
+    this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(6);
+    this.food = scene.add.text(760, 14, '', textStyle(16, COLORS.text, { fontStyle: 'bold' })).setDepth(6);
     this.refresh();
   }
 
@@ -60,5 +64,8 @@ export class RunBar {
     const dmg = (Object.entries(c.damage) as [SystemId, number][]).map(([id, n]) => `${SYSTEM_NAMES[id]} −${n}`);
     this.damage.setText(dmg.length ? `Damaged: ${dmg.join(', ')}` : '');
     this.fleet.setText(fleetDistance(run));
+    this.sector.setText(`Sector ${run.sector + 1}: ${run.sectorDef.name}`);
+    this.food.setText(`Provisions ${run.provisions}/${run.maxProvisions}`);
+    this.food.setColor(run.provisions === 0 ? COLORS.textWarn : run.provisions <= 3 ? COLORS.gold : COLORS.text);
   }
 }

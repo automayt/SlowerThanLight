@@ -83,7 +83,11 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): v
 }
 
 /** Put an arriving crew member into a room of a ship (the nearest free tile if that room is full). */
+/** HP a boarder loses climbing through boarding nets. */
+export const NET_DAMAGE = 30;
+
 export function land(ship: Ship, crew: Crew, roomId: string): void {
+  if (ship.boardingNets && crew.side !== ship.side) crew.hp = Math.max(1, crew.hp - NET_DAMAGE);
   const room = ship.rooms.has(roomId) && ship.freeSlot(roomId) ? roomId : [...ship.rooms.keys()].find((id) => ship.freeSlot(id)) ?? roomId;
   const slot = ship.freeSlot(room) ?? { x: ship.room(room).def.x, y: ship.room(room).def.y };
   crew.room = room;

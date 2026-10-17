@@ -3,7 +3,7 @@ import { PLAYER_SHIPS } from '../../src/data/ships';
 import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
-import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, SYSTEM_CAP } from '../../src/sim/Run';
+import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
@@ -401,5 +401,121 @@ describe('difficulty', () => {
 
   it('defaults to normal', () => {
     expect(new Run('gull', 1).difficulty).toBe('normal');
+  });
+});
+
+describe('sectors, provisions and the chandler', () => {
+  /** Sail straight across a sector: always the first onward node, settling whatever turns up. */
+  function crossSector(run: Run): void {
+    const start = run.sector;
+    for (let guard = 0; guard < 40 && run.sector === start && !run.over; guard++) {
+      if (run.status === 'battle') {
+        const b = run.startBattle({ autoPlayer: true });
+        b.enemy.hull = 0;
+        b.step(0.05);
+        run.finishBattle(b);
+      } else if (run.status === 'event') run.chooseEvent(run.currentEvent().choices.findIndex((_, j) => run.canChoose(j)));
+      else if (run.status === 'port') run.leavePort();
+      else {
+        run.navy = -10;
+        run.jump(run.reachable().find((n) => !run.isLateral(n))!.id);
+      }
+    }
+  }
+
+  it('a voyage has three sectors; only the last ends at the blockade', () => {
+    const run = new Run('gull', 11);
+    expect(run.sector).toBe(0);
+    expect(run.chart.nodes.some((n) => n.kind === 'exit')).toBe(true);
+    expect(run.chart.nodes.some((n) => n.kind === 'boss')).toBe(false);
+    crossSector(run);
+    expect(run.sector).toBe(1);
+    expect(run.node.kind).toBe('start');
+    expect(run.navy).toBeLessThan(0);
+    crossSector(run);
+    expect(run.sector).toBe(2);
+    expect(run.chart.nodes.some((n) => n.kind === 'boss')).toBe(true);
+    expect(run.chart.nodes.some((n) => n.kind === 'exit')).toBe(false);
+  });
+
+  it('you can explore across a column to an unvisited neighbour', () => {
+    for (let seed = 1; seed < 50; seed++) {
+      const run = new Run('wren', seed);
+      run.jump(run.reachable()[0].id);
+      if (run.status !== 'chart') continue;
+      const across = run.reachable().filter((n) => run.isLateral(n));
+      if (!across.length) continue;
+      const col = run.node.col;
+      const food = run.provisions;
+      run.jump(across[0].id);
+      expect(run.node.col).toBe(col);
+      expect(run.provisions).toBeLessThanOrEqual(food);
+      return;
+    }
+    throw new Error('no chart with a sideways channel found');
+  });
+
+  it('every jump eats a provision; on empty stores the crew go hungry', () => {
+    const run = new Run('gull', 4);
+    const food = run.provisions;
+    run.navy = -10;
+    run.jump(run.reachable()[0].id);
+    expect(run.provisions).toBe(food - 1);
+
+    const starving = new Run('gull', 4);
+    starving.provisions = 0;
+    starving.navy = -10;
+    const hp = starving.condition.crew.map((c) => c.hp);
+    starving.jump(starving.reachable()[0].id);
+    expect(starving.hungerNote).toContain('hungry');
+    // Running repairs heal 15 first, then hunger takes 25.
+    starving.condition.crew.forEach((c, i) => expect(c.hp).toBeLessThanOrEqual(Math.max(1, Math.min(100, hp[i] + 15) - 25)));
+  });
+
+  it('deeper sectors field tougher ships; the blockade does not grow', () => {
+    const base = ENEMIES.cutter.ship;
+    const scaled = scaleEnemy(base, 2);
+    expect(scaled.hull).toBeGreaterThan(base.hull);
+    expect(scaled.hands).toBeGreaterThan(base.hands);
+    expect(scaled.systems.guns).toBeGreaterThan(base.systems.guns!);
+    expect(scaled.guns.some((g) => g.weapon === 'pdr12')).toBe(true);
+    expect(scaleEnemy(base, 0)).toBe(base);
+  });
+
+  it('the chandler sells provisions and fittings, and fittings change the ship', () => {
+    const run = runAt('port');
+    run.gold = 500;
+    const food = run.provisions;
+    expect(run.buyProvisions(3)).toBe(true);
+    expect(run.provisions).toBe(food + 3);
+    const offers = run.fittingOffers();
+    expect(offers).toHaveLength(2);
+    const id = offers[0].fitting.id;
+    expect(run.buyFitting(id)).toBe(true);
+    expect(run.has(id)).toBe(true);
+    expect(run.fittingOffers().some((o) => o.fitting.id === id)).toBe(false);
+    run.fittings.push('careened');
+    expect(run.ship.speedBonus).toBe(run.def.speedBonus + 5);
+    run.fittings.push('casks');
+    expect(run.maxProvisions).toBe(30);
+  });
+
+  it('sector, provisions and fittings survive a save; an old single-chart save is treated as the last sector', () => {
+    const run = new Run('maw', 21);
+    run.provisions = 7;
+    run.fittings = ['drill'];
+    const back = Run.fromSave(run.toSave());
+    expect(back.sector).toBe(0);
+    expect(back.provisions).toBe(7);
+    expect(back.fittings).toEqual(['drill']);
+
+    const old = run.toSave();
+    delete old.sector;
+    delete old.provisions;
+    delete old.fittings;
+    old.chart = generateChart(new Rng(3), { ports: ['A'], armoury: ['pdr6'] });
+    const legacy = Run.fromSave(old);
+    expect(legacy.sector).toBe(2);
+    expect(legacy.provisions).toBeGreaterThan(0);
   });
 });

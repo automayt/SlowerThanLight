@@ -110,6 +110,8 @@ export class Ship {
   layerCharge = 0;
   /** Hold every gun until all are loaded, then fire together (to swamp bulwarks). */
   broadside = false;
+  /** Boarding nets rigged: enemy boarders land wounded. */
+  boardingNets = false;
   /** "Make sail" escape charge, 0..100. */
   escape = 0;
   /** Bounding size in tiles. */

@@ -79,7 +79,7 @@ export interface ShipDef {
   crew: CrewDef[];
 }
 
-export type Faction = 'navy' | 'merchant' | 'privateer';
+export type Faction = 'navy' | 'merchant' | 'privateer' | 'pirate';
 
 /** An opponent: its ship, how its captain behaves and what it carries. */
 export interface EnemyDef {
@@ -94,6 +94,8 @@ export interface EnemyDef {
   names: string[];
   /** Line shown when she is sighted. */
   sighting: string;
+  /** More ways of telling the sighting; one is picked at random (with `sighting`). */
+  sightings?: string[];
 }
 
 /** Something the shipwright can improve. */

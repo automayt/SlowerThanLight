@@ -1,10 +1,11 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
-import { PORT_NAMES, RECRUIT_NAMES, SEA_EVENTS, seaEvent } from '../data/voyage';
+import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
+import { PORT_NAMES, RECRUIT_NAMES, SEA_EVENTS, SECTORS, seaEvent } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
 import { Rng } from './rng';
-import { generateChart, nodeById, type SeaChart, type SeaNode } from './SeaChart';
+import { generateChart, nodeById, SECTOR_COLUMNS, type SeaChart, type SeaNode } from './SeaChart';
 import { Ship, type ShipCondition } from './Ship';
 import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
@@ -25,11 +26,42 @@ export const START_GOLD = 30;
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 /** What each difficulty changes: how fast the fleet closes, starting gold, and how tough enemy hulls are. */
-export const DIFFICULTY: Record<Difficulty, { label: string; navySpeed: number; startGold: number; enemyHull: number; enemyReload: number; blurb: string }> = {
-  easy: { label: 'Easy', navySpeed: 1.0, startGold: 80, enemyHull: 0.75, enemyReload: 0.8, blurb: 'A slower fleet, a fuller purse, weaker enemies.' },
-  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, enemyHull: 1, enemyReload: 1, blurb: 'The voyage as intended.' },
-  hard: { label: 'Hard', navySpeed: 1.5, startGold: 10, enemyHull: 1.3, enemyReload: 1.15, blurb: 'A faster fleet, an empty purse, deadlier enemies.' },
+export const DIFFICULTY: Record<Difficulty, { label: string; navySpeed: number; startGold: number; provisions: number; enemyHull: number; enemyReload: number; blurb: string }> = {
+  easy: { label: 'Easy', navySpeed: 1.0, startGold: 80, provisions: 14, enemyHull: 0.75, enemyReload: 0.8, blurb: 'A slower fleet, a fuller purse, weaker enemies.' },
+  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, provisions: 10, enemyHull: 1, enemyReload: 1, blurb: 'The voyage as intended.' },
+  hard: { label: 'Hard', navySpeed: 1.5, startGold: 10, provisions: 8, enemyHull: 1.3, enemyReload: 1.15, blurb: 'A faster fleet, an empty purse, deadlier enemies.' },
 };
+
+/** Provisions the hold carries (more with extra water casks). */
+export const MAX_PROVISIONS = 20;
+export const CASK_PROVISIONS = 30;
+/** Gold per provision in port. */
+export const PROVISION_PRICE = 3;
+/** HP every crew member loses for each jump made on empty stores, and the chance someone deserts. */
+export const STARVE_HP = 25;
+export const DESERT_CHANCE = 0.3;
+/** Chance a quiet crossing of open sea brings in a provision (fishing, a turtle, rainwater). */
+export const FORAGE_CHANCE = 0.3;
+/** Plunder is scaled by this, and by a further share per sector deeper into the voyage. */
+export const PLUNDER_MULT = 1.5;
+export const SECTOR_PLUNDER = 0.5;
+
+/** A tougher enemy for deeper sectors: more hull and hands, heavier guns, and (last sector) an extra gun bar. */
+export function scaleEnemy(def: ShipDef, tier: number): ShipDef {
+  if (tier <= 0) return def;
+  const systems = { ...def.systems };
+  const guns = def.guns.map((g) => ({ ...g }));
+  const heavier = (from: string, to: string) => {
+    const g = guns.find((x) => x.weapon === from);
+    if (g) g.weapon = to;
+  };
+  heavier('pdr6', 'pdr9');
+  if (tier >= 2) {
+    systems.guns = (systems.guns ?? 0) + 1;
+    heavier('pdr9', 'pdr12');
+  }
+  return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + tier, systems, guns };
+}
 export const HULL_PRICE = 3;
 export const CREW_PRICE = 30;
 /** Hired crew allowed above the ship's starting complement. */
@@ -113,6 +145,9 @@ export interface RunSave {
   flags?: string[];
   seenEvents?: string[];
   prize?: Prize | null;
+  sector?: number;
+  provisions?: number;
+  fittings?: string[];
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -128,8 +163,8 @@ export type RunStatus = 'chart' | 'battle' | 'event' | 'port' | 'won' | 'lost';
 export type Encounter =
   | { kind: 'battle'; enemy: string; name: string; boss: boolean; ambush: boolean; text: string }
   | { kind: 'event'; event: string; actor?: string; actor2?: string; variant?: number }
-  | { kind: 'port'; name: string; rested: boolean; stock: string[] }
-  | { kind: 'empty'; text: string }
+  | { kind: 'port'; name: string; rested: boolean; stock: string[]; fittings?: string[] }
+  | { kind: 'empty'; text: string; title?: string }
   | { kind: 'start' };
 
 export interface BattleReport {
@@ -147,6 +182,12 @@ export interface Prize {
   recruits: number;
   /** Whether the pick has been made. */
   taken: boolean;
+}
+
+export interface FittingOffer {
+  fitting: FittingDef;
+  price: number;
+  available: boolean;
 }
 
 export interface EventResult {
@@ -184,18 +225,66 @@ export class Run {
   seenEvents: string[] = [];
   /** Spoils of the last battle, until you sail on. */
   prize: Prize | null = null;
+  /** Which stretch of the voyage you are in (0-based). */
+  sector = 0;
+  /** Food and water; a jump eats one. */
+  provisions: number;
+  /** Chandler's fittings aboard. */
+  fittings: string[] = [];
+  /** What the last jump cost you on short rations, for the chart to report (not saved). */
+  hungerNote = '';
   private usedNames = new Set<string>();
 
   constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal') {
     this.difficulty = difficulty;
     this.gold = DIFFICULTY[difficulty].startGold;
+    this.provisions = DIFFICULTY[difficulty].provisions;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     this.rng = new Rng(this.seed);
     this.def = playerShip(shipId);
     this.condition = new Ship(this.def, 'player').condition();
     for (const c of this.condition.crew) this.usedNames.add(c.name);
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
-    this.chart = generateChart(this.rng, { ports: PORT_NAMES, armoury: ARMOURY });
+    this.chart = this.makeChart(0);
+  }
+
+  /** The chart for one sector: its own enemies, ending at a passage or (last of all) at the blockade. */
+  private makeChart(sector: number): SeaChart {
+    const def = SECTORS[sector];
+    return generateChart(this.rng, {
+      columns: SECTOR_COLUMNS,
+      ports: PORT_NAMES,
+      armoury: ARMOURY,
+      final: sector === SECTORS.length - 1,
+      startName: sector === 0 ? 'Tortuga' : def.name,
+      exitName: SECTORS[sector + 1]?.name,
+      enemies: def.enemies,
+    });
+  }
+
+  get sectorDef() {
+    return SECTORS[Math.min(this.sector, SECTORS.length - 1)];
+  }
+
+  /** Legs sailed over the whole voyage, and how many there are in all. */
+  get legs(): { sailed: number; total: number } {
+    if (this.chart.columns !== SECTOR_COLUMNS) return { sailed: this.node.col, total: this.chart.columns - 1 };
+    const per = SECTOR_COLUMNS - 1;
+    return { sailed: this.sector * per + this.node.col, total: SECTORS.length * per };
+  }
+
+  /** Progress through the voyage on the old single-chart scale (0..7), which event conditions are written against. */
+  get progressCol(): number {
+    const { sailed, total } = this.legs;
+    return Math.round((sailed * 7) / total);
+  }
+
+  get maxProvisions(): number {
+    return this.has('casks') ? CASK_PROVISIONS : MAX_PROVISIONS;
+  }
+
+  has(fittingId: string): boolean {
+    return this.fittings.includes(fittingId);
   }
 
   /** Columns the fleet advances per jump on this difficulty. */
@@ -206,7 +295,8 @@ export class Run {
   /** The ship as currently fitted out. */
   get ship(): ShipDef {
     const f = this.fit;
-    return { ...this.def, hull: f.hull, hands: f.hands, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
+    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0);
+    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
   get node(): SeaNode {
@@ -221,15 +311,27 @@ export class Run {
     return this.def.crew.length + EXTRA_CREW;
   }
 
-  /** Nodes you can sail to next. */
+  /** Nodes you can sail to next: onward, or across to an unvisited neighbour in the same column (exploring costs a jump). */
   reachable(): SeaNode[] {
     if (this.status !== 'chart') return [];
-    return this.node.next.map((id) => nodeById(this.chart, id));
+    const here = this.node;
+    const out = here.next.map((id) => nodeById(this.chart, id));
+    if (here.col > 0 && here.kind !== 'exit' && here.kind !== 'boss') {
+      const column = this.chart.nodes.filter((n) => n.col === here.col).sort((a, b) => a.y - b.y);
+      const i = column.indexOf(here);
+      for (const n of [column[i - 1], column[i + 1]]) if (n && !this.visited.includes(n.id)) out.push(n);
+    }
+    return out;
+  }
+
+  /** Whether a reachable node is across in the same column rather than onward. */
+  isLateral(node: SeaNode): boolean {
+    return node.col === this.node.col;
   }
 
   /** True if the fleet will have overrun this node by the time you get there. */
   willBeOverrun(node: SeaNode): boolean {
-    return node.kind !== 'boss' && node.col <= this.navy + this.navySpeed;
+    return node.kind !== 'boss' && node.kind !== 'exit' && node.col <= this.navy + this.navySpeed;
   }
 
   /** Sail to a neighbouring node. The crew make running repairs and the fleet advances. */
@@ -242,21 +344,23 @@ export class Run {
     this.visited.push(id);
     this.prize = null;
     this.runningRepairs();
+    this.eat();
     this.navy += this.navySpeed;
 
+    if (node.kind === 'exit') return this.enterSector(this.sector + 1);
     if (node.kind === 'boss') {
       const foe = enemy(node.enemy ?? 'frigate');
       return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: true, ambush: false, text: foe.sighting });
     }
     if (overrun) {
-      const foe = enemy('cutter');
-      const text = 'The fleet has overrun these waters. A Navy cutter of the vanguard bears down on you!';
+      const foe = enemy(this.sectorDef.ambush);
+      const text = `The fleet has overrun these waters. A ${foe.ship.className.toLowerCase()} of the vanguard bears down on you!`;
       return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: true, text });
     }
     switch (node.kind) {
       case 'battle': {
         const foe = enemy(node.enemy ?? 'cutter');
-        return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: foe.sighting });
+        return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text: this.rng.pick([foe.sighting, ...(foe.sightings ?? [])]) });
       }
       case 'event': {
         const ev = this.drawEvent('encounter') ?? this.drawEvent('incident');
@@ -264,12 +368,44 @@ export class Run {
         break;
       }
       case 'port':
-        return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false, stock: [...(node.stock ?? [])] });
+        return this.begin({ kind: 'port', name: node.name ?? 'Nassau', rested: false, stock: [...(node.stock ?? [])], fittings: this.stockFittings() });
     }
     // Open sea: often something happens aboard on the way.
     const incident = this.rng.chance(INCIDENT_CHANCE) ? this.drawEvent('incident') : null;
     if (incident) return this.startEvent(incident);
-    return this.begin({ kind: 'empty', text: 'Open water and a fair wind. The crew make running repairs.' });
+    if (this.rng.chance(FORAGE_CHANCE) && this.provisions < this.maxProvisions) {
+      this.provisions++;
+      return this.begin({ kind: 'empty', text: this.rng.pick(FORAGE_LINES) });
+    }
+    return this.begin({ kind: 'empty', text: this.rng.pick(QUIET_LINES) });
+  }
+
+  /** A jump eats a day's provisions. With none left the crew go hungry, and someone may jump ship. */
+  private eat(): void {
+    this.hungerNote = '';
+    if (this.provisions > 0) {
+      this.provisions--;
+      return;
+    }
+    const c = this.condition;
+    for (const m of c.crew) m.hp = Math.max(1, m.hp - STARVE_HP);
+    const notes = [`Short rations: the crew go hungry (−${STARVE_HP} HP each).`];
+    if (c.crew.length > 1 && this.rng.chance(DESERT_CHANCE)) {
+      const gone = c.crew.splice(this.rng.int(c.crew.length), 1)[0];
+      notes.push(`${gone.name} slips over the side in the night.`);
+    }
+    this.hungerNote = notes.join(' ');
+  }
+
+  /** Sail through a passage into the next sector: a fresh chart, and the fleet loses your trail for a while. */
+  private enterSector(sector: number): Encounter {
+    this.sector = sector;
+    this.chart = this.makeChart(sector);
+    this.nodeId = 0;
+    this.visited = [0];
+    this.navy = NAVY_START;
+    const def = this.sectorDef;
+    return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} The fleet has lost your trail for now. It will find it again.` });
   }
 
   /** A name for the ship you meet: one you have not fought before, if it can be helped. */
@@ -286,11 +422,14 @@ export class Run {
     return enc;
   }
 
-  /** Between nodes: wounds mend a little and the carpenter fixes the worst-damaged system by one point. */
+  /** Between nodes: wounds mend a little and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
   private runningRepairs(): void {
-    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + JUMP_HEAL);
-    const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
-    if (worst) this.setDamage(worst[0], worst[1] - 1);
+    const heal = this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
+    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + heal);
+    for (let i = this.has('spars') ? 2 : 1; i > 0; i--) {
+      const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
+      if (worst) this.setDamage(worst[0], worst[1] - 1);
+    }
   }
 
   private setDamage(id: SystemId, amount: number): void {
@@ -309,13 +448,17 @@ export class Run {
   startBattle(opts: Partial<BattleOptions> = {}): Battle {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
-    const hull = Math.round(foe.ship.hull * DIFFICULTY[this.difficulty].enemyHull);
-    return new Battle(this.ship, { ...foe.ship, name: this.encounter.name, hull }, {
+    // Deeper sectors field better-found ships; the blockade is what it is.
+    const ship = scaleEnemy(foe.ship, this.encounter.boss ? 0 : this.sector);
+    const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull);
+    return new Battle(this.ship, { ...ship, name: this.encounter.name, hull }, {
       seed: this.rng.int(2 ** 31),
       enemyAI: foe.ai,
       playerCondition: this.condition,
       allowEscape: !this.encounter.boss,
       enemyReload: DIFFICULTY[this.difficulty].enemyReload,
+      playerReload: this.has('drill') ? 1.1 : 1,
+      playerNets: this.has('nets'),
       ...opts,
     });
   }
@@ -334,11 +477,19 @@ export class Run {
     if (o.won) {
       this.battlesWon++;
       const share = PLUNDER_SHARE[o.kind] ?? 0;
-      plunder = Math.round((foe.plunder[0] + this.rng.int(foe.plunder[1] - foe.plunder[0] + 1)) * share);
+      const base = foe.plunder[0] + this.rng.int(foe.plunder[1] - foe.plunder[0] + 1);
+      plunder = Math.round(base * share * PLUNDER_MULT * (1 + SECTOR_PLUNDER * this.sector));
       if (!enc.boss && plunder > 0) {
         this.gold += plunder;
         this.plunderTaken += plunder;
         lines.push(o.kind === 'enemySunk' || o.kind === 'victory' ? `You fish ${plunder} gold from the wreckage.` : `Her hold yields ${plunder} gold.`);
+      }
+      if (!enc.boss) {
+        const food = Math.min(this.maxProvisions - this.provisions, 1 + this.rng.int(3) + (foe.faction === 'merchant' ? 2 : 0));
+        if (food > 0) {
+          this.provisions += food;
+          lines.push(`+${food} provisions from her stores.`);
+        }
       }
       if (enc.ambush) {
         this.navy -= AMBUSH_SETBACK;
@@ -448,7 +599,7 @@ export class Run {
   unmet(n: EventNeeds | undefined): string | null {
     if (!n) return null;
     const c = this.condition;
-    const col = this.node.col;
+    const col = this.progressCol;
     if (n.crew && c.crew.length < n.crew) return `needs ${n.crew} crew`;
     if (n.gold && this.gold < n.gold) return `needs ${n.gold} gold`;
     if (n.hurt && !c.crew.some((m) => m.hp < 70)) return 'nobody is hurt';
@@ -641,6 +792,44 @@ export class Run {
     if (this.status === 'port') this.status = 'chart';
   }
 
+  // --- Chandler: provisions and fittings ------------------------------------------
+
+  canBuyProvisions(n = 1): boolean {
+    return this.inPort && n > 0 && this.provisions + n <= this.maxProvisions && this.gold >= n * PROVISION_PRICE;
+  }
+
+  buyProvisions(n = 1): boolean {
+    if (!this.canBuyProvisions(n)) return false;
+    this.gold -= n * PROVISION_PRICE;
+    this.provisions += n;
+    return true;
+  }
+
+  /** Two fittings the port's chandler has, that you don't already carry. */
+  private stockFittings(): string[] {
+    const pool = FITTING_IDS.filter((id) => !this.has(id));
+    const out: string[] = [];
+    while (out.length < 2 && pool.length) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    return out;
+  }
+
+  fittingOffers(): FittingOffer[] {
+    if (this.encounter.kind !== 'port') return [];
+    return (this.encounter.fittings ?? []).map((id) => {
+      const f = fitting(id);
+      return { fitting: f, price: f.price, available: this.inPort && !this.has(id) && this.gold >= f.price };
+    });
+  }
+
+  buyFitting(id: string): boolean {
+    const offer = this.fittingOffers().find((o) => o.fitting.id === id);
+    if (!offer?.available || this.encounter.kind !== 'port') return false;
+    this.gold -= offer.price;
+    this.fittings.push(id);
+    this.encounter.fittings = (this.encounter.fittings ?? []).filter((x) => x !== id);
+    return true;
+  }
+
   // --- Shipwright and armoury -----------------------------------------------
 
   private get inPort(): boolean {
@@ -767,6 +956,9 @@ export class Run {
       seenEvents: this.seenEvents,
       prize: this.prize,
       difficulty: this.difficulty,
+      sector: this.sector,
+      provisions: this.provisions,
+      fittings: this.fittings,
     });
   }
 
@@ -793,6 +985,26 @@ export class Run {
     run.flags = new Set(s.flags ?? []);
     run.seenEvents = s.seenEvents ?? [];
     run.prize = s.prize ?? null;
+    // Saves from before sectors hold one long chart that ends at the blockade: treat it as the last sector.
+    run.sector = s.sector ?? (s.chart.columns === SECTOR_COLUMNS ? 0 : SECTORS.length - 1);
+    run.provisions = s.provisions ?? DIFFICULTY[run.difficulty].provisions;
+    run.fittings = s.fittings ?? [];
     return run;
   }
 }
+
+const QUIET_LINES = [
+  'Open water and a fair wind. The crew make running repairs.',
+  'A long, empty reach under a hot sky. The carpenter is busy below.',
+  'Nothing but flying fish and the creak of the rigging. A chance to mend.',
+  'A quiet watch. Somebody sings below; the bosun lets it go.',
+  'The trade wind holds steady and the horizon stays empty. Small mercies.',
+  'Squalls to the south, but none find you. The hands patch and splice.',
+];
+
+const FORAGE_LINES = [
+  'The hands get a line over the side and haul in a fine dorado. (+1 provision)',
+  'A rain squall fills every cask and bucket aboard. (+1 provision)',
+  'A sea turtle, sleeping on the swell, is hoisted aboard. (+1 provision)',
+  'A drifting crate of ship’s biscuit, barely damp. Somebody’s loss. (+1 provision)',
+];

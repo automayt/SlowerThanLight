@@ -1,6 +1,6 @@
 import type { Rng } from './rng';
 
-export type NodeKind = 'start' | 'battle' | 'event' | 'port' | 'empty' | 'boss';
+export type NodeKind = 'start' | 'battle' | 'event' | 'port' | 'empty' | 'boss' | 'exit';
 
 export interface SeaNode {
   id: number;
@@ -30,10 +30,20 @@ export interface ChartOptions {
   ports: string[];
   /** Weapon ids ports can stock, cheapest first. Heavier guns turn up later in the voyage. */
   armoury?: string[];
+  /** The last stretch of the voyage ends at the blockade; earlier ones end at a passage into the next. */
+  final?: boolean;
+  /** Name of the start node (default Tortuga). */
+  startName?: string;
+  /** Name of the passage at the far end of a non-final chart. */
+  exitName?: string;
+  /** Who battle nodes hold, with relative weights. Defaults to the classic mix by depth. */
+  enemies?: [string, number][];
 }
 
-/** Columns from start to boss inclusive. */
+/** Columns from start to boss inclusive, for a single-chart voyage. */
 export const CHART_COLUMNS = 8;
+/** Columns in each sector of a multi-sector voyage. */
+export const SECTOR_COLUMNS = 6;
 
 /** Rough share of middle nodes of each kind; the rest are open sea. */
 const KIND_SHARES: [NodeKind, number][] = [
@@ -92,9 +102,14 @@ function link(rng: Rng, a: SeaNode[], b: SeaNode[]): void {
 function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
   const last = cols.length - 1;
   cols[0][0].kind = 'start';
-  cols[0][0].name = 'Tortuga';
-  cols[last][0].kind = 'boss';
-  cols[last][0].enemy = 'frigate';
+  cols[0][0].name = opts.startName ?? 'Tortuga';
+  if (opts.final === false) {
+    cols[last][0].kind = 'exit';
+    cols[last][0].name = opts.exitName ?? 'The Passage';
+  } else {
+    cols[last][0].kind = 'boss';
+    cols[last][0].enemy = 'frigate';
+  }
 
   const ports = [...opts.ports];
 
@@ -115,7 +130,7 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
       rng.pick(cols[col]).kind = 'port';
     }
     for (const node of cols[col]) {
-      if (node.kind === 'battle') node.enemy = pickEnemy(rng, depth);
+      if (node.kind === 'battle') node.enemy = opts.enemies ? rng.weighted(opts.enemies, (e) => e[1])[0] : pickEnemy(rng, depth);
       if (node.kind === 'port') {
         if (!ports.length) ports.push(...opts.ports);
         node.name = ports.splice(rng.int(ports.length), 1)[0];

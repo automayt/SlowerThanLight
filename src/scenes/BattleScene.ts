@@ -75,7 +75,7 @@ export class BattleScene extends Phaser.Scene {
     const e = battle.enemy;
     this.playerView = new ShipView(this, p, 250, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false, { flag: 'pirate' });
     this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + 1.7) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
-      flag: faction === 'navy' ? 'navy' : 'merchant',
+      flag: faction === 'navy' ? 'navy' : faction === 'pirate' ? 'pirate' : 'merchant',
     });
     this.fx = this.add.graphics().setDepth(10);
     this.events.once('shutdown', () => {

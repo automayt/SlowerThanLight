@@ -35,6 +35,10 @@ export interface BattleOptions {
   playerBoardWith?: number;
   /** How fast enemy guns load, relative to normal (difficulty). */
   enemyReload?: number;
+  /** How fast the player's guns load, relative to normal (gun drill). */
+  playerReload?: number;
+  /** The player has boarding nets rigged. */
+  playerNets?: boolean;
 }
 
 /** Fixed simulation step in seconds. */
@@ -73,6 +77,8 @@ export class Battle {
     updateCrew(this.player, 0);
     updateCrew(this.enemy, 0);
     this.enemy.reloadRate = opts.enemyReload ?? 1;
+    this.player.reloadRate = opts.playerReload ?? 1;
+    this.player.boardingNets = opts.playerNets ?? false;
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     const actions = (side: Side) => ({
       board: (crew: Crew[], room: string) => this.board(side, crew, room),

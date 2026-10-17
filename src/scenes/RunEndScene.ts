@@ -36,7 +36,7 @@ export class RunEndScene extends Phaser.Scene {
 
     const rows: [string, string][] = [
       ['Ship', `${run.def.name} (${run.def.className})`],
-      ['Distance sailed', `${run.node.col} of ${run.chart.columns - 1} legs`],
+      ['Distance sailed', `${run.legs.sailed} of ${run.legs.total} legs (${run.sectorDef.name})`],
       ['Battles won', `${run.battlesWon}`],
       ['Plunder taken', `${run.plunderTaken} gold`],
       ['Gold in the hold', `${run.gold}`],

@@ -4,7 +4,8 @@ import { playLoop, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
-import type { Run } from '../sim/Run';
+import { type Run } from '../sim/Run';
+import { SECTORS } from '../data/voyage';
 import type { NodeKind, SeaNode } from '../sim/SeaChart';
 import { saveRun } from './save';
 
@@ -21,6 +22,7 @@ const KIND_STYLE: Record<NodeKind, { color: number; label: string; glyph: string
   port: { color: 0x7fdc6a, label: 'Port', glyph: '⚓' },
   empty: { color: 0x6b7f8f, label: 'Open sea', glyph: '~' },
   boss: { color: 0x8a1c1c, label: 'The Blockade', glyph: '☠' },
+  exit: { color: 0xd8b45a, label: 'Passage', glyph: '»' },
 };
 
 /** The voyage chart: pick the next node to sail to while the Navy fleet closes from the west. */
@@ -53,13 +55,14 @@ export class SeaMapScene extends Phaser.Scene {
     this.g = this.add.graphics();
     this.bar = new RunBar(this, run);
 
-    this.add.text(SCREEN.w / 2, 86, 'Choose your heading', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0);
+    const sectorLine = `${run.sectorDef.name}  ·  Sector ${run.sector + 1} of ${SECTORS.length}`;
+    this.add.text(SCREEN.w / 2, 84, sectorLine, { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0);
 
     for (const node of run.chart.nodes) {
       const { x, y } = this.pos(node);
       const style = KIND_STYLE[node.kind];
-      this.add.text(x, y, style.glyph, textStyle(node.kind === 'boss' ? 22 : 18, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5).setDepth(2);
-      const label = node.kind === 'port' || node.kind === 'start' ? (node.name ?? style.label) : style.label;
+      this.add.text(x, y, style.glyph, textStyle(node.kind === 'boss' || node.kind === 'exit' ? 22 : 18, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5).setDepth(2);
+      const label = node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
       this.add.text(x, y + NODE_R + 4, label, textStyle(12, COLORS.textDim)).setOrigin(0.5, 0).setDepth(2);
       const hit = this.add.circle(x, y, NODE_R + 6, 0x000000, 0.001).setDepth(3);
       hit.setInteractive({ useHandCursor: true });
@@ -70,7 +73,11 @@ export class SeaMapScene extends Phaser.Scene {
 
     panel(this, 8, SCREEN.h - 74, SCREEN.w - 16, 66);
     this.add.text(20, SCREEN.h - 66, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 60 } }));
-    this.add.text(20, SCREEN.h - 32, 'Click a highlighted node to sail there. The red tide is the Royal Navy: nodes it overruns become Navy ambushes.', textStyle(12, COLORS.textDim));
+    const hint =
+      run.provisions <= 3
+        ? `⚠ ${run.provisions === 0 ? 'No provisions left: every jump now costs the crew health' : `Only ${run.provisions} provisions left`}. Buy more in port, or take them from prizes.`
+        : 'Click a highlighted node to sail on, or across to explore its neighbour (a jump and a day’s provisions). The red tide is the Navy: nodes it overruns become ambushes.';
+    this.add.text(20, SCREEN.h - 32, hint, textStyle(12, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim));
 
     this.tip = this.add
       .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 280 } }))
@@ -78,7 +85,9 @@ export class SeaMapScene extends Phaser.Scene {
       .setVisible(false);
 
     if (run.encounter.kind === 'empty' && run.status === 'chart' && this.registry.get('fresh-jump')) {
-      this.showDialog('Open Water', run.encounter.text, [['Continue', () => this.closeDialog()]]);
+      const title = run.encounter.title ?? 'Open Water';
+      const text = [run.hungerNote, run.encounter.text].filter(Boolean).join('\n\n');
+      this.showDialog(title, text, [['Continue', () => this.closeDialog()]], run.encounter.title ? 'blockade' : undefined);
     }
     this.registry.set('fresh-jump', false);
   }
@@ -87,7 +96,8 @@ export class SeaMapScene extends Phaser.Scene {
   private lastWords(): string {
     const note = this.registry.get('chart-note') as string | undefined;
     if (note) return note;
-    return this.run.jumps === 0 ? 'You slip out of Tortuga at dawn. Somewhere astern, a Royal Navy squadron has your scent.' : 'The chart is spread on the captain’s table.';
+    if (this.run.jumps === 0) return 'You slip out of Tortuga at dawn. Somewhere astern, a Royal Navy squadron has your scent. Three stretches of sea lie between you and freedom.';
+    return this.run.node.kind === 'start' ? `${this.run.sectorDef.blurb}` : 'The chart is spread on the captain’s table.';
   }
 
   private pos(node: SeaNode): { x: number; y: number } {
@@ -110,7 +120,8 @@ export class SeaMapScene extends Phaser.Scene {
       case 'battle': {
         const foe = run.currentEnemy();
         const title = enc.boss ? 'The Blockade' : enc.ambush ? 'Overrun!' : 'Sail Ho!';
-        this.showDialog(title, `${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]], enc.boss ? 'blockade' : `enemy-${foe.id}`);
+        const hunger = run.hungerNote ? `${run.hungerNote}\n\n` : '';
+        this.showDialog(title, `${hunger}${enc.text}\n\n${enc.name}, ${foe.ship.className}.`, [['Beat to quarters!', () => this.scene.start('Battle')]], enc.boss ? 'blockade' : `enemy-${foe.id}`);
         break;
       }
       case 'event':
@@ -170,6 +181,9 @@ export class SeaMapScene extends Phaser.Scene {
     this.sea.draw(time);
     g.clear();
 
+    const reach = new Set(run.reachable().map((n) => n.id));
+    const visited = new Set(run.visited);
+
     // The fleet: a red tide from the west edge up to its front.
     const front = Math.max(0, this.colX(run.navy));
     if (front > 0) {
@@ -190,8 +204,20 @@ export class SeaMapScene extends Phaser.Scene {
       for (let y = 82; y < SCREEN.h - 80; y += 16) g.lineBetween(next, y, next, y + 8);
     }
 
-    const reach = new Set(run.reachable().map((n) => n.id));
-    const visited = new Set(run.visited);
+    // Cross-channels within a column: exploring sideways costs a jump.
+    for (let col = 1; col < run.chart.columns - 1; col++) {
+      const column = run.chart.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
+      for (let i = 0; i + 1 < column.length; i++) {
+        const a = this.pos(column[i]);
+        const b = this.pos(column[i + 1]);
+        const open = (column[i].id === run.nodeId && reach.has(column[i + 1].id)) || (column[i + 1].id === run.nodeId && reach.has(column[i].id));
+        g.lineStyle(open ? 2.5 : 1.5, open ? 0xffffff : 0x9fb1bf, open ? 0.7 : 0.18);
+        for (let t = 0; t < 1; t += 0.12) {
+          const t2 = Math.min(1, t + 0.06);
+          g.lineBetween(a.x + (b.x - a.x) * t, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t, a.x + (b.x - a.x) * t2, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t2);
+        }
+      }
+    }
 
     // Routes.
     for (const n of run.chart.nodes) {
@@ -210,8 +236,8 @@ export class SeaMapScene extends Phaser.Scene {
     for (const n of run.chart.nodes) {
       const { x, y } = this.pos(n);
       const style = KIND_STYLE[n.kind];
-      const overrun = n.kind !== 'boss' && n.col <= run.navy;
-      const r = n.kind === 'boss' ? NODE_R + 6 : NODE_R;
+      const overrun = n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy;
+      const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
       g.fillStyle(overrun ? 0x4a1414 : style.color, visited.has(n.id) && n.id !== run.nodeId ? 0.45 : 1).fillCircle(x, y, r);
       if (reach.has(n.id)) {
         const pulse = 3 + Math.sin(time / 200) * 2;
@@ -248,9 +274,12 @@ export class SeaMapScene extends Phaser.Scene {
     if (n.kind === 'port') lines.push('Repair the hull, hire crew, rest and refit.');
     if (n.kind === 'empty') lines.push('Open sea. Time for repairs, if nothing happens aboard.');
     if (n.kind === 'boss') lines.push('HMS Relentless guards the channel to the open ocean. No running from this one.');
+    if (n.kind === 'exit') lines.push(`A passage into ${n.name}. Tougher ships, richer prizes, and the fleet loses your trail for a while.`);
     const reachable = run.reachable().some((m) => m.id === n.id);
+    if (reachable && run.isLateral(n)) lines.push('Across the column: exploring costs a jump and a day’s provisions.');
+    if (reachable && run.provisions === 0) lines.push('⚠ No provisions: the crew will go hungry.');
     if (reachable && run.willBeOverrun(n)) lines.push('⚠ The fleet will overrun this before you get there: a Navy ambush.');
-    else if (n.kind !== 'boss' && n.col <= run.navy) lines.push('Overrun by the Navy fleet.');
+    else if (n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy) lines.push('Overrun by the Navy fleet.');
     if (!reachable && n.id !== run.nodeId) lines.push('(Not reachable from here)');
     const { x, y } = this.pos(n);
     this.tip.setText(lines.join('\n'));

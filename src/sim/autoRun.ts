@@ -28,8 +28,14 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
       case 'chart': {
         const options = run.reachable();
         const hurt = run.condition.hull < run.fit.hull * 0.6;
+        const hungry = run.provisions <= 2;
+        // Press on rather than explore sideways, unless the detour is a port you need.
         const score = (n: (typeof options)[number]) =>
-          (run.willBeOverrun(n) ? -10 : 0) + (n.kind === 'port' && hurt ? 5 : 0) + (n.kind === 'battle' && hurt ? -2 : 0) + run.rng.next();
+          (run.willBeOverrun(n) ? -10 : 0) +
+          (run.isLateral(n) ? (n.kind === 'port' && (hurt || hungry) ? 1 : -4) : 0) +
+          (n.kind === 'port' && (hurt || hungry) ? 5 : 0) +
+          (n.kind === 'battle' && hurt ? -2 : 0) +
+          run.rng.next();
         const pick = [...options].sort((a, b) => score(b) - score(a))[0];
         run.jump(pick.id);
         break;
@@ -62,6 +68,8 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
         if (hurt) run.rest();
         while (run.repairHull(1));
         if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
+        // Victuals first: enough for the rest of the sector and a little over.
+        while (run.provisions < 10 && run.buyProvisions(1));
         if (opts.shop !== false) shop(run);
         run.leavePort();
         break;
@@ -80,4 +88,5 @@ function shop(run: Run): void {
   if (gun) run.buyGun(gun.weapon.id);
   const priority: UpgradeId[] = ['guns', 'hull', 'hands', 'bulwarks', 'sails', 'pumps', 'helm', 'surgeon'];
   for (const id of priority) while (run.buyUpgrade(id));
+  for (const o of run.fittingOffers()) if (o.available) run.buyFitting(o.fitting.id);
 }

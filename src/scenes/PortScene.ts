@@ -4,7 +4,9 @@ import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { weapon } from '../data/weapons';
-import { CREW_PRICE, HULL_PRICE, MAX_GUNS, type Run } from '../sim/Run';
+import { FITTINGS } from '../data/fittings';
+import { CREW_PRICE, HULL_PRICE, MAX_GUNS, PROVISION_PRICE, type Run } from '../sim/Run';
+import { PORT_TAGLINES } from '../data/voyage';
 import { badges } from '../sim/Skills';
 import type { WeaponDef } from '../sim/types';
 import { saveRun } from './save';
@@ -17,6 +19,10 @@ const COLS = [
   { x: 850, w: 390, title: 'Armoury' },
 ];
 const ROW = 50;
+
+function fittingName(id: string): string {
+  return FITTINGS[id]?.name ?? id;
+}
 
 function gunStats(w: WeaponDef): string {
   return `${w.shots}×${w.damage} dmg · ${w.loadTime}s · ${w.hands} hand${w.hands > 1 ? 's' : ''}`;
@@ -45,7 +51,7 @@ export class PortScene extends Phaser.Scene {
     panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.9 : 0.92);
     this.add.text(SCREEN.w / 2, TOP + 8, name, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
     this.add
-      .text(SCREEN.w / 2, TOP + 52, 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
+      .text(SCREEN.w / 2, TOP + 52, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
     for (const c of COLS) {
       this.add.text(c.x, COL_Y - 30, c.title.toUpperCase(), textStyle(14, COLORS.gold, { fontStyle: 'bold' }));
@@ -83,13 +89,16 @@ export class PortScene extends Phaser.Scene {
     this.time.delayedCall(0, () => this.rebuild());
   }
 
-  private button(x: number, y: number, w: number, label: string, enabled: boolean, fn: () => void, detail?: string): void {
+  private button(x: number, y: number, w: number, label: string, enabled: boolean, fn: () => void, detail?: string, tip?: string): void {
     const b = new Button(this, x, y, w, 40, label, () => {
       fn();
       this.later();
     }, { size: 14 }).setEnabled(enabled);
     b.label.setOrigin(0, 0.5).setX(12);
     this.dyn.push(b);
+    if (tip) {
+      b.bg.on('pointerover', () => this.say(tip));
+    }
     if (detail) this.dyn.push(this.add.text(x + w + 10, y + 12, detail, textStyle(12, COLORS.textDim)));
   }
 
@@ -111,9 +120,40 @@ export class PortScene extends Phaser.Scene {
       const who = run.hireCrew();
       if (who) this.say(`${who} signs the articles.`);
     }, `Bunks for ${run.maxCrew}`);
-    y += ROW + 4;
-    const roster = run.condition.crew.map((c) => `${c.name}  ${c.hp}%  ${badges(c)}`).join('\n');
-    this.dyn.push(this.add.text(x, y, roster, textStyle(12, COLORS.text, { lineSpacing: 2 })));
+    y += ROW + 10;
+
+    // Chandler: victuals and fittings.
+    this.dyn.push(this.add.text(x, y - 6, 'CHANDLER', textStyle(12, COLORS.gold, { fontStyle: 'bold' })));
+    y += 12;
+    const room = run.maxProvisions - run.provisions;
+    const lot = Math.min(5, room);
+    this.button(
+      x,
+      y,
+      w,
+      room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * PROVISION_PRICE}g)`,
+      lot > 0 && run.canBuyProvisions(lot),
+      () => run.buyProvisions(lot) && this.say('Salt pork, biscuit and fresh water are swayed aboard.'),
+      `${run.provisions}/${run.maxProvisions} aboard`,
+    );
+    y += ROW;
+    const offers = run.fittingOffers();
+    if (!offers.length) {
+      this.dyn.push(this.add.text(x, y + 10, 'No fittings for sale.', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })));
+      y += ROW;
+    }
+    for (const o of offers) {
+      this.button(x, y, w, `${o.fitting.name} (${o.price}g)`, o.available, () => run.buyFitting(o.fitting.id) && this.say(`${o.fitting.name} fitted. ${o.fitting.blurb}`), o.fitting.short, o.fitting.blurb);
+      y += ROW;
+    }
+    if (run.fittings.length) {
+      this.dyn.push(this.add.text(x, y + 2, `Aboard: ${run.fittings.map((id) => fittingName(id)).join(', ')}`, textStyle(11, COLORS.textDim, { wordWrap: { width: COLS[0].w } })));
+      y += 22;
+    }
+    y += 6;
+    // Crew, compactly: the chandler's goods push the roster down the column.
+    const roster = run.condition.crew.map((c) => `${c.name} ${c.hp}%${badges(c) ? ` ${badges(c)}` : ''}`).join('  ·  ');
+    this.dyn.push(this.add.text(x, y, roster, textStyle(11, COLORS.text, { lineSpacing: 2, wordWrap: { width: COLS[0].w } })));
   }
 
   private shipwright(): void {
