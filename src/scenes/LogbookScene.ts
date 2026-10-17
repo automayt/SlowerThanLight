@@ -35,8 +35,13 @@ export class LogbookScene extends Phaser.Scene {
     this.pageObjects = [];
     this.overlay = [];
     this.seen = discovered();
+    // By rarity, and within each rarity the tales already found first, so the early pages are not all question marks.
+    const seen = this.seen;
     this.tales = SEA_EVENTS.filter((e) => e.pool !== 'chain').sort(
-      (a, b) => ORDER.indexOf(a.rarity ?? 'common') - ORDER.indexOf(b.rarity ?? 'common') || a.title.localeCompare(b.title),
+      (a, b) =>
+        ORDER.indexOf(a.rarity ?? 'common') - ORDER.indexOf(b.rarity ?? 'common') ||
+        Number(seen.has(b.id)) - Number(seen.has(a.id)) ||
+        a.title.localeCompare(b.title),
     );
   }
 
@@ -54,7 +59,14 @@ export class LogbookScene extends Phaser.Scene {
     this.add.text(SCREEN.w / 2, 26, 'The Captain’s Logbook', { fontFamily: TITLE_FONT, fontSize: '32px', color: COLORS.gold }).setOrigin(0.5, 0);
     this.add.text(SCREEN.w / 2, 68, `${found} of ${events.length} tales discovered across all your voyages`, textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
     const legend = ORDER.map((r) => `${r[0].toUpperCase()}${r.slice(1)}: ${events.filter((e) => (e.rarity ?? 'common') === r && seen.has(e.id)).length}/${events.filter((e) => (e.rarity ?? 'common') === r).length}`);
-    legend.forEach((t, i) => this.add.text(SCREEN.w / 2 - 390 + i * 200, 96, t, textStyle(13, RARITY_COLOR[ORDER[i]], { fontStyle: 'bold' })));
+    // Centred as a row, spaced by the measured widths.
+    const keys = legend.map((t, i) => this.add.text(0, 96, t, textStyle(14, RARITY_COLOR[ORDER[i]], { fontStyle: 'bold' })));
+    const spacing = 48;
+    let lx = (SCREEN.w - keys.reduce((n, k) => n + k.width, 0) - spacing * (keys.length - 1)) / 2;
+    for (const k of keys) {
+      k.setX(lx);
+      lx += k.width + spacing;
+    }
 
     const pages = Math.ceil(events.length / (COLS * ROWS));
     const turn = (d: number) => {
@@ -62,12 +74,13 @@ export class LogbookScene extends Phaser.Scene {
       this.page = (this.page + d + pages) % pages;
       this.drawPage();
     };
-    new Button(this, SCREEN.w / 2 - 330, SCREEN.h - 66, 60, 40, '◀', () => turn(-1), { size: 18 });
-    new Button(this, SCREEN.w / 2 + 270, SCREEN.h - 66, 60, 40, '▶', () => turn(1), { size: 18 });
-    this.pageLabel = this.add.text(SCREEN.w / 2 - 200, SCREEN.h - 54, '', textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
+    // Page turning in the middle, the page number between the arrows; the way out at the left.
+    new Button(this, SCREEN.w / 2 - 150, SCREEN.h - 66, 60, 40, '◀', () => turn(-1), { size: 18 });
+    new Button(this, SCREEN.w / 2 + 90, SCREEN.h - 66, 60, 40, '▶', () => turn(1), { size: 18 });
+    this.pageLabel = this.add.text(SCREEN.w / 2, SCREEN.h - 46, '', textStyle(15, COLORS.text)).setOrigin(0.5);
 
     const back = () => (this.overlay.length ? this.closeOverlay() : this.scene.start('Title'));
-    new Button(this, SCREEN.w / 2 - 90, SCREEN.h - 66, 180, 40, '← Back', back, { size: 16 });
+    new Button(this, 48, SCREEN.h - 66, 160, 40, '← Back', back, { size: 16 });
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', back);
     kb.on('keydown-LEFT', () => turn(-1));
@@ -99,7 +112,7 @@ export class LogbookScene extends Phaser.Scene {
       }
       this.pageObjects.push(
         this.add
-          .text(x + CARD.w / 2, y + CARD.h + 5, known ? e.title : '? ? ?', textStyle(12, RARITY_COLOR[rarity], { align: 'center', wordWrap: { width: CARD.w }, fontStyle: known ? 'normal' : 'italic' }))
+          .text(x + CARD.w / 2, y + CARD.h + 5, known ? e.title : '? ? ?', textStyle(13, RARITY_COLOR[rarity], { align: 'center', wordWrap: { width: CARD.w }, fontStyle: known ? 'normal' : 'italic' }))
           .setOrigin(0.5, 0)
           .setAlpha(known ? 1 : 0.45),
       );
