@@ -105,6 +105,10 @@ export class ShipView {
   private readonly flag: Ensign;
   private readonly ensign: EnsignArt;
   private readonly strips: Phaser.GameObjects.Image[] = [];
+  /** Her stern half, once she has blown in two. */
+  private wreck: Phaser.GameObjects.Image | null = null;
+  /** Where she broke, in screen pixels from the left of her painted hull. */
+  private breakX = 0;
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -210,16 +214,19 @@ export class ShipView {
     return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
   }
 
-  /** Muzzle of the cannon that stands for gun `index`, and the way it points. */
+  /** Muzzle of the cannon that stands for gun `index`, run out through its port in the ship's side, and the way it points. */
   muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
     const guns = this.gunRoom;
+    const mid = this.ship.height / 2;
     if (!guns) {
-      const c = this.toScreen({ x: this.ship.width / 2, y: this.ship.height / 2 });
+      const c = this.toScreen({ x: this.ship.width / 2, y: mid });
       return { ...c, dx: 0, dy: -1 };
     }
     const col = index % guns.w;
     const top = Math.floor(index / guns.w) % 2 === 0 || guns.h === 1;
-    const p = this.toScreen({ x: guns.x + col + 0.5, y: top ? guns.y + 0.3 - 0.4 : guns.y + guns.h - 0.3 + 0.4 });
+    const x = guns.x + col + 0.5;
+    const side = this.geom.half(x) + 0.05;
+    const p = this.toScreen({ x, y: top ? mid - side : mid + side });
     return { x: p.x, y: p.y, dx: 0, dy: top ? -1 : 1 };
   }
 
@@ -260,6 +267,43 @@ export class ShipView {
     this.finale = { kind, t0: nowMs / 1000 };
     this.nameText?.setVisible(false);
     for (const b of this.badges.values()) b.setVisible(false);
+    if (kind === 'explode') this.breakUp();
+  }
+
+  /** Crack the hull in two at the waist: each half is cut out into a texture of its own, so the halves can part. */
+  private breakUp(): void {
+    const g = this.geom;
+    const src = this.base.texture.getSourceImage() as HTMLCanvasElement;
+    const cut = Math.round((this.ship.width * 0.55 + g.padL) * this.tile * ART_SCALE);
+    const half = (suffix: string, x: number, w: number) => {
+      const key = `${this.base.texture.key}-${suffix}`;
+      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+      const tex = this.scene.textures.createCanvas(key, w, src.height)!;
+      const ctx = tex.getContext();
+      ctx.drawImage(src, x, 0, w, src.height, 0, 0, w, src.height);
+      // Splintered timbers along the break, not a clean saw cut.
+      const edge = x === 0 ? w : 0;
+      const inward = x === 0 ? -1 : 1;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.moveTo(edge, 0);
+      for (let y = 0; y <= src.height; y += 9) ctx.lineTo(edge + inward * (2 + Math.random() * 16), y);
+      ctx.lineTo(edge, src.height);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      tex.refresh();
+      this.keys.push(key);
+      return key;
+    };
+    const sternKey = half('stern', 0, cut);
+    const bowKey = half('bow', cut, src.width - cut);
+    // Both halves pivot about the break, on the keel; flipped, each break edge is on the other side.
+    const oy = (g.padT + this.ship.height / 2) / (g.padT + this.ship.height + g.padB);
+    this.wreck = this.scene.add.image(0, 0, sternKey).setScale(1 / ART_SCALE).setFlipX(this.flip).setDepth(DEPTH.base).setOrigin(this.flip ? 0 : 1, oy);
+    this.base.setTexture(bowKey).setOrigin(this.flip ? 1 : 0, oy);
+    this.breakX = (this.flip ? src.width - cut : cut) / ART_SCALE;
+    this.marks?.setVisible(false);
   }
 
   /** Her own gun has fired out of the side facing `dy`: she gives a little the other way. */
@@ -273,7 +317,7 @@ export class ShipView {
   }
 
   destroy(): void {
-    for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
+    for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
   }
 
@@ -282,9 +326,18 @@ export class ShipView {
     const T = this.tile;
     const left = (this.flip ? this.ox - g.padR * T : this.ox - g.padL * T) + this.fx;
     const top = this.oy + this.bob + this.fy - g.padT * T;
-    this.base.setPosition(left, top);
+    if (this.wreck && this.finale) {
+      // Blown in two: the halves part and fold away from the break.
+      const k = Math.min(1, (this.scene.time.now / 1000 - this.finale.t0) / 3.2);
+      const bow = this.flip ? -1 : 1;
+      const px = left + this.breakX;
+      const py = top + this.base.originY * this.base.displayHeight;
+      const ease = 1 - Math.pow(1 - k, 2);
+      this.base.setPosition(px + bow * ease * 16, py).setRotation(bow * ease * 0.16);
+      this.wreck.setPosition(px - bow * ease * 14, py + ease * 4).setRotation(-bow * ease * 0.12);
+    } else this.base.setPosition(left, top);
     this.rig.setPosition(left, top + this.roll);
-    const texW = this.base.width;
+    const texW = this.rig.width;
     for (const { img, piece } of this.furls) {
       img.setPosition(left + (this.flip ? texW - piece.x - piece.w : piece.x) / ART_SCALE, top + this.roll + piece.y / ART_SCALE);
     }
@@ -315,13 +368,15 @@ export class ShipView {
     const rigFade = fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1;
     this.rig.setAlpha(rigFade);
     this.base.setAlpha(fade);
+    this.wreck?.setAlpha(fade);
     this.over.setAlpha(fade);
-    this.drawMarks(fade);
+    if (!this.wreck) this.drawMarks(fade);
     if (fin && fin.kind !== 'sail') {
       // Darken and drown the hull as she goes.
       const c = Math.round(255 - fin.k * 150);
       const tint = (c << 16) | (Math.round(255 - fin.k * 110) << 8) | Math.round(255 - fin.k * 70);
       this.base.setTint(tint);
+      this.wreck?.setTint(tint);
       this.rig.setTint(tint);
     }
 
