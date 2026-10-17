@@ -331,10 +331,10 @@ export class SeaMapScene extends Phaser.Scene {
         ...placed.map((o) => Math.hypot(px - o.x, py - o.y) - o.r - 10),
       );
     /** The roomiest of a few hundred random spots, or null if none has room for r. */
-    const spot = (r: number, tries = 260) => {
+    const spot = (r: number, tries = 260, padX = 20) => {
       let best: { x: number; y: number; room: number } | null = null;
       for (let i = 0; i < tries; i++) {
-        const px = x + 20 + rand() * (w - 40);
+        const px = x + padX + rand() * (w - 2 * padX);
         const py = y + 20 + rand() * (h - 40);
         const room = clearance(px, py);
         if (room >= r && (!best || room > best.room)) best = { x: px, y: py, room };
@@ -370,10 +370,14 @@ export class SeaMapScene extends Phaser.Scene {
       placed.push({ x: at.x, y: at.y, r: r * 1.5 });
     }
     if (look.serpent) {
-      const at = spot(62, 400);
-      if (at) {
-        this.add.image(at.x, at.y, chartSerpent(this)).setDepth(-1).setAlpha(0.75).setFlipX(rand() < 0.5);
-        placed.push({ x: at.x, y: at.y, r: 62 });
+      // It is wider than it is tall: keep its ends off the neatline.
+      // Smaller, if the chart is crowded.
+      for (const scale of [1, 0.72]) {
+        const at = spot(62 * scale, 400, 126 * scale);
+        if (!at) continue;
+        this.add.image(at.x, at.y, chartSerpent(this)).setDepth(-1).setAlpha(0.75).setScale(scale).setFlipX(rand() < 0.5);
+        placed.push({ x: at.x, y: at.y, r: 62 * scale });
+        break;
       }
     }
     // Wave marks scattered over the open water.
