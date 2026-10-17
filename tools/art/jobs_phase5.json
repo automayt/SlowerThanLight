@@ -106,5 +106,23 @@
     "h": 768,
     "kw": { "lora_s": 0.45 },
     "prompt": "An armed Spanish patrol schooner flying one red and gold Spanish flag sails straight toward the viewer across a turquoise sea, a puff of grey-white cannon smoke rolling away from her side, a column of white spray rising from the water in the foreground where a cannonball has landed, palm-covered coast behind, a lone ship"
+  },
+  {
+    "name": "event-guarda_r6",
+    "model": "flux",
+    "seed": 9135,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A Spanish guarda costa schooner of 1715 with two raked masts and fore-and-aft sails, a large red and gold Spanish flag at her stern, closing in under full sail with her gun ports open and a few cannons run out, an officer at the rail with a speaking trumpet hailing the viewer, a thin wisp of gunsmoke drifting away to leeward, Caribbean blue sea, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "event-guarda_r7",
+    "model": "flux",
+    "seed": 9136,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "Seen from the deck of a pirate sloop, a lean Spanish coastguard schooner with two masts and a red and gold Spanish flag heels toward us across bright green water, signal flags run up her rigging, her gun ports open, men in morion helmets and breastplates along her rail, afternoon sun"
   }
 ]
