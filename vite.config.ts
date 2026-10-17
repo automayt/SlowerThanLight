@@ -13,5 +13,9 @@ export default defineConfig({
       },
     },
   },
-  test: { include: ['tests/**/*.test.ts'] },
+  test: {
+    include: ['tests/**/*.test.ts'],
+    // `npm run coverage`: the simulation and its data are what the tests can reach (scenes need a browser).
+    coverage: { provider: 'v8', include: ['src/sim/**', 'src/data/**', 'src/scenes/save.ts'], reporter: ['text', 'text-summary'] },
+  },
 });
