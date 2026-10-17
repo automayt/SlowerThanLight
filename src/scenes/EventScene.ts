@@ -58,7 +58,11 @@ export class EventScene extends Phaser.Scene {
 
     ev.choices.forEach((choice, i) => {
       const blocked = run.choiceBlocker(i);
-      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
+      // Warn about hidden costs: time lost to the fleet, or a fight.
+      const time = choice.outcomes.filter((o) => (o.effect.navy ?? 0) > 0).length;
+      const fight = choice.outcomes.some((o) => o.effect.battle);
+      const hints = [time ? (time === choice.outcomes.length ? 'costs time' : 'may cost time') : '', fight ? 'may mean a fight' : ''].filter(Boolean);
+      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}${hints.length ? `  · ${hints.join(', ')}` : ''}`;
       const b = new Button(this, this.tx, this.choicesY + i * 54, this.tw, 44, label, () => this.choose(i), { size: 16 });
       b.label.setOrigin(0, 0.5).setX(16);
       b.setEnabled(!blocked);

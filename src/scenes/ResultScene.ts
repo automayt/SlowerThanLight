@@ -5,6 +5,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
+import { MAX_GUNS } from '../sim/Run';
 import type { ResultData } from './BattleScene';
 import { saveRun } from './save';
 
@@ -102,7 +103,12 @@ export class ResultScene extends Phaser.Scene {
     const prize = run.prize;
     if (!prize || prize.taken) return;
     const picks: [string, () => string | null][] = [
-      ...prize.guns.map((id): [string, () => string | null] => [`Take her ${weapon(id).name}`, () => run.takePrizeGun(id)]),
+      ...prize.guns.map((id): [string, () => string | null] => {
+        // Will the gun deck have the bars to crew it alongside the guns already aboard?
+        const hands = run.fit.guns.reduce((n, g) => n + weapon(g.weapon).hands, 0) + weapon(id).hands;
+        const short = run.fit.guns.length < MAX_GUNS && hands > (run.fit.systems.guns ?? 0) ? `  (needs Gun Deck ${hands})` : '';
+        return [`Take her ${weapon(id).name}${short}`, () => run.takePrizeGun(id)];
+      }),
       ...(prize.recruits
         ? [
             [

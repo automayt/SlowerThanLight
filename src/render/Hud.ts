@@ -140,8 +140,8 @@ export class Hud {
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => (p.rightButtonDown() ? cb.clearGunTarget(i) : cb.selectGun(i)));
       if (scene.textures.exists('sysicon:guns')) scene.add.image(x + 18, BOTTOM_Y + 19, 'sysicon:guns').setScale(0.55);
       const name = scene.add.text(x + 34, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, { fontFamily: TITLE_FONT, fontSize: '14px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: CARD_W - 42 } });
-      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 22, '', () => battle.toggleGun(i), { size: 12 });
-      scene.add.text(x + 88, BOTTOM_Y + 54, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''} · ${gun.def.shots}×${gun.def.damage}`, textStyle(11, COLORS.textDim));
+      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 64, 22, '', () => battle.toggleGun(i), { size: 11 });
+      scene.add.text(x + 76, BOTTOM_Y + 55, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''} · ${gun.def.shots}×${gun.def.damage} dmg`, textStyle(10, COLORS.textDim));
       const status = scene.add.text(x + 8, BOTTOM_Y + 98, '', textStyle(11, COLORS.textDim));
       const target = scene.add.text(x + 8, BOTTOM_Y + 114, '', textStyle(11));
       const shots = SHOT_TYPES.map((s, j) => {
@@ -212,7 +212,9 @@ export class Hud {
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
     tint(this.playerStats, battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
-    const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : 'Make Sail…';
+    const rate = player.escapeRate();
+    const eta = rate > 0 ? Math.ceil((100 - player.escape) / rate) : 0;
+    const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : rate > 0 ? `Make Sail ${eta}s` : 'No way on';
     this.escapeBtn.setEnabled(battle.canEscape()).setText(escapeLabel);
 
     this.drawHull(enemy, SCREEN.w - 414, 14);
