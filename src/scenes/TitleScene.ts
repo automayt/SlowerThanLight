@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { placeBackdrop } from '../render/art';
-import { isMuted, playLoop, stopLoop, toggleMute } from '../render/sound';
+import { playLoop, stopLoop } from '../render/sound';
 import { setRun } from '../render/RunBar';
-import { Button, Sea } from '../render/ui';
+import { Button, Sea, SoundButton } from '../render/ui';
 import { Run } from '../sim/Run';
 import { disableSaving, loadRun, sceneFor } from './save';
 
@@ -38,28 +38,30 @@ export class TitleScene extends Phaser.Scene {
       this.registry.set('chart-note', `You take up the voyage again aboard ${saved.def.name}.`);
       this.scene.start(sceneFor(saved));
     };
+    let primary: Button;
     if (saved) {
-      new Button(this, cx - 230, 340, 220, 52, 'Continue Voyage', resume, { size: 22 });
-      new Button(this, cx + 10, 340, 220, 52, 'New Voyage', () => this.scene.start('ShipSelect'), { size: 22 });
+      primary = new Button(this, cx - 240, 340, 230, 52, 'Continue Voyage', resume, { size: 22, hint: 'Enter' });
+      new Button(this, cx + 10, 340, 230, 52, 'New Voyage', () => this.scene.start('ShipSelect'), { size: 22 });
       this.add
         .text(cx, 404, `${saved.def.name} · ${saved.sectorDef.name} · leg ${saved.legs.sailed} of ${saved.legs.total} · ${saved.gold} gold`, textStyle(14, COLORS.text, { backgroundColor: '#0b1622bb', padding: { x: 10, y: 4 } }))
         .setOrigin(0.5, 0);
     } else {
-      new Button(this, cx - 110, 340, 220, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22 });
+      primary = new Button(this, cx - 115, 340, 230, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22, hint: 'Enter' });
     }
 
     new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 });
-    const sound = new Button(this, 20, SCREEN.h - 58, 150, 38, isMuted() ? 'Sound: off' : 'Sound: on', () => sound.setText(toggleMute(this.game) ? 'Sound: off' : 'Sound: on'), { size: 16 });
+    new SoundButton(this, 20, SCREEN.h - 58, 38);
     playLoop(this, 'shanty', 0.35);
     stopLoop(this, 'creak');
 
     // The controls live behind a button, so the painting stays clear.
-    new Button(this, cx - 85, SCREEN.h - 58, 170, 38, 'How to play', () => this.showHelp(), { size: 16 });
-    this.input.keyboard!.on('keydown-ESC', () => this.closeHelp());
-    this.input.keyboard!.on('keydown-ENTER', () => {
+    new Button(this, cx - 85, SCREEN.h - 58, 170, 38, 'How to Play', () => this.showHelp(), { size: 16, hint: 'H' });
+    const kb = this.input.keyboard!;
+    kb.on('keydown-ESC', () => this.closeHelp());
+    kb.on('keydown-H', () => (this.help.length ? this.closeHelp() : this.showHelp()));
+    kb.on('keydown-ENTER', () => {
       if (this.help.length) this.closeHelp();
-      else if (saved) resume();
-      else this.scene.start('ShipSelect');
+      else primary.press();
     });
   }
 
@@ -72,9 +74,10 @@ export class TitleScene extends Phaser.Scene {
       ['Guns', 'Click a gun card, then an enemy room, to aim. Right-click a card to hold fire.'],
       ['Deckhands', 'They are your power: put them on Bulwarks, Sails, Pumps, the Surgeon and the guns.'],
       ['Boarding', 'Select crew, then click an enemy room to board her (if you are as fast as she is).'],
+      ['Keys', 'Enter takes the main action, Esc goes back, number keys pick a numbered choice, M mutes the sound.'],
     ];
     const w = 720;
-    const h = 380;
+    const h = 440;
     const x = (SCREEN.w - w) / 2;
     const y = (SCREEN.h - h) / 2 - 10;
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.55).setOrigin(0).setDepth(30).setInteractive();

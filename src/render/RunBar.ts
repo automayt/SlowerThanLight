@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Run } from '../sim/Run';
 import { SYSTEM_NAMES, type SystemId } from '../sim/types';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
-import { drawBar, panel } from './ui';
+import { drawBar, panel, SoundButton } from './ui';
 
 /** The scene that holds the current voyage. Scenes share it through the game registry. */
 export function currentRun(scene: Phaser.Scene): Run {
@@ -42,6 +42,8 @@ export class RunBar {
   private readonly fleet: Phaser.GameObjects.Text;
   private readonly food: Phaser.GameObjects.Text;
   private readonly sector: Phaser.GameObjects.Text;
+  /** What the strip last showed, so a refresh every frame only redraws when something changed. */
+  private shown = '';
 
   constructor(scene: Phaser.Scene, private readonly run: Run) {
     panel(scene, 8, 8, SCREEN.w - 16, 62).setDepth(5);
@@ -55,12 +57,16 @@ export class RunBar {
     this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(6);
     this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(6);
     this.food = scene.add.text(760, 14, '', textStyle(16, COLORS.text, { fontStyle: 'bold' })).setDepth(6);
+    new SoundButton(scene, 972, 23, 30).setDepth(6);
     this.refresh();
   }
 
   refresh(): void {
     const { run } = this;
     const c = run.condition;
+    const state = `${c.hull}/${run.fit.hull} ${c.crew.map((m) => m.hp).join()}/${run.maxCrew} ${run.gold} ${JSON.stringify(c.damage)} ${run.navy}@${run.nodeId} ${run.sector} ${run.provisions}/${run.maxProvisions}`;
+    if (state === this.shown) return;
+    this.shown = state;
     const g = this.g;
     g.clear();
     this.hull.setText(`Hull ${c.hull}/${run.fit.hull}`);
@@ -71,7 +77,9 @@ export class RunBar {
     this.gold.setText(`${run.gold} gold`);
     const dmg = (Object.entries(c.damage) as [SystemId, number][]).map(([id, n]) => `${SYSTEM_NAMES[id]} −${n}`);
     this.damage.setText(dmg.length ? `Damaged: ${dmg.join(', ')}` : '');
-    this.fleet.setText(fleetDistance(run));
+    // The fleet's line warms from parchment to red as it closes.
+    const gap = run.node.col - run.navy;
+    this.fleet.setText(fleetDistance(run)).setColor(gap > 2 ? COLORS.text : gap > 1 ? COLORS.gold : COLORS.textWarn);
     this.sector.setText(`Sector ${run.sector + 1}: ${run.sectorDef.name}`);
     this.food.setText(`Provisions ${run.provisions}/${run.maxProvisions}`);
     this.food.setColor(run.provisions === 0 ? COLORS.textWarn : run.provisions <= 3 ? COLORS.gold : COLORS.text);
