@@ -408,7 +408,7 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     text: 'Weed and barnacles trail from her bottom in green beards. She sails like a haystack.',
     choices: [
       { label: 'Careen her on the next beach', outcomes: [{ weight: 1, effect: { text: 'Two days on her side, scraping and paying the seams. She flies again.', navy: 1, hull: 4 } }] },
-      { label: 'Sail on, slower', outcomes: [{ weight: 1, effect: { text: 'The Navy’s ships have copper bottoms. Yours does not.', navy: 0.5 } }] },
+      { label: 'Sail on, slower', outcomes: [{ weight: 1, effect: { text: 'The Navy careens its ships every season. Yours drags a beard of weed.', navy: 0.5 } }] },
     ],
   },
 ];

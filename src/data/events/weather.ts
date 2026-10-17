@@ -131,7 +131,7 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     pool: 'incident',
     rarity: 'rare',
     needs: { minCol: 3 },
-    text: 'The swell has been building for a day under a coppery sky. Now the barometer falls through the floor. A hurricane is coming.',
+    text: 'The swell has been building for a day under a coppery sky. Now the gulls are gone and the old hands are stowing everything twice. A hurricane is coming.',
     choices: [
       { label: 'Run for the lee of the nearest island', outcomes: [{ weight: 1, effect: { text: 'You claw into shelter, battered but whole, and lose two days waiting it out.', hull: -3, navy: 1 } }] },
       {
