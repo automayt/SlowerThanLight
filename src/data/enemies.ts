@@ -157,7 +157,20 @@ export const GALLEON: ShipDef = {
 };
 
 /** Spanish coastguard: a privateer-built schooner under the colours of Spain. */
-export const GUARDA_COSTA: ShipDef = { ...PRIVATEER, id: 'guarda', className: 'Guarda Costa', description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.' };
+export const GUARDA_COSTA: ShipDef = {
+  ...PRIVATEER,
+  id: 'guarda',
+  name: 'San Antonio',
+  className: 'Guarda Costa',
+  description: 'A Spanish coastguard schooner that treats every English hull as a smuggler.',
+  crew: [
+    { name: 'Teniente Olivares', room: 'helm' },
+    { name: 'Artillero Campos', room: 'guns' },
+    { name: 'Cabo Ferrer', room: 'guns' },
+    { name: 'Gaviero Lucena', room: 'sails' },
+    { name: 'Contramaestre Iriarte', room: 'pumps' },
+  ],
+};
 
 /** A fast, shallow sloop running contraband between the islands. Light guns, a deep false hold, and no wish to fight. */
 export const SMUGGLER_SLOOP: ShipDef = {
@@ -214,6 +227,7 @@ export const CORSAIR_LUGGER: ShipDef = {
     { name: 'Canonnier Le Bihan', room: 'guns' },
     { name: 'Matelot Riou', room: 'berth' },
     { name: 'Matelot Morvan', room: 'berth' },
+    { name: 'Matelot Quéré', room: 'berth' },
   ],
 };
 
@@ -299,7 +313,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     id: 'corsair',
     ship: CORSAIR_LUGGER,
     faction: 'privateer',
-    ai: { fleeAt: 0.25, surrenderChance: 0.3, surrenderAt: 0.2, boardWith: 3 },
+    ai: { fleeAt: 0.25, surrenderChance: 0.3, surrenderAt: 0.2, boardWith: 2 },
     plunder: [40, 60],
     names: ['La Mouette', 'Le Furet', "L'Hirondelle", 'La Belle Poule', 'Le Requin', 'La Sorcière'],
     sighting: 'A French corsair lugger, lean as a knife, runs up the white ensign and comes on hard.',
@@ -384,7 +398,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     ship: NAVY_FRIGATE,
     faction: 'navy',
     ai: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0, boardWith: 2 },
-    plunder: [150, 150],
+    // Beating her ends the voyage: she pays in freedom, not gold.
+    plunder: [0, 0],
     names: ['HMS Relentless'],
     sighting: 'HMS Relentless bars the channel. The Commodore means to finish this here.',
   },

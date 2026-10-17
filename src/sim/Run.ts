@@ -12,6 +12,11 @@ import { SYSTEM_NAMES } from './types';
 
 /** Where the Navy fleet starts, in chart columns (the player starts in column 0). */
 export const NAVY_START = -2.5;
+/**
+ * Share of the ground the fleet has made up on you, beyond what a straight run gives away, that it keeps
+ * through a passage into the next sector. Sailing straight on stays safe; detours, rests and alarms follow you.
+ */
+export const SECTOR_CARRY = 0.75;
 /** Columns the fleet advances per jump. A little faster than you, so dawdling catches up with you. */
 export const NAVY_SPEED = 1.25;
 /** Columns the fleet loses when you sink one of its pickets. */
@@ -43,25 +48,46 @@ export const DESERT_CHANCE = 0.3;
 /** Chance a quiet crossing of open sea brings in a provision (fishing, a turtle, rainwater). */
 export const FORAGE_CHANCE = 0.3;
 /** Plunder is scaled by this, and by a further share per sector deeper into the voyage. */
-export const PLUNDER_MULT = 1.5;
-export const SECTOR_PLUNDER = 0.5;
+export const PLUNDER_MULT = 1.25;
+export const SECTOR_PLUNDER = 0.25;
+/** Shipwright, chandler and armoury prices rise by this share per sector (hull repairs, crew and food do not). */
+export const SECTOR_PRICE = 0.2;
+/** Gold found in events rises by this share per sector. */
+export const SECTOR_EVENT_GOLD = 0.2;
 
-/** A tougher enemy for deeper sectors: more hull and hands, heavier guns, and (last sector) an extra gun bar. */
+/** One step heavier for each gun a better-found ship carries. */
+const HEAVIER: Record<string, string> = { pdr6: 'pdr9', pdr9: 'pdr12' };
+
+/** Hands needed to crew a set of guns. */
+const gunHands = (guns: GunMount[]) => guns.reduce((n, g) => n + weapon(g.weapon).hands, 0);
+
+/**
+ * A tougher enemy for deeper sectors: 10% more hull per tier, one gun a step heavier per tier (never the same gun
+ * twice), and in the last sector a bar more sail. She gets exactly the hands and gun bars to work it all, so nobody
+ * stands idle.
+ */
 export function scaleEnemy(def: ShipDef, tier: number): ShipDef {
   if (tier <= 0) return def;
   const systems = { ...def.systems };
   const guns = def.guns.map((g) => ({ ...g }));
-  const heavier = (from: string, to: string) => {
-    const g = guns.find((x) => x.weapon === from);
-    if (g) g.weapon = to;
-  };
-  heavier('pdr6', 'pdr9');
-  if (tier >= 2) {
-    systems.guns = (systems.guns ?? 0) + 1;
-    heavier('pdr9', 'pdr12');
+  const upgraded = new Set<number>();
+  for (let t = 0; t < Math.min(tier, 2); t++) {
+    // First a 6-pounder becomes a 9; deeper still, another gun goes from a 9 to a 12.
+    const order = t === 0 ? ['pdr6', 'pdr9'] : ['pdr9', 'pdr6'];
+    const pick = order.map((from) => guns.findIndex((g, i) => !upgraded.has(i) && g.weapon === from)).find((i) => i >= 0);
+    if (pick === undefined) break;
+    guns[pick].weapon = HEAVIER[guns[pick].weapon];
+    upgraded.add(pick);
   }
-  return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + tier, systems, guns };
+  const extraGunHands = gunHands(guns) - gunHands(def.guns);
+  systems.guns = Math.max(systems.guns ?? 0, gunHands(guns));
+  // The last sector's ships also carry more sail, with a hand to work it.
+  const sails = tier >= 2 ? 1 : 0;
+  systems.sails = (systems.sails ?? 0) + sails;
+  return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + extraGunHands + sails, systems, guns };
 }
+/** How well found the blockade frigate is, on scaleEnemy's scale: more hull and a 12-pounder for her long 9. */
+export const BOSS_TIER = 1;
 export const HULL_PRICE = 3;
 export const CREW_PRICE = 30;
 /** Hired crew allowed above the ship's starting complement. */
@@ -252,6 +278,7 @@ export class Run {
   private makeChart(sector: number): SeaChart {
     const def = SECTORS[sector];
     return generateChart(this.rng, {
+      depth: [sector / SECTORS.length, (sector + 1) / SECTORS.length],
       columns: SECTOR_COLUMNS,
       ports: PORT_NAMES,
       armoury: ARMOURY,
@@ -343,8 +370,9 @@ export class Run {
     this.jumps++;
     this.visited.push(id);
     this.prize = null;
-    this.runningRepairs();
-    this.eat();
+    // Hungry crews do not mend: eat first, and heal only on a full belly.
+    const fed = this.eat();
+    this.runningRepairs(fed);
     this.navy += this.navySpeed;
 
     if (node.kind === 'exit') return this.enterSector(this.sector + 1);
@@ -380,12 +408,12 @@ export class Run {
     return this.begin({ kind: 'empty', text: this.rng.pick(QUIET_LINES) });
   }
 
-  /** A jump eats a day's provisions. With none left the crew go hungry, and someone may jump ship. */
-  private eat(): void {
+  /** A jump eats a day's provisions. With none left the crew go hungry, and someone may jump ship. Returns whether they ate. */
+  private eat(): boolean {
     this.hungerNote = '';
     if (this.provisions > 0) {
       this.provisions--;
-      return;
+      return true;
     }
     const c = this.condition;
     for (const m of c.crew) m.hp = Math.max(1, m.hp - STARVE_HP);
@@ -395,17 +423,32 @@ export class Run {
       notes.push(`${gone.name} slips over the side in the night.`);
     }
     this.hungerNote = notes.join(' ');
+    return false;
   }
 
-  /** Sail through a passage into the next sector: a fresh chart, and the fleet loses your trail for a while. */
+  /**
+   * Sail through a passage into the next sector: a fresh chart, and the fleet loses some of your trail.
+   * A straight run across a sector gives away (columns - 1) x (fleet speed - 1); whatever else it gained on you,
+   * it keeps SECTOR_CARRY of.
+   */
   private enterSector(sector: number): Encounter {
+    const fresh = -NAVY_START;
+    const gap = this.node.col - this.navy;
+    const straight = (this.chart.columns - 1) * Math.max(0, this.navySpeed - 1);
+    const lost = Math.max(0, fresh - gap - straight);
     this.sector = sector;
     this.chart = this.makeChart(sector);
     this.nodeId = 0;
     this.visited = [0];
-    this.navy = NAVY_START;
+    this.navy = NAVY_START + SECTOR_CARRY * lost;
     const def = this.sectorDef;
-    return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} The fleet has lost your trail for now. It will find it again.` });
+    const fleet = lost >= 1 ? 'The fleet is hard on your heels: its topsails were in sight as you cleared the passage.' : 'The fleet has lost your trail for now. It will find it again.';
+    return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} ${fleet}` });
+  }
+
+  /** Shipwright, chandler and armoury prices in this sector. */
+  price(base: number): number {
+    return Math.round(base * (1 + SECTOR_PRICE * this.sector));
   }
 
   /** A name for the ship you meet: one you have not fought before, if it can be helped. */
@@ -422,10 +465,10 @@ export class Run {
     return enc;
   }
 
-  /** Between nodes: wounds mend a little and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
-  private runningRepairs(): void {
-    const heal = this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
-    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + heal);
+  /** Between nodes: wounds mend a little (not on empty stores) and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
+  private runningRepairs(heal: boolean): void {
+    const hp = !heal ? 0 : this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
+    for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + hp);
     for (let i = this.has('spars') ? 2 : 1; i > 0; i--) {
       const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
       if (worst) this.setDamage(worst[0], worst[1] - 1);
@@ -448,8 +491,8 @@ export class Run {
   startBattle(opts: Partial<BattleOptions> = {}): Battle {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
-    // Deeper sectors field better-found ships; the blockade is what it is.
-    const ship = scaleEnemy(foe.ship, this.encounter.boss ? 0 : this.sector);
+    // Deeper sectors field better-found ships; the blockade frigate has her own fit.
+    const ship = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : this.sector);
     const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull);
     return new Battle(this.ship, { ...ship, name: this.encounter.name, hull }, {
       seed: this.rng.int(2 ** 31),
@@ -509,7 +552,9 @@ export class Run {
       this.status = 'chart';
     }
     if (!enc.boss && (o.kind === 'captured' || o.kind === 'surrender')) {
-      this.prize = { guns: [...new Set(foe.ship.guns.map((g) => g.weapon))], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
+      // The guns she actually fought with, as found for this sector.
+      const guns = scaleEnemy(foe.ship, this.sector).guns.map((g) => g.weapon);
+      this.prize = { guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
     }
     return { kind: o.kind, won: o.won, plunder: enc.boss ? 0 : plunder, lines };
   }
@@ -609,6 +654,8 @@ export class Run {
     if (n.flag && !this.flags.has(n.flag)) return FLAG_LACKING[n.flag] ?? 'you lack something';
     if (n.noFlag && this.flags.has(n.noFlag)) return 'already done';
     if (n.gunPort && this.fit.guns.length >= MAX_GUNS) return 'no free gun port';
+    if (n.provisions && this.provisions < n.provisions) return `needs ${n.provisions} provisions`;
+    if (n.minSector !== undefined && this.sector < n.minSector) return 'too early';
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
     if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
     return null;
@@ -691,7 +738,9 @@ export class Run {
     if (e.clearFlag) this.flags.delete(e.clearFlag);
     if (e.gold) {
       const before = this.gold;
-      this.gold = Math.max(0, this.gold + e.gold);
+      // Richer waters, richer finds; losses stay as written.
+      const gold = e.gold > 0 ? Math.round(e.gold * (1 + SECTOR_EVENT_GOLD * this.sector)) : e.gold;
+      this.gold = Math.max(0, this.gold + gold);
       out.push(`${e.gold > 0 ? '+' : '−'}${Math.abs(this.gold - before)} gold`);
     }
     if (e.hull) {
@@ -729,6 +778,13 @@ export class Run {
         this.gold += scrap;
         out.push(`No free gun port: the ${w.name} fetches ${scrap} gold`);
       }
+    }
+    if (e.provisions) {
+      const before = this.provisions;
+      this.provisions = Math.max(0, Math.min(this.maxProvisions, this.provisions + e.provisions));
+      const n = this.provisions - before;
+      if (n) out.push(`${n > 0 ? '+' : '−'}${Math.abs(n)} provision${Math.abs(n) === 1 ? '' : 's'}`);
+      else if (e.provisions > 0) out.push('No room in the hold');
     }
     if (e.navy) {
       this.navy += e.navy;
@@ -818,7 +874,8 @@ export class Run {
     if (this.encounter.kind !== 'port') return [];
     return (this.encounter.fittings ?? []).map((id) => {
       const f = fitting(id);
-      return { fitting: f, price: f.price, available: this.inPort && !this.has(id) && this.gold >= f.price };
+      const price = this.price(f.price);
+      return { fitting: f, price, available: this.inPort && !this.has(id) && this.gold >= price };
     });
   }
 
@@ -846,7 +903,7 @@ export class Run {
       id: 'hull',
       label: 'Oak planking',
       detail: plating >= MAX_PLATING ? 'She can carry no more timber' : `Max hull ${f.hull} → ${f.hull + PLATING}`,
-      price: 35 + 15 * plating,
+      price: this.price(35 + 15 * plating),
       maxed: plating >= MAX_PLATING,
       available: plating < MAX_PLATING,
     });
@@ -855,7 +912,7 @@ export class Run {
       id: 'hands',
       label: 'Sign on deckhands',
       detail: extra >= EXTRA_HANDS ? 'No hammocks to spare' : `Deckhands ${f.hands} → ${f.hands + 1}`,
-      price: 30 + 10 * extra,
+      price: this.price(30 + 10 * extra),
       maxed: extra >= EXTRA_HANDS,
       available: extra < EXTRA_HANDS,
     });
@@ -866,7 +923,7 @@ export class Run {
         id,
         label: `Refit ${SYSTEM_NAMES[id]}`,
         detail: now >= SYSTEM_CAP[id] ? 'Fully fitted' : `${SYSTEM_NAMES[id]} ${now} → ${now + 1}`,
-        price: 20 + 8 * now,
+        price: this.price(20 + 8 * now),
         maxed: now >= SYSTEM_CAP[id],
         available: now < SYSTEM_CAP[id],
       });
@@ -900,7 +957,8 @@ export class Run {
     const room = this.fit.guns.length < MAX_GUNS;
     return this.encounter.stock.map((id) => {
       const w = weapon(id);
-      return { weapon: w, price: w.price, available: this.inPort && room && this.gold >= w.price };
+      const price = this.price(w.price);
+      return { weapon: w, price, available: this.inPort && room && this.gold >= price };
     });
   }
 
@@ -974,6 +1032,8 @@ export class Run {
     run.gold = s.gold;
     run.condition = s.condition;
     run.fit = s.fit;
+    // Saves from before bulwarks have no bulwark station in the fit: give her the one she was built with.
+    for (const [id, bars] of Object.entries(run.def.systems) as [SystemId, number][]) run.fit.systems[id] ??= bars;
     run.status = s.status;
     run.encounter = s.encounter;
     run.jumps = s.jumps;

@@ -3,7 +3,11 @@ import { PLAYER_SHIPS } from '../../src/data/ships';
 import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
-import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
+import { BOSS_TIER, CREW_PRICE, HULL_PRICE, NAVY_START, PROVISION_PRICE, SECTOR_CARRY, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
+import { WEAPONS } from '../../src/data/weapons';
+import { FITTINGS } from '../../src/data/fittings';
+import { grappleSpeed } from '../../src/sim/Boarding';
+import { Ship } from '../../src/sim/Ship';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
@@ -253,6 +257,12 @@ describe('auto runs', () => {
     const b = autoRun(new Run('gull', 77)).run;
     expect([a.status, a.gold, a.visited]).toEqual([b.status, b.gold, b.visited]);
   });
+
+  it('sometimes buys fittings, so balance runs exercise them', () => {
+    const bought = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) for (const f of autoRun(new Run('gull', seed), { focus: 'guns' }).run.fittings) bought.add(f);
+    expect(bought.size).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('enemy names', () => {
@@ -357,6 +367,18 @@ describe('prizes', () => {
     return run;
   };
 
+  it('spoils are the guns she fought with, heavier in deeper sectors', () => {
+    const run = runAt('battle');
+    run.sector = 2;
+    run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS Test', boss: false, ambush: false, text: '' };
+    const battle = run.startBattle();
+    for (const c of battle.enemy.crew) c.hp = 0;
+    battle.step(0.05);
+    run.finishBattle(battle);
+    expect(run.prize?.guns).toContain('pdr12');
+    expect(new Set(run.prize!.guns)).toEqual(new Set(battle.enemy.def.guns.map((g) => g.weapon)));
+  });
+
   it('a captured ship offers her guns; one pick only', () => {
     const run = win('captured');
     expect(run.prize?.guns.length).toBeGreaterThan(0);
@@ -438,6 +460,43 @@ describe('sectors, provisions and the chandler', () => {
     expect(run.chart.nodes.some((n) => n.kind === 'exit')).toBe(false);
   });
 
+  it('a straight run shakes off the fleet in the passage; ground lost to detours follows you into the next sector', () => {
+    const straight = new Run('gull', 11);
+    crossSector(straight);
+    // crossSector holds the fleet far back: the passage forgives a straight run entirely.
+    expect(straight.navy).toBe(NAVY_START);
+
+    const dawdler = new Run('gull', 11);
+    const enter = (dawdler as unknown as { enterSector(s: number): void }).enterSector.bind(dawdler);
+    // At the passage (column 5) with the fleet 2.25 columns closer than a straight run would have let it come.
+    dawdler.nodeId = dawdler.chart.nodes.find((n) => n.kind === 'exit')!.id;
+    dawdler.navy = 5 - (-NAVY_START - 1.25 - 2.25);
+    enter(1);
+    expect(dawdler.navy).toBeCloseTo(NAVY_START + SECTOR_CARRY * 2.25);
+    expect(dawdler.encounter).toMatchObject({ kind: 'empty' });
+    expect((dawdler.encounter as { text: string }).text).toContain('hard on your heels');
+
+    // A straight run on Normal (every jump onward, no rests) never meets an ambush in any sector.
+    for (let seed = 1; seed <= 10; seed++) {
+      const run = new Run('maw', seed);
+      for (let guard = 0; guard < 60 && !run.over && !(run.encounter.kind === 'battle' && run.encounter.boss); guard++) {
+        if (run.status === 'battle') {
+          expect(run.encounter.kind === 'battle' && run.encounter.ambush, `seed ${seed}`).toBe(false);
+          const b = run.startBattle({ autoPlayer: true });
+          b.enemy.hull = 0;
+          b.step(0.05);
+          run.finishBattle(b);
+        } else if (run.status === 'event') {
+          const ev = run.currentEvent();
+          // Take the choice that costs no time, as a captain in a hurry would.
+          const i = ev.choices.findIndex((c, j) => run.canChoose(j) && c.outcomes.every((o) => !o.effect.navy || o.effect.navy < 0));
+          run.chooseEvent(i >= 0 ? i : ev.choices.findIndex((_, j) => run.canChoose(j)));
+        } else if (run.status === 'port') run.leavePort();
+        else run.jump(run.reachable().find((n) => !run.isLateral(n))!.id);
+      }
+    }
+  });
+
   it('you can explore across a column to an unvisited neighbour', () => {
     for (let seed = 1; seed < 50; seed++) {
       const run = new Run('wren', seed);
@@ -468,11 +527,19 @@ describe('sectors, provisions and the chandler', () => {
     const hp = starving.condition.crew.map((c) => c.hp);
     starving.jump(starving.reachable()[0].id);
     expect(starving.hungerNote).toContain('hungry');
-    // Running repairs heal 15 first, then hunger takes 25.
-    starving.condition.crew.forEach((c, i) => expect(c.hp).toBeLessThanOrEqual(Math.max(1, Math.min(100, hp[i] + 15) - 25)));
+    // A hungry crew does not mend: the full 25 comes off, even with a surgeon's chest aboard.
+    starving.condition.crew.forEach((c, i) => expect(c.hp).toBe(Math.max(1, hp[i] - 25)));
+
+    const chest = new Run('gull', 4);
+    chest.provisions = 0;
+    chest.navy = -10;
+    chest.fittings.push('chest');
+    chest.condition.crew[0].hp = 60;
+    chest.jump(chest.reachable()[0].id);
+    expect(chest.condition.crew[0].hp).toBe(35);
   });
 
-  it('deeper sectors field tougher ships; the blockade does not grow', () => {
+  it('deeper sectors field tougher ships', () => {
     const base = ENEMIES.cutter.ship;
     const scaled = scaleEnemy(base, 2);
     expect(scaled.hull).toBeGreaterThan(base.hull);
@@ -480,6 +547,73 @@ describe('sectors, provisions and the chandler', () => {
     expect(scaled.systems.guns).toBeGreaterThan(base.systems.guns!);
     expect(scaled.guns.some((g) => g.weapon === 'pdr12')).toBe(true);
     expect(scaleEnemy(base, 0)).toBe(base);
+  });
+
+  it('the blockade frigate is better found than the frigate fresh from the yard', () => {
+    const run = new Run('gull', 8);
+    run.sector = 2;
+    run.status = 'battle';
+    run.encounter = { kind: 'battle', enemy: 'frigate', name: 'HMS Relentless', boss: true, ambush: false, text: '' };
+    const b = run.startBattle();
+    expect(b.enemy.def.hull).toBeGreaterThan(ENEMIES.frigate.ship.hull);
+    expect(b.enemy.def.guns).toEqual(scaleEnemy(ENEMIES.frigate.ship, BOSS_TIER).guns);
+    expect(b.enemy.def.guns.some((g) => g.weapon === 'pdr9')).toBe(false);
+  });
+
+  it('prices rise and finds grow richer deeper into the voyage', () => {
+    const run = runAt('port');
+    run.gold = 1000;
+    const before = { up: run.upgradeOffers()[0].price, fit: run.fittingOffers()[0].price, gun: run.gunOffers()[0].price };
+    run.sector = 2;
+    expect(run.upgradeOffers()[0].price).toBeGreaterThan(before.up);
+    expect(run.fittingOffers()[0].price).toBeGreaterThan(before.fit);
+    expect(run.gunOffers()[0].price).toBeGreaterThan(before.gun);
+    // Necessities stay at the same price.
+    const gold = run.gold;
+    run.buyProvisions(1);
+    expect(run.gold).toBe(gold - PROVISION_PRICE);
+    // And what you pay is what was offered.
+    const offer = run.upgradeOffers().find((o) => o.available)!;
+    const g = run.gold;
+    run.buyUpgrade(offer.id);
+    expect(run.gold).toBe(g - offer.price);
+
+    const finds = run.applyEffect({ text: '', gold: 20 });
+    expect(finds[0]).toMatch(/^\+2[1-9] gold$/);
+  });
+
+  it('later sectors stock heavier guns in their armouries', () => {
+    const avg = (sector: number) => {
+      let total = 0;
+      let n = 0;
+      for (let seed = 1; seed <= 40; seed++) {
+        const run = new Run('gull', seed);
+        (run as unknown as { sector: number }).sector = sector;
+        const chart = (run as unknown as { makeChart(s: number): SeaChart }).makeChart(sector);
+        for (const node of chart.nodes) for (const id of node.stock ?? []) (total += WEAPONS[id].price), n++;
+      }
+      return total / n;
+    };
+    expect(avg(2)).toBeGreaterThan(avg(0) + 10);
+  });
+
+  it('a scaled enemy upgrades different guns one step each, and has a use for every extra hand', () => {
+    const step: Record<string, string> = { pdr6: 'pdr9', pdr9: 'pdr12' };
+    const hands = (guns: { weapon: string }[]) => guns.reduce((n, g) => n + WEAPONS[g.weapon].hands, 0);
+    for (const e of Object.values(ENEMIES)) {
+      for (const tier of [1, 2]) {
+        const base = e.ship;
+        const s = scaleEnemy(base, tier);
+        const changed = s.guns.map((g, i) => [base.guns[i].weapon, g.weapon]).filter(([a, b]) => a !== b);
+        for (const [from, to] of changed) expect(to, `${e.id} tier ${tier}`).toBe(step[from]);
+        expect(changed.length).toBeLessThanOrEqual(tier);
+        const sails = tier >= 2 ? 1 : 0;
+        expect(s.systems.sails).toBe((base.systems.sails ?? 0) + sails);
+        // Every new hand goes on a heavier gun or the extra sail.
+        expect(s.hands - base.hands).toBe(hands(s.guns) - hands(base.guns) + sails);
+        expect(s.systems.guns).toBeGreaterThanOrEqual(hands(s.guns));
+      }
+    }
   });
 
   it('the chandler sells provisions and fittings, and fittings change the ship', () => {
@@ -496,6 +630,10 @@ describe('sectors, provisions and the chandler', () => {
     expect(run.fittingOffers().some((o) => o.fitting.id === id)).toBe(false);
     run.fittings.push('careened');
     expect(run.ship.speedBonus).toBe(run.def.speedBonus + 5);
+    // A careened hull also lays alongside faster ships, and says so.
+    const plain = new Ship(run.def, 'player');
+    expect(grappleSpeed(new Ship(run.ship, 'player'))).toBe(grappleSpeed(plain) + 1);
+    expect(FITTINGS.careened.blurb).toContain('grapple');
     run.fittings.push('casks');
     expect(run.maxProvisions).toBe(30);
   });
@@ -517,5 +655,16 @@ describe('sectors, provisions and the chandler', () => {
     const legacy = Run.fromSave(old);
     expect(legacy.sector).toBe(2);
     expect(legacy.provisions).toBeGreaterThan(0);
+  });
+
+  it('a save from before bulwarks gets her bulwark station back, so the refit is offered', () => {
+    const run = new Run('gull', 21);
+    const old = run.toSave();
+    delete old.fit.systems.bulwarks;
+    const back = Run.fromSave(old);
+    expect(back.fit.systems.bulwarks).toBe(run.def.systems.bulwarks);
+    back.status = 'port';
+    back.encounter = { kind: 'port', name: 'Nassau', rested: false, stock: [] };
+    expect(back.upgradeOffers().some((o) => o.id === 'bulwarks')).toBe(true);
   });
 });

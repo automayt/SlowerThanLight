@@ -38,6 +38,11 @@ export interface ChartOptions {
   exitName?: string;
   /** Who battle nodes hold, with relative weights. Defaults to the classic mix by depth. */
   enemies?: [string, number][];
+  /**
+   * Where this chart lies in the whole voyage, as [start, end] on a 0..1 scale (default: all of it).
+   * Armouries stock heavier guns, and the classic enemy mix turns harder, the deeper into the voyage a port lies.
+   */
+  depth?: [number, number];
 }
 
 /** Columns from start to boss inclusive, for a single-chart voyage. */
@@ -123,8 +128,9 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
     node.kind = bag.splice(rng.pick(allowed), 1)[0];
   }
 
+  const [from, to] = opts.depth ?? [0, 1];
   for (let col = 1; col < last; col++) {
-    const depth = col / last;
+    const depth = from + ((to - from) * col) / last;
     // A port in the middle of the voyage and one just before the blockade.
     if ((col === Math.floor(last / 2) || col === last - 1) && !cols[col].some((n) => n.kind === 'port')) {
       rng.pick(cols[col]).kind = 'port';
@@ -140,9 +146,9 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
   }
 }
 
-/** Two different guns, the heavy ones likelier the deeper into the voyage. */
+/** Two different guns, likeliest those whose weight suits how deep into the voyage the port lies (light early, heavy late). */
 function stockArmoury(rng: Rng, armoury: string[], depth: number): string[] {
-  const pool = armoury.map((id, i) => ({ id, w: 1 + depth * i }));
+  const pool = armoury.map((id, i) => ({ id, w: 1 / (0.15 + Math.abs(i / Math.max(1, armoury.length - 1) - depth)) }));
   const stock: string[] = [];
   while (stock.length < 2 && pool.length) {
     const pick = rng.weighted(pool, (p) => p.w);

@@ -284,7 +284,7 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
         needs: { flag: 'cat' },
         outcomes: [{ weight: 1, effect: { text: 'The cats feast for a week. The stores are saved.', crewHp: 5 } }],
       },
-      { label: 'Throw out the spoiled stores and buy more', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Expensive, but nobody starves.' } }] },
+      { label: 'Throw out the spoiled stores', outcomes: [{ weight: 1, effect: { text: 'Over the side it goes, three days’ food with it. Nobody falls sick, at least.', provisions: -3 } }] },
       { label: 'Eat around the weevils', outcomes: [{ weight: 1, effect: { text: 'Short rations and bellyaches.', crewHp: -15 } }] },
     ],
   },

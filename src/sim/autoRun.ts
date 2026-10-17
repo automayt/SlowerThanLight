@@ -14,7 +14,8 @@ export interface AutoRunOptions {
 
 export interface AutoRunResult {
   run: Run;
-  battles: { enemy: string; report: BattleReport }[];
+  /** Every fight, in order: who, in which sector, whether the fleet's vanguard sprang it, and how it went. */
+  battles: { enemy: string; sector: number; ambush: boolean; report: BattleReport }[];
 }
 
 /**
@@ -42,13 +43,15 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
       }
       case 'battle': {
         const enemy = run.currentEnemy().id;
+        const { sector } = run;
+        const ambush = run.encounter.kind === 'battle' && run.encounter.ambush;
         const battle = run.startBattle({ autoPlayer: true, playerFocus: opts.focus, playerBoardWith: opts.boardWith });
         battle.runToEnd(opts.battleLimit ?? 900);
         if (!battle.outcome) {
           run.concede('The battle dragged on to a stalemate.');
           break;
         }
-        battles.push({ enemy, report: run.finishBattle(battle) });
+        battles.push({ enemy, sector, ambush, report: run.finishBattle(battle) });
         // Spoils: a hand if short-crewed, else her best gun.
         const prize = run.prize;
         if (prize && !prize.taken) {
@@ -79,13 +82,22 @@ export function autoRun(run: Run, opts: AutoRunOptions = {}): AutoRunResult {
   return { run, battles };
 }
 
-/** Spend spare gold: the biggest affordable gun if a port is free, then upgrades in a sensible order. */
+/** Fittings a simple captain values, best first. */
+const FITTING_PRIORITY = ['drill', 'careened', 'chest', 'spars', 'nets', 'casks'];
+
+/** Spend spare gold: the biggest affordable gun if a port is free, often a fitting, then upgrades in a sensible order. */
 function shop(run: Run): void {
   const gun = run
     .gunOffers()
     .filter((o) => o.available)
     .sort((a, b) => b.price - a.price)[0];
   if (gun) run.buyGun(gun.weapon.id);
+  // Now and then the chandler gets first call on the purse, so voyages exercise fittings too.
+  const fit = run
+    .fittingOffers()
+    .filter((o) => o.available)
+    .sort((a, b) => FITTING_PRIORITY.indexOf(a.fitting.id) - FITTING_PRIORITY.indexOf(b.fitting.id))[0];
+  if (fit && run.rng.chance(0.5)) run.buyFitting(fit.fitting.id);
   const priority: UpgradeId[] = ['guns', 'hull', 'hands', 'bulwarks', 'sails', 'pumps', 'helm', 'surgeon'];
   for (const id of priority) while (run.buyUpgrade(id));
   for (const o of run.fittingOffers()) if (o.available) run.buyFitting(o.fitting.id);

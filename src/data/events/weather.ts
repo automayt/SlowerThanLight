@@ -196,6 +196,7 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
         outcomes: [
           { weight: 2, effect: { text: 'A crate of good Bristol pewter. Saleable.', gold: 12 } },
           { weight: 1, effect: { text: 'A cask of Barbados rum, still sealed. The crew are in heaven.', crewHp: 15 } },
+          { weight: 1, effect: { text: 'Two casks of ship’s biscuit, tight and dry. Somebody’s loss is your supper.', provisions: 2 } },
           { weight: 1, effect: { text: 'Salt water and rot. Nothing worth keeping.' } },
         ],
       },
@@ -222,8 +223,28 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
       'The water in the scuttlebutt has turned. It is thick, green and alive, and {crew} will not touch it.',
     ],
     choices: [
-      { label: 'Put in for fresh water', outcomes: [{ weight: 1, effect: { text: 'A spring above a beach, and full casks. It costs a day.', navy: 0.5 } }] },
+      { label: 'Put in for fresh water', outcomes: [{ weight: 1, effect: { text: 'A spring above a beach, and every cask filled to the bung. It costs a day.', navy: 0.5, provisions: 2 } }] },
+      { label: 'Pour it over the side', outcomes: [{ weight: 1, effect: { text: 'Two days’ water goes into the sea. Better thirsty than poisoned.', provisions: -2 } }] },
       { label: 'Ration the rum instead', outcomes: [{ weight: 1, effect: { text: 'The crew drink grog thin as tea and get thinner themselves.', crewHp: -15 } }] },
+    ],
+  },
+  {
+    id: 'banks',
+    title: 'The Fishing Banks',
+    pool: 'incident',
+    text: 'The lead finds bottom at twenty fathoms, and the water is boiling with fish. Every idle hand wants a line over the side.',
+    variants: [
+      'Birds wheel and dive over a patch of green shoal water. {crew} swears the snapper are thick enough to walk on.',
+    ],
+    choices: [
+      {
+        label: 'Heave to and fish all day',
+        outcomes: [
+          { weight: 3, effect: { text: 'Snapper, grouper and a great ugly jewfish. The cook salts down a hold full.', provisions: 4, navy: 0.5 } },
+          { weight: 1, effect: { text: 'Sharks find the shoal before you do, and take half of every catch off the hook.', provisions: 2, navy: 0.5 } },
+        ],
+      },
+      { label: 'Trail a few lines and keep sailing', outcomes: [{ weight: 1, effect: { text: 'Enough for a fry-up tonight.', provisions: 1 } }] },
     ],
   },
 ];
