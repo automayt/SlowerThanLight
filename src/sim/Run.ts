@@ -621,7 +621,9 @@ export class Run {
     const flag = power(foe.power);
     switch (intent) {
       case 'hostile':
-        return `She flies the colours of ${flag.short}, and ${flag.short} wants you taken. Her guns are run out.`;
+        return this.tier(foe.power) === 'wary'
+          ? `She flies the colours of ${flag.short}. Her captain does not like the look of you, and her guns are run out.`
+          : `She flies the colours of ${flag.short}, and ${flag.short} wants you taken. Her guns are run out.`;
       case 'wary':
         return foe.ai.fleeAt >= 1 ? 'She has seen your flag and is crowding on sail to get clear.' : `She flies the colours of ${flag.short} and holds her course, watching you. She will not start a fight.`;
       case 'friendly':

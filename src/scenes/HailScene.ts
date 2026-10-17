@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { enemy } from '../data/enemies';
 import { power } from '../data/powers';
 import { placeArt } from '../render/art';
-import { Ledger, standingBar } from '../render/Ledger';
+import { ledgerOpen, openLedger, standingBar } from '../render/Ledger';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { playLoop, playSfx } from '../render/sound';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -20,7 +20,7 @@ const ART = { x: X + 28, y: Y + 70, w: 520, h: 293 };
 
 /** Odds and price of an answer, in a few words. */
 function terms(o: HailOption): string {
-  return [o.cost ? `${o.cost} gold` : '', o.chance !== undefined ? `${Math.round(o.chance * 100)}% chance` : '', o.fight === 'yes' ? 'a fight' : o.fight === 'maybe' ? 'may mean a fight' : '']
+  return [o.cost ? `${o.cost} gold` : '', o.chance !== undefined ? `${Math.round(o.chance * 100)}% chance` : '', o.fight === 'maybe' ? 'may mean a fight' : '']
     .filter(Boolean)
     .join(' · ');
 }
@@ -31,7 +31,6 @@ export class HailScene extends Phaser.Scene {
   private sea!: Sea;
   private bar!: RunBar;
   private buttons: Button[] = [];
-  private ledger: Ledger | null = null;
   private tx = 0;
   private tw = 0;
   private choicesY = 0;
@@ -58,7 +57,6 @@ export class HailScene extends Phaser.Scene {
     playLoop(this, 'waves', 0.22);
     this.bar = new RunBar(this, run);
     this.buttons = [];
-    this.ledger = null;
     const enc = run.encounter;
     const foe = enemy(enc.enemy);
     const flag = power(foe.power);
@@ -73,8 +71,7 @@ export class HailScene extends Phaser.Scene {
     this.add.text(fx, fy, `${foe.ship.className} · ${flag.name}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: flag.color });
     standingBar(this, fx, fy + 38, ART.w, 12, run.standing[foe.power]);
     this.add.text(fx, fy + 56, `${flag.name} regard${foe.power === 'brethren' || foe.power === 'trade' ? '' : 's'} you as ${tierName(run.tier(foe.power)).toLowerCase()} (${run.standing[foe.power]})`, textStyle(13, COLORS.text));
-    const ledger = new Button(this, fx, fy + 82, 200, 34, 'Standing at sea', () => this.openLedger(), { size: 14, hint: 'L' });
-    this.input.keyboard!.on('keydown-L', () => ledger.press());
+    new Button(this, fx, fy + 82, 200, 34, 'Standing at sea', () => openLedger(this, run), { size: 14, hint: 'L' });
 
     this.tx = art ? ART.x + ART.w + 32 : X + 120;
     this.tw = X + W - this.tx - 28;
@@ -102,12 +99,7 @@ export class HailScene extends Phaser.Scene {
       cy += h + 8;
     });
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'];
-    options.forEach((_, i) => this.input.keyboard!.on(`keydown-${keys[i]}`, () => !this.ledger && this.buttons[i]?.press()));
-  }
-
-  private openLedger(): void {
-    if (this.ledger) return;
-    this.ledger = new Ledger(this, this.run, () => (this.ledger = null));
+    options.forEach((_, i) => this.input.keyboard!.on(`keydown-${keys[i]}`, () => !ledgerOpen(this) && this.buttons[i]?.press()));
   }
 
   private choose(o: HailOption): void {

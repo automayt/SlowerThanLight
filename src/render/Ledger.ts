@@ -36,9 +36,9 @@ export function powerColor(id: PowerId): string {
 
 /** Who a power is at odds with and who it favours, in a line. */
 function relations(id: PowerId): string {
-  const enemies = POWER_IDS.filter((p) => p !== id && relation(id, p) <= -1).map((p) => power(p).name);
-  const rivals = POWER_IDS.filter((p) => p !== id && relation(id, p) === -0.5).map((p) => power(p).name);
-  const friends = POWER_IDS.filter((p) => p !== id && relation(id, p) > 0).map((p) => power(p).name);
+  const enemies = POWER_IDS.filter((p) => p !== id && relation(id, p) <= -1).map((p) => power(p).short);
+  const rivals = POWER_IDS.filter((p) => p !== id && relation(id, p) === -0.5).map((p) => power(p).short);
+  const friends = POWER_IDS.filter((p) => p !== id && relation(id, p) > 0).map((p) => power(p).short);
   return [enemies.length ? `At war with ${enemies.join(', ')}` : '', rivals.length ? `rivals of ${rivals.join(', ')}` : '', friends.length ? `friends of ${friends.join(', ')}` : '']
     .filter(Boolean)
     .join('; ');
@@ -50,7 +50,7 @@ function relations(id: PowerId): string {
  */
 export class Ledger {
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
-  private closed = false;
+  closed = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -106,4 +106,21 @@ export class Ledger {
     this.scene.time.delayedCall(0, () => items.forEach((o) => o.destroy()));
     this.onClose();
   }
+}
+
+const opened = new WeakMap<Phaser.Scene, Ledger>();
+
+/** Open the ledger over a scene, unless it is already open there. */
+export function openLedger(scene: Phaser.Scene, run: Run): Ledger {
+  const now = opened.get(scene);
+  if (now && !now.closed) return now;
+  const ledger = new Ledger(scene, run, () => opened.delete(scene));
+  opened.set(scene, ledger);
+  scene.events.once('shutdown', () => opened.delete(scene));
+  return ledger;
+}
+
+/** Whether the ledger is open over a scene (its keys should wait). */
+export function ledgerOpen(scene: Phaser.Scene): boolean {
+  return opened.has(scene);
 }

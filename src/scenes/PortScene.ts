@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { placeBackdrop } from '../render/art';
+import { ledgerOpen } from '../render/Ledger';
+import { harbourTerms, PortEnvoy } from '../render/PortEnvoy';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, goldText, panel, Sea } from '../render/ui';
@@ -50,6 +52,7 @@ export class PortScene extends Phaser.Scene {
   private bar!: RunBar;
   private dyn: Phaser.GameObjects.GameObject[] = [];
   private note!: Phaser.GameObjects.Text;
+  private envoy: PortEnvoy | null = null;
 
   constructor() {
     super('Port');
@@ -57,6 +60,7 @@ export class PortScene extends Phaser.Scene {
 
   create(): void {
     const run = (this.run = currentRun(this));
+    this.envoy = null;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     playLoop(this, 'waves', 0.22);
     playLoop(this, 'creak', 0.2);
@@ -81,14 +85,31 @@ export class PortScene extends Phaser.Scene {
     }
 
     this.note = this.add.text(SCREEN.w / 2, SCREEN.h - 92, '', textStyle(15, COLORS.textGood, { fontStyle: 'italic' })).setOrigin(0.5, 0);
+
+    // The harbour's masters, in the corner opposite: who holds the port, their terms, and a door to their office.
+    const terms = this.add.text(SCREEN.w - 44, TOP + 8, harbourTerms(run), textStyle(13, run.portFeud ? COLORS.textWarn : COLORS.text, { fontStyle: 'italic' })).setOrigin(1, 0);
+    const offered = run.encounter.kind === 'port' && !!run.encounter.commission;
+    const masters = new Button(this, SCREEN.w - 44 - 210, terms.y + terms.height + 6, 210, 32, offered ? 'Harbour masters ✦' : 'Harbour masters', () => this.openEnvoy(), {
+      size: 14,
+      hint: 'H',
+      tip: offered ? 'Gifts, your standing here, and work on offer.' : 'Gifts and your standing here.',
+    });
+    this.input.keyboard!.on('keydown-H', () => masters.press());
+    const welcome = run.encounter.kind === 'port' ? (run.encounter.welcome ?? []) : [];
+    if (welcome.length) this.say(welcome.join('  '));
     const leave = () => {
       run.leavePort();
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
       this.scene.start('SeaMap');
     };
     const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', leave, { size: 18, hint: 'Enter' });
-    this.input.keyboard!.once('keydown-ENTER', () => weigh.press());
+    this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !ledgerOpen(this) && weigh.press());
     this.rebuild();
+  }
+
+  private openEnvoy(): void {
+    if (this.envoy) return;
+    this.envoy = new PortEnvoy(this, this.run, () => this.later(), () => (this.envoy = null));
   }
 
   private say(text: string): void {

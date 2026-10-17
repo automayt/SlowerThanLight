@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import type { Run } from '../sim/Run';
 import { SYSTEM_NAMES, type SystemId } from '../sim/types';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
-import { coin, drawBar, panel, SoundButton } from './ui';
+import { openLedger } from './Ledger';
+import { Button, coin, drawBar, panel, SoundButton } from './ui';
 
 /** The scene that holds the current voyage. Scenes share it through the game registry. */
 export function currentRun(scene: Phaser.Scene): Run {
@@ -62,6 +63,9 @@ export class RunBar {
     this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(6);
     this.food = scene.add.text(760, 14, '', textStyle(16, COLORS.text, { fontStyle: 'bold' })).setDepth(6);
     new SoundButton(scene, 972, 23, 30).setDepth(6);
+    // How the powers regard you, a click or the L key away on every screen that shows this strip.
+    new Button(scene, 920, 8, 34, 30, '⚑', () => openLedger(scene, run), { size: 17, tip: 'Standing at sea (L)' }).setDepth(6);
+    scene.input.keyboard?.on('keydown-L', () => openLedger(scene, run));
     this.refresh();
   }
 

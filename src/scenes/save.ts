@@ -137,6 +137,8 @@ export function sceneFor(run: Run): string {
   switch (run.status) {
     case 'battle':
       return 'Battle';
+    case 'hail':
+      return 'Hail';
     case 'event':
       return 'Event';
     case 'port':
