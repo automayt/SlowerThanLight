@@ -493,6 +493,7 @@ export class SeaMapScene extends Phaser.Scene {
 
   private arrive(node: SeaNode): void {
     const run = this.run;
+    playSfx(this, 'quill', 0.5);
     const enc = run.jump(node.id);
     saveRun(run);
     this.registry.set('chart-note', '');

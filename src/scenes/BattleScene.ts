@@ -630,6 +630,7 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'board': {
         playSfx(this, 'boarders', 0.5);
+        this.time.delayedCall(250, () => playSfx(this, 'musket', 0.4));
         const target = this.viewFor(ev.side === 'player' ? 'enemy' : 'player').ship.room(ev.room).def.name;
         if (ev.side === 'player') this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
         else this.hud.addLog(`BOARDERS! ${ev.count} of them coming over the side for our ${target}!`, COLORS.textWarn);
@@ -714,6 +715,13 @@ export class BattleScene extends Phaser.Scene {
     const o = this.battle.outcome!;
     if (o.won) playSfx(this, 'bell', 0.6);
     if (o.kind === 'victory' || o.kind === 'defeat') playSfx(this, 'explosion', 0.7);
+    // A sting for how it ended: the crew's cheer and a fanfare, the low note of defeat, or the groan of a hull going down.
+    if (o.won) {
+      this.time.delayedCall(600, () => playSfx(this, 'cheer', 0.55));
+      this.time.delayedCall(1300, () => playSfx(this, 'fanfare', 0.6));
+    } else if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') this.time.delayedCall(1100, () => playSfx(this, 'defeat', 0.6));
+    if (o.kind === 'enemySunk' || o.kind === 'sunk' || o.kind === 'defeat') this.time.delayedCall(400, () => playSfx(this, 'sink', 0.6));
+    if (o.kind === 'escaped' || o.kind === 'enemyEscaped') playSfx(this, 'sail', 0.5);
     if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
     // When she gets away, say what it costs (the alarm brings the fleet on) while the log is still up.

@@ -98,6 +98,7 @@ export class PortScene extends Phaser.Scene {
     const welcome = run.encounter.kind === 'port' ? (run.encounter.welcome ?? []) : [];
     if (welcome.length) this.say(welcome.join('  '));
     const leave = () => {
+      playSfx(this, 'sail', 0.45);
       run.leavePort();
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
       this.scene.start('SeaMap');

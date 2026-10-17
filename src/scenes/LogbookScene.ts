@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SEA_EVENTS } from '../data/voyage';
 import { placeArt } from '../render/art';
+import { playSfx } from '../render/sound';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import type { EventRarity, SeaEventDef } from '../sim/types';
@@ -73,6 +74,7 @@ export class LogbookScene extends Phaser.Scene {
     const turn = (d: number) => {
       if (this.overlay.length) return;
       this.page = (this.page + d + pages) % pages;
+      playSfx(this, 'page', 0.5);
       this.drawPage();
     };
     // Page turning in the middle, the page number between the arrows; the way out at the left.
