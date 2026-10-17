@@ -158,14 +158,15 @@ export class Ship {
       });
     }
 
+    // Allocate as if whole, then apply carried damage: the allocation stays 'wanted' and comes back with repairs.
+    this.autoAssignHands();
     if (condition) {
       for (const [id, dmg] of Object.entries(condition.damage) as [SystemId, number][]) {
         const sys = this.systems.get(id);
         if (sys) sys.damage = Math.max(0, Math.min(sys.max, dmg));
       }
+      this.clampToCapacity();
     }
-
-    this.autoAssignHands();
   }
 
   /** Snapshot of hull, surviving crew and system damage to carry into the next encounter. */
@@ -174,7 +175,7 @@ export class Ship {
     for (const s of this.systems.values()) if (s.damage > 0) damage[s.id] = s.damage;
     return {
       hull: Math.max(0, this.hull),
-      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.round(c.hp), home: c.home, ...(Object.keys(c.xp).length ? { xp: { ...c.xp } } : {}) })),
+      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.max(1, Math.round(c.hp)), home: c.home, ...(Object.keys(c.xp).length ? { xp: { ...c.xp } } : {}) })),
       damage,
     };
   }

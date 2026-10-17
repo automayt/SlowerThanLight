@@ -5,7 +5,7 @@ import { isMuted, playLoop, toggleMute } from '../render/sound';
 import { setRun } from '../render/RunBar';
 import { Button, Sea } from '../render/ui';
 import { Run } from '../sim/Run';
-import { loadRun, sceneFor } from './save';
+import { disableSaving, loadRun, sceneFor } from './save';
 
 export class TitleScene extends Phaser.Scene {
   private sea!: Sea;
@@ -66,6 +66,7 @@ export class TitleScene extends Phaser.Scene {
     const ship = params.get('battle');
     if (!ship || this.registry.get('dev-battle-done')) return false;
     this.registry.set('dev-battle-done', true);
+    disableSaving();
     const run = new Run(ship);
     const foe = params.get('foe') ?? 'cutter';
     run.encounter = { kind: 'battle', enemy: foe, name: 'HMS Diligence', boss: false, ambush: false, text: 'A sail on the horizon!' };

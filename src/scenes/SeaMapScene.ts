@@ -32,6 +32,8 @@ export class SeaMapScene extends Phaser.Scene {
   private hover: SeaNode | null = null;
   private tip!: Phaser.GameObjects.Text;
   private dialog: Phaser.GameObjects.GameObject[] = [];
+  /** Enter-key shortcut of the open dialog, removed when the dialog closes. */
+  private dialogEnter: (() => void) | null = null;
 
   constructor() {
     super('SeaMap');
@@ -146,12 +148,20 @@ export class SeaMapScene extends Phaser.Scene {
       const b = new Button(this, bx, y + h - 60, bw, 42, label, fn, { size: 17 }).setDepth(32);
       this.dialog.push(b);
     });
-    this.input.keyboard!.once('keydown-ENTER', () => this.dialog.length && buttons[0][1]());
+    if (this.dialogEnter) this.input.keyboard!.off('keydown-ENTER', this.dialogEnter);
+    const enter = () => {
+      this.dialogEnter = null;
+      if (this.dialog.length) buttons[0][1]();
+    };
+    this.dialogEnter = enter;
+    this.input.keyboard!.once('keydown-ENTER', enter);
   }
 
   private closeDialog(): void {
     for (const o of this.dialog) o.destroy();
     this.dialog = [];
+    if (this.dialogEnter) this.input.keyboard!.off('keydown-ENTER', this.dialogEnter);
+    this.dialogEnter = null;
   }
 
   update(time: number): void {

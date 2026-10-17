@@ -23,6 +23,12 @@ export interface HudState {
 
 const BOTTOM_Y = 512;
 
+/** Phaser re-draws and re-uploads a Text on every setColor, so only call it on a change. */
+function tint(text: Phaser.GameObjects.Text, color: string): Phaser.GameObjects.Text {
+  if (text.style.color !== color) text.setColor(color);
+  return text;
+}
+
 /** Small-caps section heading in the serif face. */
 function heading(scene: Phaser.Scene, x: number, y: number, text: string, size = 14): Phaser.GameObjects.Text {
   return scene.add.text(x, y, text, { fontFamily: TITLE_FONT, fontSize: `${size}px`, color: COLORS.gold, fontStyle: 'bold' });
@@ -181,7 +187,7 @@ export class Hud {
     // Top bars.
     this.drawHull(player, 64, 14);
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
-    this.playerStats.setColor(battle.grappled ? COLORS.gold : COLORS.text);
+    tint(this.playerStats, battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
     const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : 'Make Sail…';
     this.escapeBtn.setEnabled(battle.canEscape()).setText(escapeLabel);
@@ -207,7 +213,7 @@ export class Hud {
       row.name.setText(`${c.name}  ${badges(c)}`);
       const aboard = battle.shipOf(c);
       row.task.setText(!aboard ? 'Crossing over…' : aboard === player ? `${taskLabel(c.task)} · ${player.room(c.room).def.name}` : `${taskLabel(c.task)} · HER ${aboard.room(c.room).def.name}`);
-      row.task.setColor(aboard && aboard !== player ? COLORS.gold : COLORS.textDim);
+      tint(row.task, aboard && aboard !== player ? COLORS.gold : COLORS.textDim);
       const frac = c.hp / c.maxHp;
       drawBar(g, row.bg.x + 36, row.bg.y + 31, 126, 3, frac, frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f);
     });
@@ -221,7 +227,8 @@ export class Hud {
       const y = label.y + 3;
       const on = id === 'helm' ? player.level('helm') : player.allocated(id);
       drawPips(g, 140, y, on, sys.max, sys.damage, 12, 3);
-      this.sysStatus.get(id)!.setText(systemStatus(player, id)).setColor(systemStatus(player, id).startsWith('!') ? COLORS.textWarn : COLORS.textDim);
+      const status = systemStatus(player, id);
+      tint(this.sysStatus.get(id)!.setText(status), status.startsWith('!') ? COLORS.textWarn : COLORS.textDim);
     }
 
     // Guns.
@@ -250,8 +257,8 @@ export class Hud {
               : `Loading… ${(gun.def.loadTime - gun.charge).toFixed(1)}s`,
       );
       card.target.setText(gun.target ? `→ ${enemy.room(gun.target).def.name}` : aiming ? '→ click an enemy room' : '→ no target');
-      card.target.setColor(gun.target ? COLORS.textWarn : COLORS.textDim);
-      card.status.setColor(loadedIdle ? COLORS.gold : !working && gun.powered ? COLORS.textWarn : COLORS.textDim);
+      tint(card.target, gun.target ? COLORS.textWarn : COLORS.textDim);
+      tint(card.status, loadedIdle ? COLORS.gold : !working && gun.powered ? COLORS.textWarn : COLORS.textDim);
       SHOT_TYPES.forEach((s: ShotType, j) => card.shots[j].setOn(gun.shot === s));
     });
 

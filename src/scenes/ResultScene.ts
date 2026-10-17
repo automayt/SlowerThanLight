@@ -83,7 +83,10 @@ export class ResultScene extends Phaser.Scene {
       buttons.push(
         new Button(this, cx - 150 + i * (w + 8), y, w, 30, text, () => {
           const said = take();
-          if (!said) return;
+          if (!said) {
+            label.setText(i === picks.length - 1 && prize.recruits ? 'No bunk to spare for a prisoner.' : 'No room aboard for her guns.').setColor(COLORS.textWarn);
+            return;
+          }
           // Destroy after this click has finished dispatching.
           this.time.delayedCall(0, () => buttons.forEach((b) => b.destroy()));
           label.setText(said).setX(cx).setOrigin(0.5, 0).setColor(COLORS.textGood);

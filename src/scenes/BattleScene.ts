@@ -53,6 +53,7 @@ export class BattleScene extends Phaser.Scene {
     this.ending = false;
     this.startAt = 0;
     this.drag = null;
+    this.swingers.clear();
   }
 
   create(): void {
@@ -74,6 +75,12 @@ export class BattleScene extends Phaser.Scene {
       flag: faction === 'navy' ? 'navy' : 'merchant',
     });
     this.fx = this.add.graphics().setDepth(10);
+    this.events.once('shutdown', () => {
+      this.playerView.destroy();
+      this.enemyView.destroy();
+      for (const img of this.swingers.values()) img.destroy();
+      this.swingers.clear();
+    });
     this.ambient = this.add.graphics().setDepth(8);
     this.clouds = Array.from({ length: 4 }, (_, i) => ({ x: i * 380 + Math.random() * 200, y: 60 + Math.random() * 420, s: 0.8 + Math.random() * 0.8, v: 6 + Math.random() * 6 }));
     this.gulls = Array.from({ length: 3 }, () => ({ x: Math.random() * SCREEN.w, y: 90 + Math.random() * 380, v: 22 + Math.random() * 18, phase: Math.random() * 6, drift: Math.random() * 6 }));
@@ -337,7 +344,11 @@ export class BattleScene extends Phaser.Scene {
   private drawProjectiles(): void {
     const g = this.fx;
     g.clear();
-    if (this.battle.outcome) return;
+    if (this.battle.outcome) {
+      for (const img of this.swingers.values()) img.destroy();
+      this.swingers.clear();
+      return;
+    }
     // Boarders swinging across on lines between the ships.
     const swinging = new Set<number>();
     for (const tr of this.battle.transit) {

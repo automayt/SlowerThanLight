@@ -77,6 +77,7 @@ export class ShipSelectScene extends Phaser.Scene {
       const left = x + (CARD_W - spanW * tile) / 2 + (geo.padL - 0.25) * tile;
       const view = new ShipView(this, ship, left, boxY + (boxH - ship.height * tile) / 2, tile, false, false);
       this.views.push(view);
+      if (this.views.length === 1) this.events.once('shutdown', () => this.views.forEach((v) => v.destroy()));
 
       this.add.text(x + 14, CARD_Y + 266, def.description, textStyle(13, COLORS.text, { wordWrap: { width: CARD_W - 28 }, lineSpacing: 2 }));
 

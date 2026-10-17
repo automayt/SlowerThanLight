@@ -44,8 +44,10 @@ export function playSfx(scene: Phaser.Scene, name: string, volume = 0.6): void {
 export function playLoop(scene: Phaser.Scene, name: string, volume = 0.3): void {
   const key = soundKey(name);
   if (!scene.cache.audio.exists(key)) return;
-  const playing = scene.sound.getAll(key).some((s) => s.isPlaying);
-  if (!playing) scene.sound.add(key, { loop: true, volume }).play();
+  const existing = scene.sound.getAll(key);
+  if (existing.some((s) => s.isPlaying)) return;
+  const sound = existing[0] ?? scene.sound.add(key, { loop: true, volume });
+  sound.play({ loop: true, volume });
 }
 
 export function stopLoop(scene: Phaser.Scene, name: string): void {

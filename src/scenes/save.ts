@@ -1,9 +1,19 @@
+import { weapon } from '../data/weapons';
 import { Run } from '../sim/Run';
+import { Ship } from '../sim/Ship';
 
 const KEY = 'slower-than-light.voyage.v1';
 
+let writable = true;
+
+/** Dev sandboxes (the ?battle= shortcut) call this so they never touch the player's real voyage or records. */
+export function disableSaving(): void {
+  writable = false;
+}
+
 /** Remember the voyage in this browser so it can be continued later. Finished voyages are forgotten. */
 export function saveRun(run: Run): void {
+  if (!writable) return;
   try {
     if (run.over) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, JSON.stringify(run.toSave()));
@@ -17,13 +27,27 @@ export function loadRun(): Run | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const run = Run.fromSave(JSON.parse(raw));
-    return run.over ? null : run;
+    if (run.over) return null;
+    checkRun(run);
+    return run;
   } catch {
+    // Corrupt, or written by a version whose ships, events or enemies no longer exist: start afresh.
+    clearSave();
     return null;
   }
 }
 
+/** Throws if a loaded voyage refers to anything the current game data no longer has. */
+function checkRun(run: Run): void {
+  void run.node.col;
+  if (run.status === 'battle') run.currentEnemy();
+  if (run.status === 'event') run.currentEvent();
+  for (const id of run.prize?.guns ?? []) weapon(id);
+  new Ship(run.ship, 'player', run.condition);
+}
+
 export function clearSave(): void {
+  if (!writable) return;
   try {
     localStorage.removeItem(KEY);
   } catch {
@@ -46,6 +70,7 @@ export function discovered(): Set<string> {
 
 /** Write an event into the lifetime logbook. */
 export function recordDiscovery(id: string): void {
+  if (!writable) return;
   try {
     const seen = discovered();
     if (seen.has(id)) return;
@@ -77,6 +102,7 @@ export function profile(): Profile {
 }
 
 export function bumpProfile(key: keyof Profile): void {
+  if (!writable) return;
   try {
     const p = profile();
     p[key]++;

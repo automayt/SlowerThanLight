@@ -123,3 +123,25 @@ describe('condition', () => {
     expect(ship.rooms.has(hired.room)).toBe(true);
   });
 });
+
+describe('carried damage', () => {
+  it('re-crews guns and sails once damage brought into a fight is repaired', () => {
+    const def = playerShip('gull');
+    const fresh = new Ship(def, 'player');
+    const cond = fresh.condition();
+    cond.damage = { guns: 2, sails: 2 };
+    const ship = new Ship(def, 'player', cond);
+    expect(ship.allocated('guns')).toBeLessThanOrEqual(ship.capacity('guns'));
+    ship.system('guns')!.damage = 0;
+    ship.system('sails')!.damage = 0;
+    ship.restoreWanted();
+    expect(ship.allocated('guns')).toBe(fresh.allocated('guns'));
+    expect(ship.allocated('sails')).toBe(fresh.allocated('sails'));
+  });
+
+  it('never remembers a survivor at 0 HP', () => {
+    const ship = new Ship(playerShip('gull'), 'player');
+    ship.crew[0].hp = 0.3;
+    expect(ship.condition().crew[0].hp).toBe(1);
+  });
+});
