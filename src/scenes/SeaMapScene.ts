@@ -22,6 +22,13 @@ const INK = 0x2a170a;
 const RED_INK = 0x8a1c1c;
 /** Clean parchment, for labels and notes laid over the chart. */
 const PAPER = 0xefe2bf;
+/** Rings around the seals you can sail to: gold, or red where the Navy will be waiting. */
+const RING = 0xb8860b;
+const RING_AMBUSH = 0xc0201a;
+const NUMBER_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
+/** The chart's key, in the footer's right-hand corner. */
+const LEGEND_W = 430;
+const LEGEND_H = 60;
 
 const KIND_STYLE: Record<NodeKind, { color: number; label: string; glyph: string }> = {
   start: { color: 0x9fb1bf, label: 'Tortuga', glyph: '⚓' },
@@ -38,7 +45,16 @@ export class SeaMapScene extends Phaser.Scene {
   private run!: Run;
   private sea!: Sea;
   private bar!: RunBar;
+  /** Routes, channels and seals: redrawn only when the voyage moves, not every frame. */
+  private chartG!: Phaser.GameObjects.Graphics;
+  /** The fleet's tide, its edge rippling, under the seals. */
+  private fleetG!: Phaser.GameObjects.Graphics;
+  /** Pulsing rings and the hover ring, over the seals. */
   private g!: Phaser.GameObjects.Graphics;
+  /** Where you can sail next, top to bottom: number keys pick from this. */
+  private reach: SeaNode[] = [];
+  private ambush = new Set<number>();
+  private badges: Phaser.GameObjects.GameObject[] = [];
   private hover: SeaNode | null = null;
   private tip!: Phaser.GameObjects.Text;
   private tipBg!: Phaser.GameObjects.Graphics;
@@ -54,6 +70,7 @@ export class SeaMapScene extends Phaser.Scene {
   init(): void {
     this.hover = null;
     this.dialog = [];
+    this.badges = [];
   }
 
   create(): void {
@@ -64,7 +81,9 @@ export class SeaMapScene extends Phaser.Scene {
     playLoop(this, 'waves', 0.25);
     playLoop(this, 'creak', 0.2);
     this.parchment();
-    this.g = this.add.graphics();
+    this.fleetG = this.add.graphics().setDepth(-0.5);
+    this.chartG = this.add.graphics();
+    this.g = this.add.graphics().setDepth(0.5);
     this.bar = new RunBar(this, run);
 
     const sectorLine = `${run.sectorDef.name}  ·  Sector ${run.sector + 1} of ${SECTORS.length}`;
@@ -89,23 +108,34 @@ export class SeaMapScene extends Phaser.Scene {
         .strokeRoundedRect(name.x - 5, name.y - 1, name.width + 10, name.height + 2, 6);
       const hit = this.add.circle(x, y, NODE_R + 6, 0x000000, 0.001).setDepth(3);
       hit.setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => (this.hover = node));
-      hit.on('pointerout', () => this.hover === node && (this.hover = null));
+      hit.on('pointerover', () => {
+        this.hover = node;
+        this.updateTip();
+      });
+      hit.on('pointerout', () => {
+        if (this.hover !== node) return;
+        this.hover = null;
+        this.updateTip();
+      });
       hit.on('pointerdown', () => this.sailTo(node));
     }
+    this.refreshChart();
+    NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.sailTo(this.reach[i])));
 
-    // Footer: the last thing that happened, then a hint, stacked by their measured heights.
+    // Footer: the last thing that happened, then a hint, stacked by their measured heights; the chart's key on the right.
     const hint =
       run.provisions <= 3
         ? `⚠ ${run.provisions === 0 ? 'No provisions left: every jump now costs the crew health' : `Only ${run.provisions} provisions left`}. Buy more in port, or take them from prizes.`
-        : 'Click a highlighted node to sail on, or across to explore its neighbour (a jump and a day’s provisions). The red tide is the Navy: nodes it overruns become ambushes.';
-    const words = this.add.text(20, 0, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 3 })).setDepth(6);
-    const help = this.add.text(20, 0, hint, textStyle(13, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 2 })).setDepth(6);
-    const footH = 8 + words.height + 4 + help.height + 8;
+        : 'Click a ringed seal, or press its number, to sail there. Sailing across a column explores a neighbour, at the cost of a jump and a day’s provisions.';
+    const textW = SCREEN.w - 48 - LEGEND_W;
+    const words = this.add.text(20, 0, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: textW }, maxLines: 3 })).setDepth(6);
+    const help = this.add.text(20, 0, hint, textStyle(13, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim, { wordWrap: { width: textW }, maxLines: 2 })).setDepth(6);
+    const footH = Math.max(LEGEND_H, 8 + words.height + 4 + help.height + 8);
     const footY = Math.max(CHART.y + CHART.h + 10, SCREEN.h - 8 - footH);
     panel(this, 8, footY, SCREEN.w - 16, SCREEN.h - 8 - footY).setDepth(5);
     words.setY(footY + 8);
     help.setY(words.y + words.height + 4);
+    this.legend(SCREEN.w - 16 - LEGEND_W, footY + (SCREEN.h - 8 - footY - LEGEND_H) / 2 + 6);
 
     this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
 
@@ -122,6 +152,102 @@ export class SeaMapScene extends Phaser.Scene {
       this.showDialog(title, text, [['Continue', () => this.closeDialog()]], run.encounter.title ? 'blockade' : undefined);
     }
     this.registry.set('fresh-jump', false);
+  }
+
+  /** What the rings and the red ink on the chart mean. */
+  private legend(x: number, y: number): void {
+    const g = this.add.graphics().setDepth(6);
+    const col = LEGEND_W / 2;
+    const entries: [number, number, (cx: number, cy: number) => void, string][] = [
+      [0, 0, (cx, cy) => g.lineStyle(3, RING, 1).strokeCircle(cx, cy, 8), 'You can sail here'],
+      [col, 0, (cx, cy) => g.lineStyle(3, RING_AMBUSH, 1).strokeCircle(cx, cy, 8), 'Navy ambush if you go'],
+      [0, 24, (cx, cy) => g.fillStyle(RED_INK, 0.7).fillRect(cx - 9, cy - 7, 18, 14).lineStyle(2, RING_AMBUSH, 1).lineBetween(cx + 9, cy - 7, cx + 9, cy + 7), 'The Navy fleet'],
+      [col, 24, (cx, cy) => {
+        g.lineStyle(2, RING_AMBUSH, 1);
+        g.lineBetween(cx, cy - 9, cx, cy - 3).lineBetween(cx, cy + 2, cx, cy + 8);
+      }, 'The fleet after your next jump'],
+    ];
+    for (const [dx, dy, draw, label] of entries) {
+      draw(x + dx + 10, y + dy + 9);
+      this.add.text(x + dx + 26, y + dy + 1, label, textStyle(13, COLORS.textDim)).setDepth(6);
+    }
+  }
+
+  /** Recompute where you can go and redraw the static chart. */
+  private refreshChart(): void {
+    const run = this.run;
+    this.reach = run.reachable().sort((a, b) => a.y - b.y || a.col - b.col);
+    this.ambush = new Set(this.reach.filter((n) => run.willBeOverrun(n)).map((n) => n.id));
+    this.drawChart(this.chartG.clear());
+    // Number badges beside each seal you can sail to.
+    for (const o of this.badges) o.destroy();
+    this.badges = [];
+    this.reach.forEach((n, i) => {
+      const { x, y } = this.pos(n);
+      const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
+      const bx = x - r - 6;
+      const by = y - r + 2;
+      const disc = this.add.circle(bx, by, 9, this.ambush.has(n.id) ? RING_AMBUSH : RING).setStrokeStyle(1.5, INK).setDepth(3.5);
+      const num = this.add.text(bx, by, `${i + 1}`, textStyle(12, '#fff8e6', { fontStyle: 'bold' })).setOrigin(0.5).setDepth(3.6);
+      this.badges.push(disc, num);
+    });
+  }
+
+  /** Everything on the chart that stays put until the next jump: the fleet's next mark, channels, routes and seals. */
+  private drawChart(g: Phaser.GameObjects.Graphics): void {
+    const run = this.run;
+    const reach = new Set(this.reach.map((n) => n.id));
+    const visited = new Set(run.visited);
+    const top = CHART.y + 3;
+    const bottom = CHART.y + CHART.h - 3;
+
+    // Where the fleet will be after your next jump.
+    const next = this.colX(run.navy + run.navySpeed);
+    if (next > CHART.x && run.status === 'chart') {
+      g.lineStyle(1.5, RED_INK, 0.55);
+      for (let y = top + 4; y < bottom - 6; y += 16) g.lineBetween(next, y, next, y + 8);
+    }
+
+    // Cross-channels within a column: exploring sideways costs a jump.
+    for (let col = 1; col < run.chart.columns - 1; col++) {
+      const column = run.chart.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
+      for (let i = 0; i + 1 < column.length; i++) {
+        const a = this.pos(column[i]);
+        const b = this.pos(column[i + 1]);
+        const open = (column[i].id === run.nodeId && reach.has(column[i + 1].id)) || (column[i + 1].id === run.nodeId && reach.has(column[i].id));
+        g.lineStyle(open ? 2.5 : 1.5, INK, open ? 0.85 : 0.25);
+        for (let t = 0; t < 1; t += 0.12) {
+          const t2 = Math.min(1, t + 0.06);
+          g.lineBetween(a.x + (b.x - a.x) * t, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t, a.x + (b.x - a.x) * t2, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t2);
+        }
+      }
+    }
+
+    // Routes.
+    for (const n of run.chart.nodes) {
+      const a = this.pos(n);
+      for (const id of n.next) {
+        const m = run.chart.nodes[id];
+        const b = this.pos(m);
+        const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
+        const open = n.id === run.nodeId && reach.has(m.id);
+        g.lineStyle(sailed ? 3.5 : open ? 3 : 1.8, sailed ? RED_INK : INK, sailed ? 0.9 : open ? 0.9 : 0.35);
+        g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+    }
+
+    // Nodes: a wax seal with a darker rim.
+    for (const n of run.chart.nodes) {
+      const { x, y } = this.pos(n);
+      const overrun = n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy;
+      const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
+      const faded = visited.has(n.id) && n.id !== run.nodeId;
+      g.fillStyle(0x000000, 0.25).fillCircle(x + 2, y + 3, r);
+      g.fillStyle(overrun ? 0x5a2a20 : SEAL[n.kind], faded ? 0.5 : 1).fillCircle(x, y, r);
+      // The pressed ring where the seal's stamp met the wax.
+      g.lineStyle(1.5, 0x000000, faded ? 0.12 : 0.28).strokeCircle(x, y, r * 0.8);
+      g.lineStyle(2.5, INK, faded ? 0.5 : 0.95).strokeCircle(x, y, r);
+    }
   }
 
   /** Lay out the aged chart, with a dark frame, on the table of the sea. */
@@ -170,6 +296,8 @@ export class SeaMapScene extends Phaser.Scene {
     const enc = run.jump(node.id);
     saveRun(run);
     this.registry.set('chart-note', '');
+    this.hover = null;
+    this.refreshChart();
     switch (enc.kind) {
       case 'battle': {
         const foe = run.currentEnemy();
@@ -214,19 +342,21 @@ export class SeaMapScene extends Phaser.Scene {
     }
     body.setPosition(x + 26, y + head + (pic ? pic.h + 12 : 0));
     this.dialog.push(body);
-    buttons.forEach(([label, fn], i) => {
+    const made = buttons.map(([label, fn], i) => {
       const bw = 220;
       const bx = SCREEN.w / 2 - (buttons.length * (bw + 12) - 12) / 2 + i * (bw + 12);
-      const b = new Button(this, bx, y + h - 60, bw, 42, label, fn, { size: 17 }).setDepth(32);
+      const b = new Button(this, bx, y + h - 60, bw, 42, label, fn, { size: 17, hint: i === 0 ? 'Enter' : undefined }).setDepth(32);
       this.dialog.push(b);
+      return b;
     });
     if (this.dialogEnter) this.input.keyboard!.off('keydown-ENTER', this.dialogEnter);
     const enter = () => {
       this.dialogEnter = null;
-      if (this.dialog.length) buttons[0][1]();
+      if (this.dialog.length) made[0].press();
     };
     this.dialogEnter = enter;
     this.input.keyboard!.once('keydown-ENTER', enter);
+    this.updateTip();
   }
 
   private closeDialog(): void {
@@ -238,87 +368,41 @@ export class SeaMapScene extends Phaser.Scene {
 
   update(time: number): void {
     const run = this.run;
-    const g = this.g;
     this.sea.draw(time);
-    g.clear();
 
-    const reach = new Set(run.reachable().map((n) => n.id));
-    const visited = new Set(run.visited);
-
-    // The fleet: a wash of red ink from the west edge up to its front.
+    // The fleet: a wash of red ink from the west edge up to its rippling front.
+    const f = this.fleetG.clear();
     const top = CHART.y + 3;
     const bottom = CHART.y + CHART.h - 3;
     const front = Math.min(CHART.x + CHART.w - 3, Math.max(CHART.x, this.colX(run.navy)));
     if (front > CHART.x) {
-      g.fillStyle(RED_INK, 0.22).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
-      g.lineStyle(3, RED_INK, 0.85);
-      g.beginPath();
+      f.fillStyle(RED_INK, 0.22).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
+      f.lineStyle(3, RED_INK, 0.85);
+      f.beginPath();
       for (let y = top; y <= bottom; y += 6) {
         const x = front + Math.sin(y / 18 + time / 400) * 5;
-        if (y === top) g.moveTo(x, y);
-        else g.lineTo(x, y);
+        if (y === top) f.moveTo(x, y);
+        else f.lineTo(x, y);
       }
-      g.strokePath();
-    }
-    // Where the fleet will be after your next jump.
-    const next = this.colX(run.navy + run.navySpeed);
-    if (next > CHART.x && run.status === 'chart') {
-      g.lineStyle(1.5, RED_INK, 0.55);
-      for (let y = top + 4; y < bottom - 6; y += 16) g.lineBetween(next, y, next, y + 8);
+      f.strokePath();
     }
 
-    // Cross-channels within a column: exploring sideways costs a jump.
-    for (let col = 1; col < run.chart.columns - 1; col++) {
-      const column = run.chart.nodes.filter((n) => n.col === col).sort((a, b) => a.y - b.y);
-      for (let i = 0; i + 1 < column.length; i++) {
-        const a = this.pos(column[i]);
-        const b = this.pos(column[i + 1]);
-        const open = (column[i].id === run.nodeId && reach.has(column[i + 1].id)) || (column[i + 1].id === run.nodeId && reach.has(column[i].id));
-        g.lineStyle(open ? 2.5 : 1.5, INK, open ? 0.85 : 0.25);
-        for (let t = 0; t < 1; t += 0.12) {
-          const t2 = Math.min(1, t + 0.06);
-          g.lineBetween(a.x + (b.x - a.x) * t, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t, a.x + (b.x - a.x) * t2, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t2);
-        }
-      }
-    }
-
-    // Routes.
-    for (const n of run.chart.nodes) {
-      const a = this.pos(n);
-      for (const id of n.next) {
-        const m = run.chart.nodes[id];
-        const b = this.pos(m);
-        const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
-        const open = n.id === run.nodeId && reach.has(m.id);
-        g.lineStyle(sailed ? 3.5 : open ? 3 : 1.8, sailed ? RED_INK : INK, sailed ? 0.9 : open ? 0.9 : 0.35);
-        g.lineBetween(a.x, a.y, b.x, b.y);
-      }
-    }
-
-    // Nodes.
-    for (const n of run.chart.nodes) {
+    const g = this.g.clear();
+    const pulse = 4 + Math.sin(time / 200) * 2;
+    for (const n of this.reach) {
       const { x, y } = this.pos(n);
-      const overrun = n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy;
       const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
-      const faded = visited.has(n.id) && n.id !== run.nodeId;
-      // A wax seal with a darker rim.
-      g.fillStyle(0x000000, 0.25).fillCircle(x + 2, y + 3, r);
-      g.fillStyle(overrun ? 0x5a2a20 : SEAL[n.kind], faded ? 0.5 : 1).fillCircle(x, y, r);
-      // The pressed ring where the seal's stamp met the wax.
-      g.lineStyle(1.5, 0x000000, faded ? 0.12 : 0.28).strokeCircle(x, y, r * 0.8);
-      g.lineStyle(2.5, INK, faded ? 0.5 : 0.95).strokeCircle(x, y, r);
-      if (reach.has(n.id)) {
-        const pulse = 4 + Math.sin(time / 200) * 2;
-        g.lineStyle(3, run.willBeOverrun(n) ? 0xc0201a : 0xb8860b, 1).strokeCircle(x, y, r + pulse);
-      }
-      if (this.hover === n) g.lineStyle(2, INK, 1).strokeCircle(x, y, r + 10);
+      g.lineStyle(3, this.ambush.has(n.id) ? RING_AMBUSH : RING, 1).strokeCircle(x, y, r + pulse);
+    }
+    if (this.hover && !this.dialog.length) {
+      const { x, y } = this.pos(this.hover);
+      const r = this.hover.kind === 'boss' || this.hover.kind === 'exit' ? NODE_R + 6 : NODE_R;
+      g.lineStyle(2, INK, 1).strokeCircle(x, y, r + 10);
     }
 
     // Your ship, riding just above her node.
     const here = this.pos(run.node);
     this.ship.setPosition(here.x, here.y - NODE_R - 2 + Math.sin(time / 300) * 2).setAngle(Math.sin(time / 520) * 3);
-
-    this.updateTip();
     this.bar.refresh();
   }
 
@@ -339,7 +423,7 @@ export class SeaMapScene extends Phaser.Scene {
     if (n.kind === 'empty') lines.push('Open sea. Time for repairs, if nothing happens aboard.');
     if (n.kind === 'boss') lines.push('HMS Relentless guards the channel to the open ocean. No running from this one.');
     if (n.kind === 'exit') lines.push(`A passage into ${n.name}. Tougher ships, richer prizes, and the fleet loses your trail for a while.`);
-    const reachable = run.reachable().some((m) => m.id === n.id);
+    const reachable = this.reach.includes(n);
     if (reachable && run.isLateral(n)) lines.push('Across the column: exploring costs a jump and a day’s provisions.');
     if (reachable && run.provisions === 0) lines.push('⚠ No provisions: the crew will go hungry.');
     if (reachable && run.willBeOverrun(n)) lines.push('⚠ The fleet will overrun this before you get there: a Navy ambush.');
