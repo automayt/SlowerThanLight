@@ -1,6 +1,6 @@
 export { SEA_EVENTS, seaEvent } from './events';
 
-export const PORT_NAMES = ['Nassau', 'Port Royal', 'Saint-Pierre', 'Bridgetown', 'Willemstad', 'Charles Town'];
+export const PORT_NAMES = ['Nassau', 'Port Royal', 'Saint-Pierre', 'Bridgetown', 'Willemstad', 'Charles Town', 'Havana'];
 
 /** A line about each port, shown under its name. */
 export const PORT_TAGLINES: Record<string, string> = {
@@ -10,6 +10,7 @@ export const PORT_TAGLINES: Record<string, string> = {
   Bridgetown: 'Barbados sugar and Barbados merchants. Gold speaks louder here than any flag.',
   Willemstad: 'Dutch Curaçao, where everything is for sale and the clerks never look up from their ledgers.',
   'Charles Town': 'A colonial port that buys stolen cargo cheap and asks no more than it must.',
+  Havana: 'Spain’s great harbour under the guns of El Morro. Welcome to a friend of Castile; the garrote for anyone else.',
 };
 
 /** Names for crew who sign on during the voyage. */

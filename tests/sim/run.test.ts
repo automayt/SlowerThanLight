@@ -15,12 +15,18 @@ function chart(seed: number): SeaChart {
 }
 
 /** A run parked at a node of the given kind, ready for its encounter. */
+/** A sighted ship is hailed first: answer with the guns. */
+function engage(run: Run): void {
+  if (run.status === 'hail') run.hail('attack');
+}
+
 function runAt(kind: 'port' | 'event' | 'battle', seed = 1): Run {
   for (let s = seed; s < seed + 200; s++) {
     const run = new Run('gull', s);
     const target = run.reachable().find((n) => n.kind === kind && !run.willBeOverrun(n));
     if (target) {
       run.jump(target.id);
+      engage(run);
       return run;
     }
     // Look one column further: sail through an empty-ish first node.
@@ -31,6 +37,7 @@ function runAt(kind: 'port' | 'event' | 'battle', seed = 1): Run {
       const t = probe.reachable().find((n) => n.kind === kind && !probe.willBeOverrun(n));
       if (t) {
         probe.jump(t.id);
+        engage(probe);
         return probe;
       }
     }
@@ -431,7 +438,8 @@ describe('sectors, provisions and the chandler', () => {
   function crossSector(run: Run): void {
     const start = run.sector;
     for (let guard = 0; guard < 40 && run.sector === start && !run.over; guard++) {
-      if (run.status === 'battle') {
+      if (run.status === 'hail') run.hail('attack');
+      else if (run.status === 'battle') {
         const b = run.startBattle({ autoPlayer: true });
         b.enemy.hull = 0;
         b.step(0.05);
@@ -480,7 +488,8 @@ describe('sectors, provisions and the chandler', () => {
     for (let seed = 1; seed <= 10; seed++) {
       const run = new Run('maw', seed);
       for (let guard = 0; guard < 60 && !run.over && !(run.encounter.kind === 'battle' && run.encounter.boss); guard++) {
-        if (run.status === 'battle') {
+        if (run.status === 'hail') run.hail('attack');
+        else if (run.status === 'battle') {
           expect(run.encounter.kind === 'battle' && run.encounter.ambush, `seed ${seed}`).toBe(false);
           const b = run.startBattle({ autoPlayer: true });
           b.enemy.hull = 0;
