@@ -253,9 +253,9 @@ export class BattleFx {
     this.drops.explode(3, x, y);
   }
 
-  /** Called every frame for each burning room: embers and smoke at a rate that grows with the fire. */
+  /** Called every frame for each burning tile: embers and smoke at a rate that grows with its heat. */
   burning(key: string, r: Phaser.Geom.Rectangle, k: number, dt: number): void {
-    const owed = (this.owed.get(key) ?? 0) + dt * (2 + 7 * k);
+    const owed = (this.owed.get(key) ?? 0) + dt * (0.6 + 1.8 * k);
     let n = Math.floor(owed);
     this.owed.set(key, owed - n);
     while (n-- > 0) {

@@ -1,4 +1,5 @@
 import type { BattleEvent } from './events';
+import { ignite } from './Hazards';
 import { GUNNERY_RELOAD, rank, train } from './Skills';
 import type { Rng } from './rng';
 import type { GunState, Ship } from './Ship';
@@ -225,8 +226,7 @@ export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: n
 
   events.push({ t: 'hit', side: target.side, room: roomId, hull, shot });
   if (fx.fireChance && rng.chance(fx.fireChance)) {
-    room.fire = Math.max(room.fire, 40);
-    events.push({ t: 'fire', side: target.side, room: roomId });
+    ignite(target, room, rng, 40, events);
   }
   if (fx.breachChance && !room.breach && rng.chance(fx.breachChance)) {
     room.breach = true;

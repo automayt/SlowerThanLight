@@ -1,5 +1,6 @@
 import { findRoute } from './pathfinding';
-import type { Crew, CrewTask, Ship, Waypoint } from './Ship';
+import type { Crew, CrewTask, RoomState, Ship, Waypoint } from './Ship';
+import type { Vec } from './types';
 import { rank, REPAIR_BONUS, train } from './Skills';
 
 /** Tiles per second. */
@@ -43,6 +44,32 @@ export function destination(crew: Crew): string {
   return crew.waypoints.length ? crew.waypoints[crew.waypoints.length - 1].room : crew.room;
 }
 
+/** Tiles' worth of FIREFIGHT_RATE one firefighter beats down: buckets, wet sails and axes go where the flames are. */
+export const FIREFIGHT_REACH = 3;
+
+/** One firefighter's work: beat down the burning tile nearest them, then the next nearest, until `amount` is spent. */
+function douse(room: RoomState, pos: Vec, amount: number): void {
+  const d = room.def;
+  const px = pos.x - d.x - 0.5;
+  const py = pos.y - d.y - 0.5;
+  while (amount > 0) {
+    let best = -1;
+    let bestDist = Infinity;
+    room.flames.forEach((f, i) => {
+      if (f <= 0) return;
+      const dist = Math.abs((i % d.w) - px) + Math.abs(Math.floor(i / d.w) - py);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    if (best < 0) return;
+    const used = Math.min(amount, room.flames[best]);
+    room.flames[best] -= used;
+    amount -= used;
+  }
+}
+
 /** Move crew along their paths, then let everyone standing in a room work on its most urgent problem. */
 export function updateCrew(ship: Ship, dt: number): void {
   for (const c of ship.crew) move(ship, c, dt);
@@ -56,7 +83,7 @@ export function updateCrew(ship: Ship, dt: number): void {
     let task: CrewTask;
     if (room.fire > 0) {
       task = 'fire';
-      room.fire = Math.max(0, room.fire - FIREFIGHT_RATE * workers.length * dt);
+      for (const w of workers) douse(room, w.pos, FIREFIGHT_RATE * FIREFIGHT_REACH * dt);
     } else if (room.breach) {
       task = 'breach';
       room.breachProgress += PATCH_RATE * workers.reduce((n, w) => n + 1 + rank(w, 'repair') * REPAIR_BONUS, 0) * dt;

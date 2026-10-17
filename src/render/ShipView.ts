@@ -214,6 +214,16 @@ export class ShipView {
     return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
   }
 
+  /** Screen rectangle of one tile of a room (`i` indexes the room's flames, row by row). */
+  tileRect(roomId: string, i: number): Phaser.Geom.Rectangle {
+    const d = this.ship.room(roomId).def;
+    const x = d.x + (i % d.w);
+    const y = d.y + Math.floor(i / d.w);
+    const a = this.toScreen({ x, y });
+    const b = this.toScreen({ x: x + 1, y: y + 1 });
+    return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
+  }
+
   /** Muzzle of the cannon that stands for gun `index`, run out through its port in the ship's side, and the way it points. */
   muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
     const guns = this.gunRoom;
@@ -740,23 +750,33 @@ export class ShipView {
       }
 
       if (room.fire > 0) {
-        const k = room.fire / 100;
-        g.fillStyle(0xff6a1a, 0.14 + 0.22 * k + 0.05 * Math.sin(t * 9 + r.x)).fillRect(r.x, r.y, r.width, r.height);
-        g.fillStyle(0xffc040, 0.08 + 0.1 * k).fillRect(r.x + 3, r.y + 3, r.width - 6, r.height - 6);
-        const n = Math.max(2, Math.ceil(k * room.def.w * room.def.h * 2));
-        for (let i = 0; i < n; i++) {
-          const fx = r.x + T * 0.2 + (((i * 0.618 + 0.13) % 1) * (r.width - T * 0.4));
-          const fy = r.y + T * 0.3 + (((i * 0.371 + 0.4) % 1) * (r.height - T * 0.45));
-          const s = T * (0.22 + 0.16 * k) * (1 + 0.15 * Math.sin(t * 11 + i * 3));
-          flame(g, fx, fy, s, t + i);
+        // Fire lives on tiles: each burning tile glows and carries flames by its own heat, so a blaze can be seen
+        // starting in a corner and creeping across the deck. Smoke hangs over the whole room by how much of it burns.
+        const flames = room.flames;
+        for (let i = 0; i < flames.length; i++) {
+          const k = flames[i] / 100;
+          if (k <= 0) continue;
+          const tr = this.tileRect(room.def.id, i);
+          const seed = i * 1.7 + r.x * 0.01;
+          g.fillStyle(0xff6a1a, 0.12 + 0.26 * k + 0.05 * Math.sin(t * 9 + seed)).fillRect(tr.x + 1, tr.y + 1, tr.width - 2, tr.height - 2);
+          g.fillStyle(0xffc040, 0.05 + 0.12 * k).fillRect(tr.x + 4, tr.y + 4, tr.width - 8, tr.height - 8);
+          // One tongue for a fresh flicker, up to three for a tile burning fierce.
+          const n = k < 0.35 ? 1 : k < 0.7 ? 2 : 3;
+          for (let j = 0; j < n; j++) {
+            const fx = tr.x + tr.width * (0.25 + 0.5 * ((j * 0.618 + i * 0.29 + 0.13) % 1));
+            const fy = tr.y + tr.height * (0.45 + 0.35 * ((j * 0.371 + i * 0.17 + 0.4) % 1));
+            const s = T * (0.14 + 0.2 * k) * (1 + 0.15 * Math.sin(t * 11 + j * 3 + seed));
+            flame(g, fx, fy, s, t + j + seed);
+          }
+          if (k > 0.4) {
+            const kk = (t * 0.9 + i * 0.37) % 1;
+            g.fillStyle(0xffb040, 0.9 * (1 - kk)).fillCircle(tr.centerX + Math.sin(t * 3 + seed) * 4, tr.bottom - T * 0.15 - kk * tr.height * 0.9, 1.5);
+          }
         }
-        for (let i = 0; i < 6; i++) {
-          const kk = (t * 0.9 + i / 6) % 1;
-          g.fillStyle(0xffb040, 0.9 * (1 - kk)).fillCircle(r.x + ((i * 0.37 + 0.2) % 1) * r.width + Math.sin(t * 3 + i) * 4, r.bottom - T * 0.2 - kk * r.height * 0.9, 1.6);
-        }
+        const smoke = room.fire / 100;
         for (let i = 0; i < 3; i++) {
           const kk = (t * 0.45 + i / 3) % 1;
-          g.fillStyle(0x2a2420, 0.3 * (1 - kk)).fillCircle(r.centerX + Math.sin(t + i * 2) * T * 0.4, r.y + r.height * 0.4 - kk * T * 1.2, T * (0.15 + kk * 0.3));
+          g.fillStyle(0x2a2420, (0.12 + 0.25 * smoke) * (1 - kk)).fillCircle(r.centerX + Math.sin(t + i * 2) * T * 0.4, r.y + r.height * 0.4 - kk * T * 1.2, T * (0.15 + kk * 0.3));
         }
       }
 

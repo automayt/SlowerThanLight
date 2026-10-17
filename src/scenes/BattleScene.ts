@@ -309,7 +309,8 @@ export class BattleScene extends Phaser.Scene {
     this.drawProjectiles();
     for (const view of [this.playerView, this.enemyView]) {
       for (const room of view.ship.rooms.values()) {
-        if (room.fire > 0) this.fxs.burning(`${view.ship.side}:${room.def.id}`, view.roomRect(room.def.id), room.fire / 100, delta / 1000);
+        if (room.fire <= 0) continue;
+        room.flames.forEach((f, i) => f > 0 && this.fxs.burning(`${view.ship.side}:${room.def.id}:${i}`, view.tileRect(room.def.id, i), f / 100, delta / 1000));
       }
     }
 

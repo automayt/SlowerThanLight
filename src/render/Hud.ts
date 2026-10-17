@@ -670,8 +670,10 @@ function urgentAlert(battle: Battle): string {
   }
   const boarders = ship.crew.find((c) => c.side !== ship.side && !c.waypoints.length);
   if (boarders) return `BOARDERS in the ${roomName(boarders.room)}: send crew to repel them`;
-  const fire = [...ship.rooms.values()].filter((r) => r.fire > 0).sort((a, b) => b.fire - a.fire)[0];
-  if (fire && fire.fire > 30) return `FIRE in the ${roomName(fire.def.id)}: send crew to put it out`;
+  // The fiercest blaze, by its hottest tile: a fire is worth shouting about before it fills the room.
+  const hottest = (r: { flames: number[] }) => Math.max(...r.flames);
+  const fire = [...ship.rooms.values()].filter((r) => r.fire > 0).sort((a, b) => hottest(b) - hottest(a))[0];
+  if (fire && hottest(fire) > 30) return `FIRE in the ${roomName(fire.def.id)}: send crew to put it out`;
   const helm = ship.system('helm');
   if (helm && ship.capacity('helm') > 0 && !ship.isManned('helm')) return `HELM UNMANNED: evasion 0%. Send someone to the ${roomName(helm.room)}`;
   const guns = ship.system('guns');

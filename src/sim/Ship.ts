@@ -9,7 +9,9 @@ export const SWAMP_LEVEL = 50;
 
 export interface RoomState {
   def: RoomDef;
-  /** Fire intensity 0..100. */
+  /** Fire intensity 0..100 on each tile, row by row from the room's top-left (see tileAt). */
+  flames: number[];
+  /** Mean fire intensity over the room's tiles (0 when nothing burns). Setting it sets every tile. */
   fire: number;
   /** Accumulated fire damage toward the next system damage point. */
   burn: number;
@@ -19,6 +21,35 @@ export interface RoomState {
   breachProgress: number;
   /** Progress (0..100) of unopposed boarders wrecking this room's system. */
   sabotage: number;
+}
+
+/** A room's state at the start of a fight: dry, whole and not burning. */
+function roomState(def: RoomDef): RoomState {
+  return {
+    def,
+    flames: new Array<number>(def.w * def.h).fill(0),
+    get fire() {
+      let sum = 0;
+      for (const f of this.flames) sum += f;
+      return sum / this.flames.length;
+    },
+    set fire(v: number) {
+      this.flames.fill(Math.max(0, Math.min(100, v)));
+    },
+    burn: 0,
+    water: 0,
+    breach: false,
+    breachProgress: 0,
+    sabotage: 0,
+  };
+}
+
+/** Index into a room's flames of the tile under a point (clamped into the room). */
+export function tileAt(room: RoomState, p: Vec): number {
+  const d = room.def;
+  const x = Math.max(0, Math.min(d.w - 1, Math.floor(p.x) - d.x));
+  const y = Math.max(0, Math.min(d.h - 1, Math.floor(p.y) - d.y));
+  return y * d.w + x;
 }
 
 export interface SystemState {
@@ -127,7 +158,7 @@ export class Ship {
     this.height = Math.max(...def.rooms.map((r) => r.y + r.h));
 
     for (const r of def.rooms) {
-      this.rooms.set(r.id, { def: r, fire: 0, burn: 0, water: 0, breach: false, breachProgress: 0, sabotage: 0 });
+      this.rooms.set(r.id, roomState(r));
       if (r.system) {
         const max = def.systems[r.system] ?? 1;
         this.systems.set(r.system, { id: r.system, room: r.id, max, damage: 0, hands: 0, wanted: 0, repair: 0 });
