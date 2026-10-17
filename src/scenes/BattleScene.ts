@@ -399,19 +399,19 @@ export class BattleScene extends Phaser.Scene {
     if (room.fire > 0) parts.push('ON FIRE');
     if (room.breach) parts.push('HOLED');
     if (room.water > 5) parts.push(`water ${Math.round(room.water)}%`);
+    const boarding = !!enemyRoom && this.selected.size > 0 && this.aimingGun === null;
+    // What a ball would find in there (the boarding odds below say it for a party).
+    if (enemyRoom && !boarding) {
+      const hers = side.own().filter((c) => c.room === id).length;
+      parts.push(hers ? `${hers} of her crew` : 'no crew');
+    }
     if (enemyRoom && this.aimingGun !== null) parts.push('click to aim');
     if (playerRoom && this.selected.size) parts.push('click to send crew');
-    const boarding = !!enemyRoom && this.selected.size > 0 && this.aimingGun === null;
     if (boarding) {
       parts.push(b.canBoard() ? 'click to BOARD' : `too fast to grapple (her speed ${grappleSpeed(b.enemy).toFixed(0)}, yours ${grappleSpeed(b.player).toFixed(0)})`);
     }
     const fighting = side.crew.filter((c) => c.room === id && c.side !== side.side).length;
     if (fighting) parts.push(`${fighting} BOARDER${fighting > 1 ? 'S' : ''}`);
-    // What a ball (or a boarding party) would find in there.
-    if (enemyRoom) {
-      const hers = side.own().filter((c) => c.room === id).length;
-      parts.push(hers ? `${hers} of her crew` : 'no crew');
-    }
     return boarding ? `${parts.join(' · ')}\n${this.boardingOdds(id)}` : parts.join(' · ');
   }
 

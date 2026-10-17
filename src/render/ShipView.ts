@@ -571,6 +571,7 @@ export class ShipView {
         this.scene.tweens.add({ targets: s, angle: -88 * dir, y: s.y - 2, duration: 380, ease: 'Quad.easeIn' });
         // Name the fallen where they drop, so a death in the melee is not missed.
         const label = this.scene.add.text(s.x, s.y - T * 0.9, `† ${s.name}`, textStyle(12, s.getData('ours') ? '#ff8a7a' : '#e8e0cc', { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(DEPTH.ui + 6);
+        label.setX(Phaser.Math.Clamp(label.x, label.width / 2 + 4, this.scene.scale.width - label.width / 2 - 4));
         this.scene.tweens.add({ targets: label, y: label.y - 22, alpha: 0, delay: 600, duration: 1400, onComplete: () => label.destroy() });
         this.scene.tweens.add({ targets: s, alpha: 0, delay: 1400, duration: 900, onComplete: () => s.destroy() });
       } else s.destroy();

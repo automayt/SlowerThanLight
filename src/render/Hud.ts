@@ -41,7 +41,7 @@ const SYSTEM_TIPS: Record<SystemId, string> = {
 export type HintId = 'aim' | 'crew' | 'pause' | 'hands' | 'shot';
 const HINT_TEXT: Record<HintId, string> = {
   aim: 'Click a gun card (or press its number), then a room on her ship to aim it.',
-  crew: 'Click a crew member (or press their key), then a room to send them. Shift picks several.',
+  crew: 'Click a crew member (or their key), then a room to send them. Shift picks several.',
   pause: 'Space pauses the fight. You can give every order while paused.',
   hands: 'Deckhands work your stations with the + and − buttons. On Bulwarks, each raises a layer that stops a ball.',
   shot: 'Try other shot: chain tears her sails, grape cuts down crew, hot shot starts fires. Shift+number cycles a gun’s shot.',
@@ -308,7 +308,8 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     this.hintAnchors = {
       aim: { x: card0 + CARD_W / 2, y: BOTTOM_Y - 3, dir: 'down' },
       shot: { x: card0 + CARD_W / 2, y: BOTTOM_Y - 3, dir: 'down' },
-      crew: { x: 180, y: 128, dir: 'left' },
+      // Low enough on the first crew row to clear the opening banner.
+      crew: { x: 180, y: 134, dir: 'left' },
       pause: { x: SCREEN.w / 2 - 63, y: 39, dir: 'up' },
       hands: { x: 140, y: BOTTOM_Y - 3, dir: 'down' },
     };
@@ -326,7 +327,7 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     const h = this.hintText.height + 18;
     const a = this.hintAnchors[id];
     const x = a.dir === 'left' ? a.x + 12 : a.dir === 'up' ? SCREEN.w / 2 - w / 2 : Phaser.Math.Clamp(a.x - 40, 8, SCREEN.w - w - 8);
-    const y = a.dir === 'down' ? a.y - 10 - h : a.dir === 'up' ? a.y + 10 : a.y - 18;
+    const y = a.dir === 'down' ? a.y - 10 - h : a.dir === 'up' ? a.y + 10 : a.y - 12;
     const g = this.hintG.clear();
     g.fillStyle(0x0b1622, 0.96).fillRoundedRect(0, 0, w, h, 6);
     g.lineStyle(2, 0xf2c45a, 0.95).strokeRoundedRect(0, 0, w, h, 6);
@@ -336,7 +337,7 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     g.fillStyle(0xf2c45a, 1);
     if (a.dir === 'down') g.fillTriangle(tx - 8, h, tx + 8, h, tx, ty);
     else if (a.dir === 'up') g.fillTriangle(tx - 8, 0, tx + 8, 0, tx, ty);
-    else g.fillTriangle(0, 10, 0, 26, tx, ty);
+    else g.fillTriangle(0, ty - 8, 0, ty + 8, tx, ty);
     this.hintClose.setX(w - 6);
     this.hintBox.setPosition(x, y).setVisible(true);
   }
@@ -390,7 +391,9 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     this.enemyTitle.setText('HULL');
     // Her people still standing, out of those she began with: the odds for a boarding party.
     const crewLeft = battle.crewOf('enemy').length;
-    this.enemyStats.setText(`${enemy.def.className} · Evasion ${Math.round(enemy.evasion())}% · Flood ${floodPct(enemy)} · Crew ${crewLeft}/${battle.crewAtStart.enemy}`);
+    // While she runs, her class gives way to the flight bar at the panel's end.
+    const herClass = battle.enemyFleeing ? '' : `${enemy.def.className} · `;
+    this.enemyStats.setText(`${herClass}Evasion ${Math.round(enemy.evasion())}% · Flood ${floodPct(enemy)} · Crew ${crewLeft}/${battle.crewAtStart.enemy}`);
     this.fleeLabel.setVisible(battle.enemyFleeing);
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
