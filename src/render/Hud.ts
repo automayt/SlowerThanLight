@@ -1,10 +1,9 @@
 import Phaser from 'phaser';
-import type { Battle } from '../sim/Battle';
+import { gunLoadRate, type Battle } from '../sim/Battle';
 import { SHOT_EFFECTS } from '../sim/Combat';
 import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
-import { UNCREWED_RELOAD } from '../sim/Combat';
-import type { Ship } from '../sim/Ship';
+import type { GunState, Ship } from '../sim/Ship';
 import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/types';
 import { crewTextures } from './CrewArt';
 import { COLORS, SCREEN, textStyle, TITLE_FONT } from './theme';
@@ -23,6 +22,16 @@ export interface HudState {
 }
 
 const BOTTOM_Y = 512;
+
+/**
+ * Draw order of the HUD: above the ships (1-6), drag band (25), ambient gulls and cloud shadows, and hit effects,
+ * so nothing drifts over a panel; the scene's banners and outcome overlay sit above all of it (60+).
+ */
+export const HUD_DEPTH = { panels: 50, alert: 52, banner: 53, hover: 55 } as const;
+/** Hull bars start this far right of their HULL heading. */
+const HULL_BAR_DX = 58;
+/** Widest a hull bar may grow. */
+const HULL_BAR_W = 390;
 
 /** Phaser re-draws and re-uploads a Text on every setColor, so only call it on a change. */
 function tint(text: Phaser.GameObjects.Text, color: string): Phaser.GameObjects.Text {
@@ -58,6 +67,7 @@ export class Hud {
   private readonly playerStats: Phaser.GameObjects.Text;
   private readonly enemyStats: Phaser.GameObjects.Text;
   private readonly enemyTitle: Phaser.GameObjects.Text;
+  private readonly fleeLabel: Phaser.GameObjects.Text;
   private readonly escapeBtn: Button;
   private readonly broadsideBtn: Button;
   private readonly handsTitle: Phaser.GameObjects.Text;
@@ -82,6 +92,7 @@ export class Hud {
     cb: HudCallbacks,
   ) {
     const player = battle.player;
+    const before = new Set(scene.children.list);
 
     // --- Top: player status ---
     panel(scene, 8, 8, 470, 66);
@@ -123,7 +134,7 @@ export class Hud {
       const y = BOTTOM_Y + 38 + i * 26;
       if (scene.textures.exists(`sysicon:${id}`)) scene.add.image(27, y + 8, `sysicon:${id}`).setScale(0.48);
       this.sysLabels.set(id, scene.add.text(42, y, SYSTEM_NAMES[id], textStyle(13)));
-      this.sysStatus.set(id, scene.add.text(264, y + 1, '', textStyle(11, COLORS.textDim)));
+      this.sysStatus.set(id, scene.add.text(264, y, '', textStyle(12, COLORS.textDim)));
       if (id === 'bulwarks' || id === 'sails' || id === 'pumps' || id === 'surgeon') {
         new Button(scene, 112, y - 2, 22, 22, '−', () => battle.addHands(id, -1), { size: 15 });
         new Button(scene, 236, y - 2, 22, 22, '+', () => battle.addHands(id, 1), { size: 15 });
@@ -145,47 +156,53 @@ export class Hud {
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => (p.rightButtonDown() ? cb.clearGunTarget(i) : cb.selectGun(i)));
       if (scene.textures.exists('sysicon:guns')) scene.add.image(x + 18, BOTTOM_Y + 19, 'sysicon:guns').setScale(0.55);
       const name = scene.add.text(x + 34, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, { fontFamily: TITLE_FONT, fontSize: '14px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: CARD_W - 42 } });
-      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 64, 22, '', () => battle.toggleGun(i), { size: 11 });
-      scene.add.text(x + 76, BOTTOM_Y + 55, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''} · ${gun.def.shots}×${gun.def.damage} dmg`, textStyle(10, COLORS.textDim));
-      const status = scene.add.text(x + 8, BOTTOM_Y + 98, '', textStyle(11, COLORS.textDim));
-      const target = scene.add.text(x + 8, BOTTOM_Y + 114, '', textStyle(11));
+      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 24, '', () => battle.toggleGun(i), { size: 12 });
+      scene.add.text(x + 88, BOTTOM_Y + 47, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''}\n${gun.def.shots}×${gun.def.damage} dmg`, textStyle(12, COLORS.textDim, { lineSpacing: -1 }));
+      const status = scene.add.text(x + 8, BOTTOM_Y + 97, '', textStyle(12, COLORS.textDim, { wordWrap: { width: CARD_W - 16 }, lineSpacing: -2 }));
+      const target = scene.add.text(x + 8, BOTTOM_Y + 113, '', textStyle(12));
       const shots = SHOT_TYPES.map((s, j) => {
-        const b = new Button(scene, x + 8 + j * 36, BOTTOM_Y + 140, 33, 24, '', () => battle.setShot(i, s), { size: 13 });
+        const b = new Button(scene, x + 9 + j * 35.5, BOTTOM_Y + 143, 33, 24, '', () => battle.setShot(i, s), { size: 13 });
         b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));
         b.bg.on('pointerover', () => this.showTooltip(`${SHOT_EFFECTS[s].label} shot: ${SHOT_EFFECTS[s].blurb}`, x, BOTTOM_Y - 8));
         b.bg.on('pointerout', () => this.tooltip.setVisible(false));
         return b;
       });
-      scene.add.text(x + 8, BOTTOM_Y + 172, 'Click card, then enemy room', textStyle(10, COLORS.textDim));
+      scene.add.text(x + CARD_W / 2, BOTTOM_Y + 174, 'Click, then her room', textStyle(12, COLORS.textDim)).setOrigin(0.5, 0);
       this.cards.push({ bg, name, status, target, power, shots, x });
     });
 
-    // --- Bottom-right: log ---
-    const logX = 346 + 4 * (CARD_W + 6);
+    // --- Bottom-right: log, taking whatever room the gun cards leave ---
+    const logX = 346 + player.guns.length * (CARD_W + 6);
     panel(scene, logX, BOTTOM_Y, SCREEN.w - logX - 8, 200);
     heading(scene, logX + 10, BOTTOM_Y + 7, "Captain's Log", 15);
     this.logText = scene.add.text(logX + 10, BOTTOM_Y + 30, '', textStyle(12, COLORS.text, { wordWrap: { width: SCREEN.w - logX - 28 }, lineSpacing: 3 }));
 
     this.g = scene.add.graphics();
+    this.fleeLabel = scene.add
+      .text(SCREEN.w - 65, 56, 'FLEEING', textStyle(12, COLORS.text, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 }))
+      .setOrigin(0.5)
+      .setVisible(false);
+    // Everything built so far is panel furniture: lift it above the ships, the gulls and the gun smoke.
+    for (const obj of scene.children.list) if (!before.has(obj)) (obj as unknown as Phaser.GameObjects.Components.Depth).setDepth(HUD_DEPTH.panels);
 
     this.alert = scene.add
       .text(SCREEN.w / 2, 486, '', { fontFamily: TITLE_FONT, fontSize: '18px', color: '#ffd8cc', backgroundColor: '#5a1410e6', padding: { x: 14, y: 5 }, stroke: '#000000', strokeThickness: 2 })
       .setOrigin(0.5)
-      .setDepth(20)
+      .setDepth(HUD_DEPTH.alert)
       .setVisible(false);
     this.pauseBanner = scene.add
       .text(SCREEN.w / 2, 98, 'PAUSED  ·  Space to resume', { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, backgroundColor: '#0b1622dd', padding: { x: 18, y: 7 }, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5)
-      .setDepth(20);
+      .setDepth(HUD_DEPTH.banner);
     this.hoverText = scene.add
-      .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#0b1622e8', padding: { x: 10, y: 5 }, wordWrap: { width: 340 } }))
+      .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#0b1622e8', padding: { x: 10, y: 5 }, wordWrap: { width: 460 } }))
       .setOrigin(0, 1)
-      .setDepth(30);
+      .setDepth(HUD_DEPTH.hover);
     this.pointer = scene.input.activePointer;
     this.tooltip = scene.add
       .text(0, 0, '', textStyle(12, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 300 } }))
       .setOrigin(0, 1)
-      .setDepth(30)
+      .setDepth(HUD_DEPTH.hover)
       .setVisible(false);
   }
 
@@ -212,8 +229,8 @@ export class Hud {
     g.clear();
 
     // Top bars.
-    this.drawHull(player, 64, 14);
-    this.drawLayers(player, 64, 36);
+    this.drawHull(player, 18 + HULL_BAR_DX, 14);
+    this.drawLayers(player, 18 + HULL_BAR_DX, 36);
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
     tint(this.playerStats, battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
@@ -222,11 +239,13 @@ export class Hud {
     const escapeLabel = !battle.allowEscape ? 'No escape' : battle.grappled ? 'Grappled!' : battle.canEscape() ? 'Escape!' : rate > 0 ? `Make Sail ${eta}s` : 'No way on';
     this.escapeBtn.setEnabled(battle.canEscape()).setText(escapeLabel);
 
-    this.drawHull(enemy, SCREEN.w - 414, 14);
-    this.drawLayers(enemy, SCREEN.w - 414, 36);
+    this.drawHull(enemy, SCREEN.w - 468 + HULL_BAR_DX, 14);
+    this.drawLayers(enemy, SCREEN.w - 468 + HULL_BAR_DX, 36);
     this.enemyTitle.setText('HULL');
-    const fleeing = battle.enemyFleeing ? '   FLEEING!' : '';
-    this.enemyStats.setText(`${enemy.def.className}  ·  Evasion ${Math.round(enemy.evasion())}%  ·  Flood ${floodPct(enemy)}${fleeing}`);
+    // Her people still standing, out of those she began with: the odds for a boarding party.
+    const crewLeft = battle.crewOf('enemy').length;
+    this.enemyStats.setText(`${enemy.def.className} · Evasion ${Math.round(enemy.evasion())}% · Flood ${floodPct(enemy)} · Crew ${crewLeft}/${battle.crewAtStart.enemy}`);
+    this.fleeLabel.setVisible(battle.enemyFleeing);
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
     this.broadsideBtn.setText(player.broadside ? 'Broadside: ON' : 'Broadside: off').setOn(player.broadside);
@@ -267,6 +286,15 @@ export class Hud {
     }
 
     // Guns.
+    const loadRate = gunLoadRate(player);
+    const secsLeft = (gun: GunState) => (gun.def.loadTime - gun.charge) / loadRate;
+    // The gun a broadside is still waiting on: aimed and crewed but not yet loaded (as Combat holds it).
+    let lagging = -1;
+    if (player.broadside) {
+      player.guns.forEach((g, j) => {
+        if (g.powered && g.target && enemy.rooms.has(g.target) && g.charge < g.def.loadTime && (lagging < 0 || secsLeft(g) > secsLeft(player.guns[lagging]))) lagging = j;
+      });
+    }
     player.guns.forEach((gun, i) => {
       const card = this.cards[i];
       const aiming = state.aimingGun === i;
@@ -294,17 +322,23 @@ export class Hud {
           : !working
             ? '! Gun deck out of action'
             : loaded >= 1
-              ? gun.target
-                ? 'Loaded — firing'
-                : 'Loaded — pick a target!'
+              ? !gun.target
+                ? 'Loaded — pick a target!'
+                : battle.holdingFire
+                  ? 'Holding fire: boarders aboard'
+                  : lagging >= 0
+                    ? `Holding for broadside (gun ${lagging + 1}: ${secsLeft(player.guns[lagging]).toFixed(1)}s)`
+                    : 'Loaded — firing'
               : crewless
-                ? `Slow: no gun crew  ${((gun.def.loadTime - gun.charge) / UNCREWED_RELOAD).toFixed(0)}s`
-                : `Loading… ${(gun.def.loadTime - gun.charge).toFixed(1)}s`,
+                ? `Slow: no gun crew  ${secsLeft(gun).toFixed(0)}s`
+                : `Loading… ${secsLeft(gun).toFixed(1)}s`,
       );
       card.target.setText(gun.target ? `→ ${enemy.room(gun.target).def.name}` : aiming ? '→ click an enemy room' : '→ no target');
+      card.target.setY(card.status.y + Math.max(16, card.status.height));
       tint(card.target, gun.target ? COLORS.textWarn : COLORS.textDim);
       const warn = card.status.text.startsWith('!') || card.status.text.startsWith('Slow');
-      tint(card.status, loadedIdle ? COLORS.gold : warn ? COLORS.textWarn : COLORS.textDim);
+      const holding = card.status.text.startsWith('Holding');
+      tint(card.status, loadedIdle || holding ? COLORS.gold : warn ? COLORS.textWarn : COLORS.textDim);
       SHOT_TYPES.forEach((s: ShotType, j) => card.shots[j].setOn(gun.shot === s));
     });
 
@@ -361,7 +395,7 @@ export class Hud {
   private drawHull(ship: Ship, x: number, y: number): void {
     const g = this.g;
     const n = ship.def.hull;
-    const w = Math.min(12, Math.floor(400 / n) - 2);
+    const w = Math.min(12, Math.floor(HULL_BAR_W / n) - 2);
     const frac = ship.hull / n;
     const color = frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f;
     g.fillStyle(0x000000, 0.6).fillRect(x - 2, y - 2, n * (w + 2) + 2, 22);
@@ -485,5 +519,10 @@ function urgentAlert(battle: Battle): string {
   const guns = ship.system('guns');
   if (guns && ship.capacity('guns') === 0) return `GUN DECK WRECKED: send crew to repair the ${roomName(guns.room)}`;
   if (guns && ship.guns.some((g) => g.powered) && ship.gunCrew().length === 0) return `NO GUN CREW: guns load slowly. Send someone to the ${roomName(guns.room)}`;
+  const foe = battle.enemy;
+  const foeRate = foe.escapeRate();
+  if (battle.enemyFleeing && !battle.grappled && foe.escape >= 50 && foeRate > 0) {
+    return `SHE'S GETTING AWAY (${Math.ceil((100 - foe.escape) / foeRate)}s): chain shot her Sails, or hit her Helm`;
+  }
   return '';
 }

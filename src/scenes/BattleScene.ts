@@ -8,7 +8,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
 import type { Battle } from '../sim/Battle';
 import type { BattleReport, Run } from '../sim/Run';
-import { BOARD_TIME, grappleSpeed } from '../sim/Boarding';
+import { BOARD_TIME, grappleSpeed, partyStrength } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
 import { SYSTEM_NAMES, type Side } from '../sim/types';
@@ -16,6 +16,10 @@ import { bumpProfile, saveRun } from './save';
 
 const TILE = 42;
 const SHIP_CENTER_Y = 292;
+/** Banners and the outcome overlay sit above the HUD (see HUD_DEPTH). */
+const OVERLAY_DEPTH = 60;
+/** Ships that fly the Spanish ensign rather than a plain trade flag. */
+const SPANISH_SHIPS = new Set(['guarda', 'galleon']);
 
 export interface ResultData {
   battle: Battle;
@@ -64,13 +68,15 @@ export class BattleScene extends Phaser.Scene {
     const battle = (this.battle = run.startBattle());
     this.sea = new Sea(this, SCREEN.w, SCREEN.h, 0);
 
-    const faction = run.encounter.kind === 'battle' ? run.currentEnemy().faction : 'navy';
+    const foe = run.encounter.kind === 'battle' ? run.currentEnemy() : null;
+    const faction = foe?.faction ?? 'navy';
     setEnemyStyle(faction === 'navy' ? 'navy' : faction === 'merchant' ? 'merchant' : 'pirate');
     const p = battle.player;
     const e = battle.enemy;
+    const spanish = SPANISH_SHIPS.has(e.def.id) || (!!foe && SPANISH_SHIPS.has(foe.id));
     this.playerView = new ShipView(this, p, 250, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false, { flag: 'pirate' });
     this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + 1.7) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
-      flag: faction === 'navy' ? 'navy' : faction === 'pirate' ? 'pirate' : 'merchant',
+      flag: faction === 'navy' ? 'navy' : faction === 'pirate' ? 'pirate' : spanish ? 'spanish' : 'trade',
     });
     this.fx = this.add.graphics().setDepth(10);
     this.events.once('shutdown', () => {
@@ -97,6 +103,10 @@ export class BattleScene extends Phaser.Scene {
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
     this.hud.addLog(`${e.def.name} bears down on you. Run out the guns!`, COLORS.gold);
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
+    if (battle.enemyRuns) {
+      this.hud.addLog('She means to run: cripple her Sails or Helm before she escapes.', COLORS.textWarn);
+      this.hud.flash('SHE MEANS TO RUN: CRIPPLE HER SAILS OR HELM', 7000);
+    }
 
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => this.onPointerDown(ptr, over));
     this.input.on('pointermove', (ptr: Phaser.Input.Pointer) => this.onPointerMove(ptr));
@@ -176,15 +186,18 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    // An order is given once: the selection is spent, so a later click on her deck (to aim) can't send a boarding party.
     const room = this.playerView.roomAt(ptr.x, ptr.y);
     if (room && this.selected.size) {
       b.orderCrew(this.selected, room, 'player');
       for (const c of b.player.crew) if (this.selected.has(c.id) && c.waypoints.length) this.playerView.markMove(c.slot);
+      this.selected.clear();
       return;
     }
     if (enemyRoom && this.selected.size) {
       const sent = b.orderCrew(this.selected, enemyRoom, 'enemy');
-      if (!sent && !b.canBoard()) this.hud.addLog('She is too fast to grapple. Cripple her sails or helm first.', COLORS.textWarn);
+      if (sent) this.selected.clear();
+      else if (!b.canBoard()) this.hud.addLog('She is too fast to grapple. Cripple her sails or helm first.', COLORS.textWarn);
       return;
     }
 
@@ -256,13 +269,13 @@ export class BattleScene extends Phaser.Scene {
         strokeThickness: 7,
       })
       .setOrigin(0.5)
-      .setDepth(41)
+      .setDepth(OVERLAY_DEPTH + 1)
       .setAlpha(0)
       .setScale(0.8);
     const sub = this.add
       .text(SCREEN.w / 2, 246, `${this.battle.enemy.def.name}, ${this.battle.enemy.def.className}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: COLORS.text, stroke: '#000000', strokeThickness: 4, fontStyle: 'italic' })
       .setOrigin(0.5)
-      .setDepth(41)
+      .setDepth(OVERLAY_DEPTH + 1)
       .setAlpha(0);
     this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 450, ease: 'Back.easeOut' });
     this.tweens.add({ targets: sub, alpha: 1, duration: 450, delay: 200 });
@@ -333,12 +346,27 @@ export class BattleScene extends Phaser.Scene {
     if (room.water > 5) parts.push(`water ${Math.round(room.water)}%`);
     if (enemyRoom && this.aimingGun !== null) parts.push('click to aim');
     if (playerRoom && this.selected.size) parts.push('click to send crew');
-    if (enemyRoom && this.selected.size && this.aimingGun === null) {
+    const boarding = !!enemyRoom && this.selected.size > 0 && this.aimingGun === null;
+    if (boarding) {
       parts.push(b.canBoard() ? 'click to BOARD' : `too fast to grapple (her speed ${grappleSpeed(b.enemy).toFixed(0)}, yours ${grappleSpeed(b.player).toFixed(0)})`);
     }
     const fighting = side.crew.filter((c) => c.room === id && c.side !== side.side).length;
     if (fighting) parts.push(`${fighting} BOARDER${fighting > 1 ? 'S' : ''}`);
-    return parts.join(' · ');
+    return boarding ? `${parts.join(' · ')}\n${this.boardingOdds(id)}` : parts.join(' · ');
+  }
+
+  /** The odds of sending the selected crew into one of her rooms: who is waiting there, and how many she has in all. */
+  private boardingOdds(roomId: string): string {
+    const b = this.battle;
+    const party = b.crewOf('player').filter((c) => this.selected.has(c.id));
+    const here = b.enemy.own().filter((c) => c.room === roomId);
+    const aboard = b.enemy.own();
+    const ours = partyStrength(party);
+    const theirs = partyStrength(here, true);
+    const odds = `Your ${party.length} (strength ${ours.toFixed(1)}) vs her ${here.length} here (strength ${theirs.toFixed(1)}) · she has ${aboard.length} aboard`;
+    if (theirs > ours) return `${odds}\n⚠ OUTMATCHED in this room: send more, or pick an emptier one`;
+    if (partyStrength(aboard, true) > ours) return `${odds}\n⚠ OUTNUMBERED aboard: her crew will rally against you`;
+    return odds;
   }
 
   private viewFor(side: Side): ShipView {
@@ -559,6 +587,11 @@ export class BattleScene extends Phaser.Scene {
     if (o.kind === 'victory' || o.kind === 'defeat') playSfx(this, 'explosion', 0.7);
     if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
+    // When she gets away, say what it costs (the alarm brings the fleet on) while the log is still up.
+    if (o.kind === 'enemyEscaped') {
+      this.hud.addLog(`${this.battle.enemy.def.name} gets clean away.`, COLORS.textWarn);
+      for (const line of report.lines) this.hud.addLog(line, COLORS.textWarn);
+    }
     const now = this.time.now;
     switch (o.kind) {
       case 'victory':
@@ -581,12 +614,12 @@ export class BattleScene extends Phaser.Scene {
     if (o.kind === 'victory' || o.kind === 'defeat') this.cameras.main.shake(500, 0.006);
     // Let the finale play, then dim the scene and name the outcome.
     this.time.delayedCall(1400, () => {
-      const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0).setOrigin(0).setDepth(40);
+      const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0).setOrigin(0).setDepth(OVERLAY_DEPTH);
       this.tweens.add({ targets: shade, fillAlpha: 0.45, duration: 600 });
       const title = this.add
         .text(SCREEN.w / 2, SCREEN.h / 2 - 60, o.title, { fontFamily: TITLE_FONT, fontSize: '56px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 6 })
         .setOrigin(0.5)
-        .setDepth(41)
+        .setDepth(OVERLAY_DEPTH + 1)
         .setAlpha(0)
         .setScale(0.85);
       this.tweens.add({ targets: title, alpha: 1, scale: 1, duration: 500, ease: 'Back.easeOut' });
