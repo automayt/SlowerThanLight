@@ -382,12 +382,20 @@ export function frame(scene: Phaser.Scene, x: number, y: number, w: number, h: n
 
 /** An ornamental rule: two tapering brass arms from a diamond. Static: draw it once. */
 export function divider(scene: Phaser.Scene, cx: number, y: number, w: number, color: number = COLORS.brass, alpha = 0.85): Phaser.GameObjects.Graphics {
-  const g = scene.add.graphics().fillStyle(color, alpha);
-  for (const s of [-1, 1]) {
-    g.fillTriangle(cx + s * 14, y - 1.3, cx + s * 14, y + 1.3, cx + (s * w) / 2, y);
-    g.fillCircle(cx + s * 9.5, y, 1.7);
+  const g = scene.add.graphics();
+  // Once in shadow, a little below, then in brass.
+  for (const [fill, a, dy] of [
+    [0x000000, alpha * 0.45, 1.5],
+    [color, alpha, 0],
+  ]) {
+    g.fillStyle(fill, a);
+    const my = y + dy;
+    for (const s of [-1, 1]) {
+      g.fillTriangle(cx + s * 14, my - 1.4, cx + s * 14, my + 1.4, cx + (s * w) / 2, my);
+      g.fillCircle(cx + s * 9.5, my, 1.8);
+    }
+    g.fillPoints([new Phaser.Math.Vector2(cx, my - 5.5), new Phaser.Math.Vector2(cx + 5.5, my), new Phaser.Math.Vector2(cx, my + 5.5), new Phaser.Math.Vector2(cx - 5.5, my)], true);
   }
-  g.fillPoints([new Phaser.Math.Vector2(cx, y - 5), new Phaser.Math.Vector2(cx + 5, y), new Phaser.Math.Vector2(cx, y + 5), new Phaser.Math.Vector2(cx - 5, y)], true);
   return g;
 }
 
