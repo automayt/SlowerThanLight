@@ -29,6 +29,20 @@ function gunStats(w: WeaponDef): string {
   return `${w.shots}×${w.damage} dmg · ${w.loadTime}s · ${w.hands} hand${w.hands > 1 ? 's' : ''}`;
 }
 
+interface BuyOptions {
+  enabled: boolean;
+  fn: () => void;
+  /** Beside the button: what it does, or what you have now. */
+  detail?: string;
+  detailColor?: string;
+  /** Its price, so a disabled button can say how much you are short. */
+  price?: number;
+  /** Hover text when it can be bought. */
+  tip?: string;
+  /** Hover text when it cannot, unless the purse is the reason. */
+  why?: string;
+}
+
 /** A friendly port: repairs and crew, shipwright upgrades, and an armoury, or rest while the fleet closes in. */
 export class PortScene extends Phaser.Scene {
   private run!: Run;
@@ -70,8 +84,8 @@ export class PortScene extends Phaser.Scene {
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
       this.scene.start('SeaMap');
     };
-    new Button(this, SCREEN.w / 2 - 120, SCREEN.h - 64, 240, 44, 'Weigh anchor →', leave, { size: 18 });
-    this.input.keyboard!.once('keydown-ENTER', leave);
+    const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', leave, { size: 18, hint: 'Enter' });
+    this.input.keyboard!.once('keydown-ENTER', () => weigh.press());
     this.rebuild();
   }
 
@@ -95,22 +109,21 @@ export class PortScene extends Phaser.Scene {
     this.time.delayedCall(0, () => this.rebuild());
   }
 
-  private button(x: number, y: number, w: number, label: string, enabled: boolean, fn: () => void, detail?: string, tip?: string): void {
+  private button(x: number, y: number, w: number, label: string, o: BuyOptions): void {
+    const short = o.price !== undefined && this.run.gold < o.price ? `You need ${o.price - this.run.gold} more gold.` : '';
+    const tip = o.enabled ? o.tip : short || o.why;
     const b = new Button(this, x, y, w, 40, label, () => {
       const gold = this.run.gold;
-      fn();
+      o.fn();
       if (this.run.gold !== gold) playSfx(this, 'coins', 0.5);
       this.later();
-    }, { size: 14 }).setEnabled(enabled);
+    }, { size: 14, tip }).setEnabled(o.enabled);
     b.label.setOrigin(0, 0.5).setX(12);
     this.dyn.push(b);
-    if (tip) {
-      b.bg.on('pointerover', () => this.say(tip));
-    }
-    if (detail) {
+    if (o.detail) {
       // Beside the button, centred on it and wrapped to what is left of its column.
       const col = COLS.find((c) => c.x === x) ?? COLS[0];
-      this.dyn.push(this.add.text(x + w + 10, y + 20, detail, textStyle(12, COLORS.textDim, { wordWrap: { width: col.x + col.w - (x + w + 10) } })).setOrigin(0, 0.5));
+      this.dyn.push(this.add.text(x + w + 10, y + 20, o.detail, textStyle(12, o.detailColor ?? COLORS.textDim, { wordWrap: { width: col.x + col.w - (x + w + 10) } })).setOrigin(0, 0.5));
     }
   }
 
@@ -119,19 +132,42 @@ export class PortScene extends Phaser.Scene {
     const { x } = COLS[0];
     const w = 210;
     let y = COL_Y;
-    this.button(x, y, w, run.canRest() ? 'Rest & refit' : 'Rested and refitted', run.canRest(), () => run.rest() && this.say('The crew sleep ashore while the shipwrights mend every system.'), 'Heal crew, mend systems.\nFleet gains ½ jump.');
+    this.button(x, y, w, run.canRest() ? 'Rest & refit' : 'Rested and refitted', {
+      enabled: run.canRest(),
+      fn: () => run.rest() && this.say('The crew sleep ashore while the shipwrights mend every system.'),
+      detail: 'Heal crew, mend systems.\nFleet gains ½ jump.',
+      why: 'You have rested here already.',
+    });
     y += ROW + 6;
     const missing = run.hullMissing();
     const n = Math.min(missing, Math.floor(run.gold / HULL_PRICE));
-    this.button(x, y, w, missing ? `Patch 1 hull (${HULL_PRICE}g)` : 'Hull is sound', run.canRepairHull(1), () => run.repairHull(1) && this.say('Carpenters plank over the worst of it.'), `${HULL_PRICE} gold a point`);
+    const sound = 'The hull is sound.';
+    this.button(x, y, w, missing ? `Patch 1 hull (${HULL_PRICE}g)` : 'Hull is sound', {
+      enabled: run.canRepairHull(1),
+      fn: () => run.repairHull(1) && this.say('Carpenters plank over the worst of it.'),
+      detail: `Hull ${run.condition.hull}/${run.fit.hull} · ${HULL_PRICE}g a point`,
+      price: missing ? HULL_PRICE : undefined,
+      why: sound,
+    });
     y += ROW;
-    this.button(x, y, w, n > 1 ? `Patch ${n} hull (${n * HULL_PRICE}g)` : 'Patch all you can', n > 1, () => run.repairHull(n) && this.say('The hull is made good.'));
+    this.button(x, y, w, n > 1 ? `Patch ${n} hull (${n * HULL_PRICE}g)` : 'Patch all you can', {
+      enabled: n > 1,
+      fn: () => run.repairHull(n) && this.say('The hull is made good.'),
+      price: missing && !n ? HULL_PRICE : undefined,
+      why: missing ? 'Only one point to patch: use the button above.' : sound,
+    });
     y += ROW + 6;
     const full = run.condition.crew.length >= run.maxCrew;
-    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${CREW_PRICE}g)`, run.canHire(), () => {
-      const who = run.hireCrew();
-      if (who) this.say(`${who} signs the articles.`);
-    }, `Bunks for ${run.maxCrew}`);
+    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${CREW_PRICE}g)`, {
+      enabled: run.canHire(),
+      fn: () => {
+        const who = run.hireCrew();
+        if (who) this.say(`${who} signs the articles.`);
+      },
+      detail: `Crew ${run.condition.crew.length}/${run.maxCrew}`,
+      price: full ? undefined : CREW_PRICE,
+      why: 'Every bunk aboard is taken.',
+    });
     y += ROW + 10;
 
     // Chandler: victuals and fittings.
@@ -139,15 +175,14 @@ export class PortScene extends Phaser.Scene {
     y += 12;
     const room = run.maxProvisions - run.provisions;
     const lot = Math.min(5, room);
-    this.button(
-      x,
-      y,
-      w,
-      room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * PROVISION_PRICE}g)`,
-      lot > 0 && run.canBuyProvisions(lot),
-      () => run.buyProvisions(lot) && this.say('Salt pork, biscuit and fresh water are swayed aboard.'),
-      `${run.provisions}/${run.maxProvisions} aboard`,
-    );
+    this.button(x, y, w, room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * PROVISION_PRICE}g)`, {
+      enabled: lot > 0 && run.canBuyProvisions(lot),
+      fn: () => run.buyProvisions(lot) && this.say('Salt pork, biscuit and fresh water are swayed aboard.'),
+      detail: `${run.provisions}/${run.maxProvisions} aboard`,
+      price: lot > 0 ? lot * PROVISION_PRICE : undefined,
+      tip: 'A day’s provisions go with every jump. Without them the crew go hungry and lose health.',
+      why: 'The hold can take no more.',
+    });
     y += ROW;
     const offers = run.fittingOffers();
     if (!offers.length) {
@@ -155,7 +190,13 @@ export class PortScene extends Phaser.Scene {
       y += ROW;
     }
     for (const o of offers) {
-      this.button(x, y, w, `${o.fitting.name} (${o.price}g)`, o.available, () => run.buyFitting(o.fitting.id) && this.say(`${o.fitting.name} fitted. ${o.fitting.blurb}`), o.fitting.short, o.fitting.blurb);
+      this.button(x, y, w, `${o.fitting.name} (${o.price}g)`, {
+        enabled: o.available,
+        fn: () => run.buyFitting(o.fitting.id) && this.say(`${o.fitting.name} fitted. ${o.fitting.blurb}`),
+        detail: o.fitting.short,
+        price: o.price,
+        tip: o.fitting.blurb,
+      });
       y += ROW;
     }
     if (run.fittings.length) {
@@ -173,7 +214,13 @@ export class PortScene extends Phaser.Scene {
     const run = this.run;
     const { x } = COLS[1];
     run.upgradeOffers().forEach((o, i) => {
-      this.button(x, COL_Y + i * ROW, 230, o.maxed ? o.label : `${o.label} (${o.price}g)`, o.available, () => run.buyUpgrade(o.id) && this.say(`${o.label}: done.`), o.detail);
+      this.button(x, COL_Y + i * ROW, 230, o.maxed ? o.label : `${o.label} (${o.price}g)`, {
+        enabled: o.available,
+        fn: () => run.buyUpgrade(o.id) && this.say(`${o.label}: done.`),
+        detail: o.detail,
+        price: o.maxed ? undefined : o.price,
+        why: 'Already as good as she can be made.',
+      });
     });
   }
 
@@ -182,14 +229,28 @@ export class PortScene extends Phaser.Scene {
     const { x, w } = COLS[2];
     let y = COL_Y;
     const offers = run.gunOffers();
+    const portsFree = run.fit.guns.length < MAX_GUNS;
     this.dyn.push(this.add.text(x, y, 'For sale', textStyle(13, COLORS.textDim, { fontStyle: 'bold' })));
     y += 22;
     if (!offers.length) {
       this.dyn.push(this.add.text(x, y, 'Sold out.', textStyle(13, COLORS.textDim, { fontStyle: 'italic' })));
       y += ROW;
     }
+    // Hands the guns aboard need, to warn when a new one would leave the gun deck short.
+    const hands = run.fit.guns.reduce((n, g) => n + weapon(g.weapon).hands, 0);
+    const deck = run.fit.systems.guns ?? 0;
     for (const o of offers) {
-      this.button(x, y, 230, `${o.weapon.name} (${o.price}g)`, o.available, () => run.buyGun(o.weapon.id) && this.say(`A ${o.weapon.name} is hoisted aboard.`), gunStats(o.weapon));
+      const need = hands + o.weapon.hands;
+      const shortHanded = need > deck;
+      this.button(x, y, 230, `${o.weapon.name} (${o.price}g)`, {
+        enabled: o.available,
+        fn: () => run.buyGun(o.weapon.id) && this.say(`A ${o.weapon.name} is hoisted aboard.`),
+        detail: `${gunStats(o.weapon)}${shortHanded ? `\nneeds Gun Deck ${need}` : ''}`,
+        detailColor: shortHanded ? COLORS.gold : undefined,
+        price: portsFree ? o.price : undefined,
+        tip: shortHanded ? `With this aboard your guns need ${need} hands, but Gun Deck ${deck} lets only ${deck} work at once.` : undefined,
+        why: 'Every gun port is filled: sell a gun first.',
+      });
       y += ROW;
     }
     y += 8;
@@ -200,13 +261,16 @@ export class PortScene extends Phaser.Scene {
       this.dyn.push(this.add.text(x, y + 4, wdef.name, textStyle(13)));
       this.dyn.push(this.add.text(x, y + 22, gunStats(wdef), textStyle(12, COLORS.textDim)));
       const b = new Button(this, x + w - 110, y + 2, 110, 34, `Sell ${run.sellPrice(i)}g`, () => {
-        if (run.sellGun(i)) this.say(`The ${wdef.name} is sold.`);
+        if (run.sellGun(i)) {
+          playSfx(this, 'coins', 0.5);
+          this.say(`The ${wdef.name} is sold.`);
+        }
         this.later();
-      }, { size: 14 }).setEnabled(run.canSellGun(i));
+      }, { size: 14, tip: run.canSellGun(i) ? undefined : 'Your last gun: she will not put to sea unarmed.' }).setEnabled(run.canSellGun(i));
       this.dyn.push(b);
       y += 44;
     });
-    this.dyn.push(this.add.text(x, y + 4, `Gun Deck ${run.fit.systems.guns ?? 0}: that many hands can work guns at once.`, textStyle(12, COLORS.textDim, { wordWrap: { width: w } })));
+    this.dyn.push(this.add.text(x, y + 4, `Gun Deck ${deck}: that many hands can work guns at once (your guns need ${hands}).`, textStyle(12, hands > deck ? COLORS.gold : COLORS.textDim, { wordWrap: { width: w } })));
   }
 
   update(time: number): void {
