@@ -5,6 +5,9 @@ import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
 import { BOSS_TIER, CREW_PRICE, HULL_PRICE, NAVY_START, PROVISION_PRICE, SECTOR_CARRY, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
 import { WEAPONS } from '../../src/data/weapons';
+import { FITTINGS } from '../../src/data/fittings';
+import { grappleSpeed } from '../../src/sim/Boarding';
+import { Ship } from '../../src/sim/Ship';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
 function chart(seed: number): SeaChart {
@@ -627,6 +630,10 @@ describe('sectors, provisions and the chandler', () => {
     expect(run.fittingOffers().some((o) => o.fitting.id === id)).toBe(false);
     run.fittings.push('careened');
     expect(run.ship.speedBonus).toBe(run.def.speedBonus + 5);
+    // A careened hull also lays alongside faster ships, and says so.
+    const plain = new Ship(run.def, 'player');
+    expect(grappleSpeed(new Ship(run.ship, 'player'))).toBe(grappleSpeed(plain) + 1);
+    expect(FITTINGS.careened.blurb).toContain('grapple');
     run.fittings.push('casks');
     expect(run.maxProvisions).toBe(30);
   });
