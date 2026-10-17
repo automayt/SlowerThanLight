@@ -11,7 +11,8 @@ export const PATCH_RATE = 25;
 /** Repair progress per second per crew member (100 = one damage point fixed). */
 export const REPAIR_RATE = 20;
 
-const MANNABLE = new Set(['helm', 'sails', 'guns']);
+/** Stations someone can man: a manned helm and sails add evasion, manned guns load, a manned bulwark station rebuilds faster. */
+const MANNABLE = new Set(['helm', 'sails', 'guns', 'bulwarks']);
 
 /** Send a crew member to a room. Returns false if the room is full or unreachable. */
 export function orderMove(ship: Ship, crew: Crew, roomId: string): boolean {

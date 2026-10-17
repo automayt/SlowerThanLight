@@ -214,6 +214,8 @@ export const CORSAIR_LUGGER: ShipDef = {
     { name: 'Canonnier Le Bihan', room: 'guns' },
     { name: 'Matelot Riou', room: 'berth' },
     { name: 'Matelot Morvan', room: 'berth' },
+    { name: 'Matelot Quéré', room: 'berth' },
+    { name: 'Matelot Tanguy', room: 'berth' },
   ],
 };
 

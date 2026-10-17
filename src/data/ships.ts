@@ -64,7 +64,7 @@ export const PLAYER_SHIPS: ShipDef[] = [
     hull: 30,
     hands: 11,
     speedBonus: -5,
-    systems: { helm: 2, sails: 2, guns: 6, pumps: 3, surgeon: 2, bulwarks: 2 },
+    systems: { helm: 2, sails: 2, guns: 7, pumps: 3, surgeon: 2, bulwarks: 2 },
     rooms: [
       { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 3, system: 'helm' },
       { id: 'surgeon', name: "Surgeon's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },

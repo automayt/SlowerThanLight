@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMY_LIST } from '../../src/data/enemies';
+import { ENEMIES, ENEMY_LIST } from '../../src/data/enemies';
 import { PLAYER_SHIPS, playerShip } from '../../src/data/ships';
+import { Battle, STEP } from '../../src/sim/Battle';
+import { BULWARK_RECHARGE, updateBulwarks } from '../../src/sim/Combat';
+import { updateCrew } from '../../src/sim/Crew';
 import { buildDoors, findRoute } from '../../src/sim/pathfinding';
+import { scaleEnemy } from '../../src/sim/Run';
 import { Ship } from '../../src/sim/Ship';
 
 describe('ship data', () => {
@@ -28,8 +32,58 @@ describe('ship data', () => {
       const ship = new Ship(def, 'player');
       expect(ship.freeHands()).toBeGreaterThanOrEqual(0);
       expect(ship.crew).toHaveLength(def.crew.length);
+      expect(ship.guns.every((g) => g.powered), 'her guns need more hands than her gun deck holds').toBe(true);
     });
   }
+
+  for (const e of ENEMY_LIST) {
+    it(`${e.id}: a captain who boards has the crew to do it`, () => {
+      // EnemyAI only sends a party while it leaves at least three hands aboard.
+      if (e.ai.boardWith) expect(e.ship.crew.length).toBeGreaterThanOrEqual(e.ai.boardWith + 3);
+    });
+  }
+
+  it('every enemy of every sector can crew all her guns', () => {
+    for (const e of ENEMY_LIST) {
+      for (const tier of [0, 1, 2]) {
+        const def = scaleEnemy(e.ship, tier);
+        const ship = new Ship(def, 'enemy');
+        expect(ship.guns.every((g) => g.powered), `${e.id} tier ${tier}`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('enemy boarders', () => {
+  it('the corsair sends a boarding party across', () => {
+    const corsair = ENEMIES.corsair;
+    let boarded = 0;
+    for (let seed = 1; seed <= 5; seed++) {
+      const b = new Battle(playerShip('gull'), corsair.ship, { seed, enemyAI: corsair.ai, allowEscape: false });
+      while (!b.outcome && b.time < 120 && !b.player.boarders().length) b.step(STEP);
+      if (b.player.boarders().length) boarded++;
+    }
+    expect(boarded).toBeGreaterThan(0);
+  });
+});
+
+describe('bulwarks', () => {
+  it('can be manned, and a manned station rebuilds faster', () => {
+    const ship = new Ship(playerShip('wren'), 'player');
+    updateCrew(ship, 0);
+    // Jem Sparrow's station is the forecastle.
+    expect(ship.isManned('bulwarks')).toBe(true);
+    const bare = new Ship(playerShip('wren'), 'player');
+    bare.crew = bare.crew.filter((c) => c.room !== 'fore');
+    updateCrew(bare, 0);
+    expect(bare.isManned('bulwarks')).toBe(false);
+    for (const s of [ship, bare]) {
+      s.layers = 0;
+      updateBulwarks(s, BULWARK_RECHARGE * 0.85);
+    }
+    expect(ship.layers).toBe(1);
+    expect(bare.layers).toBe(0);
+  });
 });
 
 describe('hands', () => {
