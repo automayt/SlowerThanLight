@@ -72,15 +72,51 @@ function variants(scene: Phaser.Scene, name: string): string[] {
   return scene.cache.audio.getKeys().filter((k) => k === base || k.startsWith(`${base}-`));
 }
 
+/**
+ * Every effect in public/audio, by the name playSfx takes (variants such as cannon-1, cannon-2 share one name).
+ * A name that is not loaded plays nothing, so a scene may call one before its file exists.
+ */
+export const SFX = {
+  cannon: 'a gun fires',
+  'hit-wood': 'a ball strikes timber',
+  splash: 'a ball falls short into the sea',
+  fire: 'flames take hold',
+  breach: 'the hull is holed',
+  explosion: 'a magazine goes up',
+  boarders: 'boarders roar over the side',
+  bell: 'the ship’s bell',
+  click: 'a button',
+  coins: 'gold changes hands',
+  musket: 'a ragged musket volley (marines, boarding)',
+  sail: 'canvas flaps and fills (making sail, leaving port, fleeing)',
+  cheer: 'the crew cheers (victory, a prize taken)',
+  sink: 'a hull goes down, groaning and gurgling (a ship sinks)',
+  fanfare: 'victory sting; the music ducks under it',
+  defeat: 'low defeat sting; the music ducks under it',
+  quill: 'a quill scratches the chart (plotting a course)',
+  page: 'a logbook page turns',
+} as const;
+
+/**
+ * Musical stings: played straight (no random detune, which would put them out of tune) and the music bed
+ * ducks under them for their length.
+ */
+const STINGS = new Set(['fanfare', 'defeat']);
+
 /** Play a one-shot effect (a random variant if there are several). Silent if the sound was not loaded. */
 export function playSfx(scene: Phaser.Scene, name: string, volume = 0.6): void {
   const keys = variants(scene, name);
   if (!keys.length) return;
-  scene.sound.play(keys[Math.floor(Math.random() * keys.length)], { volume, detune: (Math.random() - 0.5) * 200 });
+  const sting = STINGS.has(name);
+  const sound = scene.sound.add(keys[Math.floor(Math.random() * keys.length)]);
+  sound.once(Phaser.Sound.Events.COMPLETE, () => sound.destroy());
+  sound.play({ volume, detune: sting ? 0 : (Math.random() - 0.5) * 200 });
+  if (sting) director?.duck(sound.duration);
 }
 
 /** Start a looping sound shared by all scenes, unless it is already playing. */
 export function playLoop(scene: Phaser.Scene, name: string, volume = 0.3): void {
+  if (director?.owns(name)) return; // music follows the scene on its own
   const key = soundKey(name);
   if (!scene.cache.audio.exists(key)) return;
   const existing = scene.sound.getAll(key);
@@ -90,5 +126,153 @@ export function playLoop(scene: Phaser.Scene, name: string, volume = 0.3): void 
 }
 
 export function stopLoop(scene: Phaser.Scene, name: string): void {
+  if (director?.owns(name)) return;
   for (const s of scene.sound.getAll(soundKey(name))) s.stop();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Music director: one bed of music per kind of screen, crossfaded as the active scene changes.
+
+/** Which music each scene wants, best first; the first one the manifest lists is used. */
+const SCENE_MUSIC: Record<string, string[]> = {
+  Title: ['shanty'],
+  ShipSelect: ['shanty'],
+  Logbook: ['shanty'],
+  SeaMap: ['music-sea'],
+  Event: ['music-sea'],
+  Result: ['music-sea'],
+  RunEnd: ['music-sea'],
+  Port: ['music-port', 'music-sea'],
+  Battle: ['music-battle'],
+};
+/** Playback level of each track (before the player's loud/soft/mute setting), so beds sit under the effects. */
+const MUSIC_LEVEL: Record<string, number> = { shanty: 0.35, 'music-sea': 0.4, 'music-port': 0.38, 'music-battle': 0.36 };
+const DEFAULT_LEVEL = 0.38;
+/** Seconds for a bed to fade fully in or out. */
+const FADE_IN = 2.5;
+const FADE_OUT = 1.6;
+/** Level a bed drops to under a sting, and how quickly it comes back. */
+const DUCK = 0.3;
+const DIRECTOR_KEY = 'MusicDirector';
+
+/** The scene keys whose music the director picks: exported for tests and tools. */
+export function musicForScene(sceneKey: string, available: readonly string[]): string | null {
+  return (SCENE_MUSIC[sceneKey] ?? []).find((name) => available.includes(name)) ?? null;
+}
+
+interface Track {
+  name: string;
+  sound: Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound | Phaser.Sound.NoAudioSound;
+  /** Current gain, 0..1 of the track's level. */
+  gain: number;
+}
+
+/**
+ * An invisible scene that runs alongside the others. It never draws; it watches which scene is active, loads that
+ * scene's music in the background (so no screen waits for megabytes of audio), and crossfades between beds.
+ * The player's mute and loud/soft settings apply through the game's sound manager, as for every other sound.
+ */
+class MusicDirector extends Phaser.Scene {
+  /** Track names ("shanty", "music-sea") mapped to their file names. */
+  files = new Map<string, string>();
+  private tried = new Set<string>();
+  private tracks = new Map<string, Track>();
+  private wanted: string | null = null;
+  private loading: string | null = null;
+  private queue: string[] = [];
+  private duckUntil = 0;
+  private duckGain = 1;
+
+  constructor() {
+    super({ key: DIRECTOR_KEY, active: false });
+  }
+
+  create(): void {
+    this.scene.sendToBack();
+    // Fetch the other beds one at a time, a little after the first screen is up.
+    this.time.delayedCall(4000, () => {
+      for (const f of this.files.keys()) if (!this.queue.includes(f)) this.queue.push(f);
+      this.pump();
+    });
+  }
+
+  /** True for any music file the director manages, whether or not it has loaded yet. */
+  owns(name: string): boolean {
+    return this.files.has(name);
+  }
+
+  duck(seconds: number): void {
+    this.duckUntil = Math.max(this.duckUntil, this.time.now + Math.max(1, seconds) * 1000);
+  }
+
+  private activeScene(): string | null {
+    const scenes = this.game.scene.getScenes(true);
+    for (let i = scenes.length - 1; i >= 0; i--) {
+      const key = scenes[i].scene.key;
+      if (key !== DIRECTOR_KEY && key !== 'Preload') return key;
+    }
+    return null;
+  }
+
+  /** Load one music file at a time; the one the current scene wants jumps the queue. */
+  private pump(): void {
+    if (this.loading) return;
+    const next = this.queue.shift();
+    if (!next) return;
+    const key = soundKey(next);
+    if (this.tried.has(next) || this.cache.audio.exists(key)) return this.pump();
+    this.tried.add(next);
+    this.loading = next;
+    const done = (): void => {
+      this.load.off(Phaser.Loader.Events.COMPLETE, done);
+      this.loading = null;
+      this.pump();
+    };
+    this.load.on(Phaser.Loader.Events.COMPLETE, done);
+    this.load.audio(key, `audio/${this.files.get(next)}`);
+    this.load.start();
+  }
+
+  update(_time: number, delta: number): void {
+    const scene = this.activeScene();
+    if (scene) this.wanted = musicForScene(scene, [...this.files.keys()]);
+    const want = this.wanted;
+    if (want && !this.tried.has(want) && this.loading !== want) {
+      this.queue = [want, ...this.queue.filter((f) => f !== want)];
+      this.pump();
+    }
+    // Browsers keep audio locked until the first click or key press; start nothing until then.
+    if (this.sound.locked) return;
+    if (want && !this.tracks.has(want) && this.cache.audio.exists(soundKey(want))) {
+      const sound = this.sound.add(soundKey(want), { loop: true, volume: 0 });
+      sound.play({ loop: true, volume: 0 });
+      this.tracks.set(want, { name: want, sound, gain: 0 });
+    }
+    const dt = delta / 1000;
+    const ducked = this.time.now < this.duckUntil;
+    this.duckGain = ducked ? Math.max(DUCK, this.duckGain - dt / 0.3) : Math.min(1, this.duckGain + dt / 1.5);
+    for (const t of this.tracks.values()) {
+      const target = t.name === want ? 1 : 0;
+      if (target > t.gain) t.gain = Math.min(target, t.gain + dt / FADE_IN);
+      else t.gain = Math.max(target, t.gain - dt / FADE_OUT);
+      if (target === 1 && t.sound.isPaused) t.sound.resume();
+      const level = (MUSIC_LEVEL[t.name] ?? DEFAULT_LEVEL) * t.gain * this.duckGain;
+      (t.sound as Phaser.Sound.WebAudioSound).setVolume(level);
+      // A bed that has faded out waits, paused, to pick up where it left off when its scene comes back.
+      if (t.gain === 0 && target === 0 && t.sound.isPlaying) t.sound.pause();
+    }
+  }
+}
+
+let director: MusicDirector | null = null;
+
+/**
+ * Start the music director (once). `files` are the music files the audio manifest lists under "music"
+ * ("shanty.ogg", "music-sea.ogg"...); they load in the background, never on the loading screen.
+ */
+export function installMusicDirector(game: Phaser.Game, files: string[]): void {
+  if (director || !files.length) return;
+  const scene = game.scene.add(DIRECTOR_KEY, MusicDirector, true) as MusicDirector;
+  for (const f of files) scene.files.set(f.replace(/\.[a-z0-9]+$/i, ''), f);
+  director = scene;
 }

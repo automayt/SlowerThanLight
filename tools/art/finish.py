@@ -35,7 +35,8 @@ def finalize(name, stem=None):
     if name + ".jpg" not in man["files"]:
         man["files"].append(name + ".jpg")
     tmp = MAN + ".tmp"
-    json.dump(man, open(tmp, "w"), indent=2)
+    with open(tmp, "w", newline="\n") as f:  # LF on Windows too
+        json.dump(man, f, indent=2)
     os.replace(tmp, MAN)
     return os.path.getsize(out), q
 

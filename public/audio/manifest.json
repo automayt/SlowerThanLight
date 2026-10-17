@@ -9,12 +9,25 @@
     "fire.ogg",
     "bell.ogg",
     "waves.ogg",
-    "shanty.ogg",
     "click.ogg",
     "coins.ogg",
     "breach.ogg",
     "explosion.ogg",
     "boarders.ogg",
-    "creak.ogg"
+    "creak.ogg",
+    "fanfare.ogg",
+    "defeat.ogg",
+    "cheer.ogg",
+    "sink.ogg",
+    "musket.ogg",
+    "sail.ogg",
+    "quill.ogg",
+    "page.ogg"
+  ],
+  "music": [
+    "shanty.ogg",
+    "music-sea.ogg",
+    "music-battle.ogg",
+    "music-port.ogg"
   ]
 }

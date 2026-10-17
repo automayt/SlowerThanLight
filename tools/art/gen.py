@@ -102,9 +102,12 @@ def fetch(outputs, dest):
 
 
 if __name__ == "__main__":
-    # usage: gen.py jobs.json   (list of {name, prompt, model, seed?, w, h, ...})
+    # usage: gen.py jobs.json [name ...]  (list of {name, prompt, model, seed?, w, h, ...}; names pick a subset)
     jobs = json.load(open(sys.argv[1], encoding="utf-8"))
+    only = set(sys.argv[2:])
     for j in jobs:
+        if only and j["name"] not in only:
+            continue
         seed = j.get("seed", random.randint(1, 2**31))
         w, h = j.get("w", 1664), j.get("h", 928)
         if j.get("model") == "zimage":

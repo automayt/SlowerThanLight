@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
-import { applySound, soundKey } from '../render/sound';
+import { applySound, installMusicDirector, soundKey } from '../render/sound';
 import { COLORS, SCREEN, textStyle } from '../render/theme';
 
-interface ArtManifest {
+interface Manifest {
   files: string[];
+  /** Audio only: music beds, which the music director streams in after the first screen is up. */
+  music?: string[];
 }
 
 /**
@@ -26,13 +28,15 @@ export class PreloadScene extends Phaser.Scene {
     });
     this.load.text('art-manifest', 'art/manifest.json');
     this.load.on('filecomplete-text-audio-manifest', (_key: string, _type: string, data: string) => {
-      for (const file of parseManifest(data, /\.(ogg|mp3|wav|m4a)$/i)) this.load.audio(soundKey(file), `audio/${file}`);
+      for (const file of parseManifest(data, AUDIO)) this.load.audio(soundKey(file), `audio/${file}`);
+      this.registry.set('music-files', parseManifest(data, AUDIO, 'music'));
     });
     this.load.text('audio-manifest', 'audio/manifest.json');
   }
 
   create(): void {
     applySound(this.game);
+    installMusicDirector(this.game, (this.registry.get('music-files') as string[] | undefined) ?? []);
     this.scene.start('Title');
   }
 }
@@ -44,10 +48,12 @@ export function loadArtOnDemand(scene: Phaser.Scene, name: string): void {
   if (file && !scene.textures.exists(artKey(file))) scene.load.image(artKey(file), `art/${file}`);
 }
 
-/** Image files listed in the manifest; none when it is missing or malformed. */
-function parseManifest(text: string, kind = /\.(jpe?g|png|webp)$/i): string[] {
+const AUDIO = /\.(ogg|mp3|wav|m4a)$/i;
+
+/** Files of one kind listed in the manifest (under "files" unless told otherwise); none when it is missing or malformed. */
+function parseManifest(text: string, kind = /\.(jpe?g|png|webp)$/i, list: keyof Manifest = 'files'): string[] {
   try {
-    const files = (JSON.parse(text) as ArtManifest).files;
+    const files = (JSON.parse(text) as Manifest)[list];
     return Array.isArray(files) ? files.filter((f) => typeof f === 'string' && /^[\w-]+\.\w+$/.test(f) && kind.test(f)) : [];
   } catch {
     return [];

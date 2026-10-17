@@ -10,9 +10,11 @@ import type { EventEffect, ShipDef, SystemId } from '../../src/sim/types';
 // File names under public/ (globs list them without loading anything) and the two manifests the game reads.
 const artFiles = Object.keys(import.meta.glob('../../public/art/*.*')).map((p) => p.split('/').pop()!);
 const audioFiles = Object.keys(import.meta.glob('../../public/audio/*.*')).map((p) => p.split('/').pop()!);
-const manifests = import.meta.glob<{ files: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
+const manifests = import.meta.glob<{ files: string[]; music?: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
 const artManifest = manifests['../../public/art/manifest.json'].files;
-const audioManifest = manifests['../../public/audio/manifest.json'].files;
+// Sound effects load up front; music beds (listed apart) stream in later.
+const audioMusic = manifests['../../public/audio/manifest.json'].music ?? [];
+const audioManifest = [...manifests['../../public/audio/manifest.json'].files, ...audioMusic];
 
 const SYSTEM_IDS = Object.keys(SYSTEM_CAP) as SystemId[];
 const effects = SEA_EVENTS.flatMap((e) => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect)));
@@ -132,6 +134,12 @@ describe('art and sound', () => {
     for (const f of audioFiles) if (f !== 'manifest.json') expect(audioManifest, `audio/${f} is not in the manifest`).toContain(f);
   });
 
+  it('the music director has a bed for the title, the chart, port and battle, and none is also loaded up front', () => {
+    for (const bed of ['shanty', 'music-sea', 'music-port', 'music-battle']) expect(audioMusic, bed).toContain(`${bed}.ogg`);
+    const sfx = manifests['../../public/audio/manifest.json'].files;
+    for (const f of audioMusic) expect(sfx, `${f} would load on the loading screen`).not.toContain(f);
+  });
+
   it('every enemy and player ship has a picture, and the backdrops and textures the scenes use exist', () => {
     const art = new Set(artManifest.map((f) => f.replace(/\.\w+$/, '')));
     for (const e of ENEMY_LIST) if (e.id !== 'frigate') expect(art.has(`enemy-${e.id}`), `enemy-${e.id}`).toBe(true);
@@ -139,12 +147,11 @@ describe('art and sound', () => {
     for (const name of ['title', 'port', 'blockade', 'victory', 'defeat', 'tex-sea', 'tex-chart', 'tex-hull', 'tex-deck']) expect(art.has(name), name).toBe(true);
   });
 
-  it('every event has its illustration (bar the few still to be painted), and every illustration belongs to an event', () => {
-    // The event screen lays out text-only without a picture; this list should only ever shrink.
-    const unpainted = ['starving', 'victualler', 'banks', 'council', 'envoy', 'compact', 'bounty', 'grudge', 'truce'];
+  it('every event has its illustration, and every illustration belongs to an event', () => {
+    // The event screen can lay out text-only, but every event is painted: a new event needs event-<id>.jpg.
     const art = new Set(artManifest.filter((f) => f.startsWith('event-')).map((f) => f.replace(/^event-|\.\w+$/g, '')));
     const ids = new Set(SEA_EVENTS.map((e) => e.id));
-    expect(SEA_EVENTS.filter((e) => !art.has(e.id)).map((e) => e.id)).toEqual(unpainted);
+    expect(SEA_EVENTS.filter((e) => !art.has(e.id)).map((e) => e.id)).toEqual([]);
     expect([...art].filter((id) => !ids.has(id))).toEqual([]);
   });
 });
