@@ -3,6 +3,7 @@ import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/C
 import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
+import { shipGeometry } from '../render/ShipArt';
 import { ShipView, type AimMark } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
@@ -85,7 +86,9 @@ export class BattleScene extends Phaser.Scene {
     const e = battle.enemy;
     const spanish = SPANISH_SHIPS.has(e.def.id) || (!!foe && SPANISH_SHIPS.has(foe.id));
     this.playerView = new ShipView(this, p, 250, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false, { flag: 'pirate' });
-    this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + 1.7) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
+    // Room at her stern for a long overhang and the ensign flying astern of it.
+    const sternRoom = Math.max(1.7, 1.05 - shipGeometry(e).stern);
+    this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + sternRoom) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
       flag: faction === 'navy' ? 'navy' : faction === 'pirate' ? 'pirate' : spanish ? 'spanish' : 'trade',
     });
     this.fx = this.add.graphics().setDepth(10);
@@ -514,6 +517,7 @@ export class BattleScene extends Phaser.Scene {
         const m = view.muzzle(ev.gun);
         this.burst(m.x, m.y, 0xfff0a0, 9, 180);
         this.smoke(m.x, m.y, m.dx, m.dy);
+        view.recoil(m.dy);
         break;
       }
       case 'hit': {
@@ -535,6 +539,7 @@ export class BattleScene extends Phaser.Scene {
         if (ev.hull > 0) view.addHullScar(ev.room);
         // What the ball struck, so a hit on a station reads even when it does no hull damage.
         const sys = view.ship.room(ev.room).def.system;
+        if (sys === 'sails' || ev.shot === 'chain') view.tearSail();
         const struck = `${ev.hull > 0 ? `-${ev.hull}` : 'HIT'}${sys ? ` ${SYSTEM_NAMES[sys].toUpperCase()}` : ''}`;
         this.floatText(c.x + jx, c.y - 22, struck, ours ? '#ff6a5a' : '#ffd27a');
         if (ours) this.cameras.main.shake(140, 0.004);
