@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
-import type { SystemId, Vec } from '../sim/types';
+import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
 import { ART_SCALE, paintShip, type Ensign, type ShipGeometry } from './ShipArt';
-import { COLORS, TITLE_FONT } from './theme';
+import { COLORS, TITLE_FONT, textStyle } from './theme';
 
 export interface ShipViewState {
   selected?: Set<number>;
@@ -58,6 +58,12 @@ export class ShipView {
   private readonly facing = new Map<number, { x: number; dir: number }>();
   private readonly scorches: Scorch[] = [];
   private readonly scars: Scorch[] = [];
+  /** Scorches and hull scars, painted into a texture only when one is added, which then rides with the ship. */
+  private marks: Phaser.GameObjects.RenderTexture | null = null;
+  private marksPen: Phaser.GameObjects.Graphics | null = null;
+  private marksDirty = false;
+  /** The gun deck's room, where the muzzles are. */
+  private readonly gunRoom: RoomDef | undefined;
   private moveMarks: { at: Vec; t0: number }[] = [];
   /** When a bulwark last stopped a ball, for the flash. */
   private blockedAt = -10;
@@ -87,6 +93,7 @@ export class ShipView {
     const art = paintShip(scene, ship, tile, `shipart:${viewCount++}`, flag);
     this.geom = art.geom;
     this.keys = [art.base, art.rig];
+    this.gunRoom = [...ship.rooms.values()].find((r) => r.def.system === 'guns')?.def;
 
     this.wake = scene.add.graphics().setDepth(DEPTH.wake);
     this.base = scene.add.image(0, 0, art.base).setOrigin(0).setScale(1 / ART_SCALE).setFlipX(flip).setDepth(DEPTH.base);
@@ -162,7 +169,7 @@ export class ShipView {
 
   /** Muzzle of the cannon that stands for gun `index`, and the way it points. */
   muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
-    const guns = [...this.ship.rooms.values()].find((r) => r.def.system === 'guns')?.def;
+    const guns = this.gunRoom;
     if (!guns) {
       const c = this.toScreen({ x: this.ship.width / 2, y: this.ship.height / 2 });
       return { ...c, dx: 0, dy: -1 };
@@ -183,6 +190,7 @@ export class ShipView {
       rot: Math.random() * Math.PI,
     });
     if (this.scorches.length > 40) this.scorches.shift();
+    this.marksDirty = true;
   }
 
   /** A cannonball through the side leaves a ragged scar in the planking near the room it struck. */
@@ -194,6 +202,7 @@ export class ShipView {
     const side = d.y + d.h / 2 < mid ? -1 : d.y + d.h / 2 > mid ? 1 : Math.random() < 0.5 ? -1 : 1;
     this.scars.push({ x, y: mid + side * (g.half(x) - 0.1), r: 0.12 + Math.random() * 0.1, rot: Math.random() * Math.PI });
     if (this.scars.length > 30) this.scars.shift();
+    this.marksDirty = true;
   }
 
   /** Sail in from off-screen over the next couple of seconds. */
@@ -211,7 +220,7 @@ export class ShipView {
   }
 
   destroy(): void {
-    for (const o of [this.wake, this.over, this.ui, this.base, this.rig, this.nameText, ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
+    for (const o of [this.wake, this.over, this.ui, this.base, this.rig, this.nameText, this.marks, this.marksPen, ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
   }
 
@@ -236,6 +245,7 @@ export class ShipView {
     this.rig.setAlpha((sails ? 0.6 + 0.4 * (this.ship.capacity('sails') / sails.max) : 1) * (fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1));
     this.base.setAlpha(fade);
     this.over.setAlpha(fade);
+    this.drawMarks(fade);
     if (fin && fin.kind !== 'sail') {
       // Darken and drown the hull as she goes.
       const c = Math.round(255 - fin.k * 150);
@@ -316,6 +326,52 @@ export class ShipView {
 
   // --- Layers --------------------------------------------------------------
 
+  /**
+   * Scorches and hull scars build up over a fight; redrawing dozens of ellipses every frame cost more than the rest of
+   * the deck overlay, so they are painted into a texture when one is added and the texture just follows the ship.
+   */
+  private drawMarks(alpha: number): void {
+    if (!this.scorches.length && !this.scars.length) return;
+    const T = this.tile;
+    const left = this.base.x;
+    const top = this.base.y;
+    if (!this.marks) {
+      // Between the deck art and the overlay, where the water and fire are drawn over them.
+      this.marks = this.scene.add.renderTexture(left, top, Math.ceil(this.base.displayWidth), Math.ceil(this.base.displayHeight)).setOrigin(0).setDepth((DEPTH.base + DEPTH.over) / 2);
+      this.marksPen = this.scene.make.graphics({}, false);
+    }
+    if (this.marksDirty) {
+      this.marksDirty = false;
+      const g = this.marksPen!.clear();
+      const at = (x: number, y: number) => {
+        const p = this.toScreen({ x, y });
+        return { x: p.x - left, y: p.y - top };
+      };
+      for (const s of this.scorches) {
+        const p = at(s.x, s.y);
+        g.fillStyle(0x140a04, 0.32).fillEllipse(p.x, p.y, s.r * T * 2, s.r * T * 1.4);
+        g.fillStyle(0x140a04, 0.25).fillEllipse(p.x + Math.cos(s.rot) * 4, p.y + Math.sin(s.rot) * 3, s.r * T, s.r * T * 0.8);
+      }
+      for (const s of this.scars) {
+        const p = at(s.x, s.y);
+        const pts: Vec[] = [];
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + s.rot;
+          const rr = s.r * T * (0.7 + 0.35 * Math.sin(i * 2.9 + s.rot * 3));
+          pts.push({ x: p.x + Math.cos(a) * rr * 1.3, y: p.y + Math.sin(a) * rr * 0.75 });
+        }
+        g.fillStyle(0x0a0604, 0.9).fillPoints(pts, true);
+        g.lineStyle(1.5, 0xd2aa72, 0.85);
+        for (let i = 0; i < 4; i++) {
+          const a = s.rot + i * 1.6;
+          g.lineBetween(p.x + Math.cos(a) * s.r * T * 0.8, p.y + Math.sin(a) * s.r * T * 0.45, p.x + Math.cos(a) * s.r * T * 1.5, p.y + Math.sin(a) * s.r * T * 0.8);
+        }
+      }
+      this.marks.clear().draw(g, 0, 0);
+    }
+    this.marks.setPosition(left, top).setAlpha(alpha);
+  }
+
   private drawWake(t: number): void {
     const g = this.wake;
     const geo = this.geom;
@@ -378,28 +434,6 @@ export class ShipView {
     const T = this.tile;
     const ship = this.ship;
     g.clear();
-
-    for (const s of this.scorches) {
-      const p = this.toScreen({ x: s.x, y: s.y });
-      g.fillStyle(0x140a04, 0.32).fillEllipse(p.x, p.y, s.r * T * 2, s.r * T * 1.4);
-      g.fillStyle(0x140a04, 0.25).fillEllipse(p.x + Math.cos(s.rot) * 4, p.y + Math.sin(s.rot) * 3, s.r * T, s.r * T * 0.8);
-    }
-
-    for (const s of this.scars) {
-      const p = this.toScreen({ x: s.x, y: s.y });
-      const pts: Vec[] = [];
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + s.rot;
-        const rr = s.r * T * (0.7 + 0.35 * Math.sin(i * 2.9 + s.rot * 3));
-        pts.push({ x: p.x + Math.cos(a) * rr * 1.3, y: p.y + Math.sin(a) * rr * 0.75 });
-      }
-      g.fillStyle(0x0a0604, 0.9).fillPoints(pts, true);
-      g.lineStyle(1.5, 0xd2aa72, 0.85);
-      for (let i = 0; i < 4; i++) {
-        const a = s.rot + i * 1.6;
-        g.lineBetween(p.x + Math.cos(a) * s.r * T * 0.8, p.y + Math.sin(a) * s.r * T * 0.45, p.x + Math.cos(a) * s.r * T * 1.5, p.y + Math.sin(a) * s.r * T * 0.8);
-      }
-    }
 
     for (const room of ship.rooms.values()) {
       const r = this.roomRect(room.def.id);
@@ -507,12 +541,13 @@ export class ShipView {
       let sprite = this.sprites.get(c.id);
       const prefix = crewTextures(this.scene, c);
       if (!sprite) {
-        sprite = this.scene.add.image(0, 0, `${prefix}:idle0`).setOrigin(CREW_ORIGIN.x, CREW_ORIGIN.y).setScale(scale);
+        sprite = this.scene.add.image(0, 0, `${prefix}:idle0`).setOrigin(CREW_ORIGIN.x, CREW_ORIGIN.y).setScale(scale).setName(c.name).setData('ours', c.side === 'player');
         this.sprites.set(c.id, sprite);
       }
       const p = this.toScreen(c.pos);
       const fy = p.y + T * 0.3;
-      sprite.setTexture(`${prefix}:${crewFrame(c, t)}`);
+      const frame = `${prefix}:${crewFrame(c, t)}`;
+      if (sprite.texture.key !== frame) sprite.setTexture(frame);
       sprite.setPosition(p.x, fy).setDepth(DEPTH.crew + fy / 10000);
 
       // Face the way they walk; otherwise keep facing as they were (bow-ward to start).
@@ -534,6 +569,9 @@ export class ShipView {
         // Fallen: topple over, then fade away.
         s.setTint(0xb0a090);
         this.scene.tweens.add({ targets: s, angle: -88 * dir, y: s.y - 2, duration: 380, ease: 'Quad.easeIn' });
+        // Name the fallen where they drop, so a death in the melee is not missed.
+        const label = this.scene.add.text(s.x, s.y - T * 0.9, `† ${s.name}`, textStyle(12, s.getData('ours') ? '#ff8a7a' : '#e8e0cc', { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(DEPTH.ui + 6);
+        this.scene.tweens.add({ targets: label, y: label.y - 22, alpha: 0, delay: 600, duration: 1400, onComplete: () => label.destroy() });
         this.scene.tweens.add({ targets: s, alpha: 0, delay: 1400, duration: 900, onComplete: () => s.destroy() });
       } else s.destroy();
     }

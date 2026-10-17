@@ -39,6 +39,8 @@ const SKIN = ['#f2cba8', '#e2b08a', '#c98f62', '#a46a43', '#7a4b2e', '#5a3622'];
 const HAIR = ['#1d1510', '#3b2414', '#6b4423', '#a8742f', '#8c3b1c', '#cfc6b8'];
 
 let enemyStyle: CrewStyle = 'navy';
+/** Texture key for each look already worked out, by style, station and name. */
+const lookIds = new Map<string, string>();
 
 /** How the enemy's crew dress for this fight. */
 export function setEnemyStyle(style: CrewStyle): void {
@@ -121,8 +123,13 @@ function lookFor(name: string, side: Side, home: string): Look {
 
 /** Texture key prefix for a crew member's look, painting the frames on first use. */
 export function crewTextures(scene: Phaser.Scene, c: Pick<Crew, 'name' | 'side' | 'home'>): string {
+  // Called for every sailor every frame: remember each look's key rather than rebuilding and hashing it.
+  const memo = `${c.side === 'player' ? 'pirate' : enemyStyle}|${c.home}|${c.name}`;
+  let id = lookIds.get(memo);
+  if (id && scene.textures.exists(`${id}:idle0`)) return id;
   const look = lookFor(c.name, c.side, c.home);
-  const id = `crew:${hash(JSON.stringify(look)).toString(36)}`;
+  id = `crew:${hash(JSON.stringify(look)).toString(36)}`;
+  lookIds.set(memo, id);
   if (scene.textures.exists(`${id}:idle0`)) return id;
   for (const f of FRAMES) {
     const key = `${id}:${f}`;
