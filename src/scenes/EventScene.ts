@@ -68,7 +68,12 @@ export class EventScene extends Phaser.Scene {
       // Warn about hidden costs: time lost to the fleet, or a fight.
       const time = choice.outcomes.filter((o) => (o.effect.navy ?? 0) > 0).length;
       const fight = choice.outcomes.some((o) => o.effect.battle);
-      const hints = [time ? (time === choice.outcomes.length ? 'costs time' : 'may cost time') : '', fight ? 'may mean a fight' : ''].filter(Boolean);
+      const eats = choice.outcomes.filter((o) => (o.effect.provisions ?? 0) < 0).length;
+      const hints = [
+        time ? (time === choice.outcomes.length ? 'costs time' : 'may cost time') : '',
+        eats ? (eats === choice.outcomes.length ? 'costs provisions' : 'may cost provisions') : '',
+        fight ? 'may mean a fight' : '',
+      ].filter(Boolean);
       const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
       const text = this.add.text(0, 0, label, textStyle(16, COLORS.text, { wordWrap: { width: this.tw - 32 }, lineSpacing: 2 }));
       const hint = hints.length ? this.add.text(0, 0, `· ${hints.join(', ')}`, textStyle(13, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: this.tw - 32 } })) : null;
