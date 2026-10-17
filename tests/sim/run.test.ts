@@ -3,7 +3,7 @@ import { PLAYER_SHIPS } from '../../src/data/ships';
 import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
-import { CREW_PRICE, HULL_PRICE, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
+import { BOSS_TIER, CREW_PRICE, HULL_PRICE, NAVY_START, PROVISION_PRICE, SECTOR_CARRY, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
 import { WEAPONS } from '../../src/data/weapons';
 import { CHART_COLUMNS, generateChart, type SeaChart } from '../../src/sim/SeaChart';
 
@@ -254,6 +254,12 @@ describe('auto runs', () => {
     const b = autoRun(new Run('gull', 77)).run;
     expect([a.status, a.gold, a.visited]).toEqual([b.status, b.gold, b.visited]);
   });
+
+  it('sometimes buys fittings, so balance runs exercise them', () => {
+    const bought = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) for (const f of autoRun(new Run('gull', seed), { focus: 'guns' }).run.fittings) bought.add(f);
+    expect(bought.size).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('enemy names', () => {
@@ -451,6 +457,43 @@ describe('sectors, provisions and the chandler', () => {
     expect(run.chart.nodes.some((n) => n.kind === 'exit')).toBe(false);
   });
 
+  it('a straight run shakes off the fleet in the passage; ground lost to detours follows you into the next sector', () => {
+    const straight = new Run('gull', 11);
+    crossSector(straight);
+    // crossSector holds the fleet far back: the passage forgives a straight run entirely.
+    expect(straight.navy).toBe(NAVY_START);
+
+    const dawdler = new Run('gull', 11);
+    const enter = (dawdler as unknown as { enterSector(s: number): void }).enterSector.bind(dawdler);
+    // At the passage (column 5) with the fleet 2.25 columns closer than a straight run would have let it come.
+    dawdler.nodeId = dawdler.chart.nodes.find((n) => n.kind === 'exit')!.id;
+    dawdler.navy = 5 - (-NAVY_START - 1.25 - 2.25);
+    enter(1);
+    expect(dawdler.navy).toBeCloseTo(NAVY_START + SECTOR_CARRY * 2.25);
+    expect(dawdler.encounter).toMatchObject({ kind: 'empty' });
+    expect((dawdler.encounter as { text: string }).text).toContain('hard on your heels');
+
+    // A straight run on Normal (every jump onward, no rests) never meets an ambush in any sector.
+    for (let seed = 1; seed <= 10; seed++) {
+      const run = new Run('maw', seed);
+      for (let guard = 0; guard < 60 && !run.over && !(run.encounter.kind === 'battle' && run.encounter.boss); guard++) {
+        if (run.status === 'battle') {
+          expect(run.encounter.kind === 'battle' && run.encounter.ambush, `seed ${seed}`).toBe(false);
+          const b = run.startBattle({ autoPlayer: true });
+          b.enemy.hull = 0;
+          b.step(0.05);
+          run.finishBattle(b);
+        } else if (run.status === 'event') {
+          const ev = run.currentEvent();
+          // Take the choice that costs no time, as a captain in a hurry would.
+          const i = ev.choices.findIndex((c, j) => run.canChoose(j) && c.outcomes.every((o) => !o.effect.navy || o.effect.navy < 0));
+          run.chooseEvent(i >= 0 ? i : ev.choices.findIndex((_, j) => run.canChoose(j)));
+        } else if (run.status === 'port') run.leavePort();
+        else run.jump(run.reachable().find((n) => !run.isLateral(n))!.id);
+      }
+    }
+  });
+
   it('you can explore across a column to an unvisited neighbour', () => {
     for (let seed = 1; seed < 50; seed++) {
       const run = new Run('wren', seed);
@@ -493,7 +536,7 @@ describe('sectors, provisions and the chandler', () => {
     expect(chest.condition.crew[0].hp).toBe(35);
   });
 
-  it('deeper sectors field tougher ships; the blockade does not grow', () => {
+  it('deeper sectors field tougher ships', () => {
     const base = ENEMIES.cutter.ship;
     const scaled = scaleEnemy(base, 2);
     expect(scaled.hull).toBeGreaterThan(base.hull);
@@ -501,6 +544,54 @@ describe('sectors, provisions and the chandler', () => {
     expect(scaled.systems.guns).toBeGreaterThan(base.systems.guns!);
     expect(scaled.guns.some((g) => g.weapon === 'pdr12')).toBe(true);
     expect(scaleEnemy(base, 0)).toBe(base);
+  });
+
+  it('the blockade frigate is better found than the frigate fresh from the yard', () => {
+    const run = new Run('gull', 8);
+    run.sector = 2;
+    run.status = 'battle';
+    run.encounter = { kind: 'battle', enemy: 'frigate', name: 'HMS Relentless', boss: true, ambush: false, text: '' };
+    const b = run.startBattle();
+    expect(b.enemy.def.hull).toBeGreaterThan(ENEMIES.frigate.ship.hull);
+    expect(b.enemy.def.guns).toEqual(scaleEnemy(ENEMIES.frigate.ship, BOSS_TIER).guns);
+    expect(b.enemy.def.guns.some((g) => g.weapon === 'pdr9')).toBe(false);
+  });
+
+  it('prices rise and finds grow richer deeper into the voyage', () => {
+    const run = runAt('port');
+    run.gold = 1000;
+    const before = { up: run.upgradeOffers()[0].price, fit: run.fittingOffers()[0].price, gun: run.gunOffers()[0].price };
+    run.sector = 2;
+    expect(run.upgradeOffers()[0].price).toBeGreaterThan(before.up);
+    expect(run.fittingOffers()[0].price).toBeGreaterThan(before.fit);
+    expect(run.gunOffers()[0].price).toBeGreaterThan(before.gun);
+    // Necessities stay at the same price.
+    const gold = run.gold;
+    run.buyProvisions(1);
+    expect(run.gold).toBe(gold - PROVISION_PRICE);
+    // And what you pay is what was offered.
+    const offer = run.upgradeOffers().find((o) => o.available)!;
+    const g = run.gold;
+    run.buyUpgrade(offer.id);
+    expect(run.gold).toBe(g - offer.price);
+
+    const finds = run.applyEffect({ text: '', gold: 20 });
+    expect(finds[0]).toMatch(/^\+2[1-9] gold$/);
+  });
+
+  it('later sectors stock heavier guns in their armouries', () => {
+    const avg = (sector: number) => {
+      let total = 0;
+      let n = 0;
+      for (let seed = 1; seed <= 40; seed++) {
+        const run = new Run('gull', seed);
+        (run as unknown as { sector: number }).sector = sector;
+        const chart = (run as unknown as { makeChart(s: number): SeaChart }).makeChart(sector);
+        for (const node of chart.nodes) for (const id of node.stock ?? []) (total += WEAPONS[id].price), n++;
+      }
+      return total / n;
+    };
+    expect(avg(2)).toBeGreaterThan(avg(0) + 10);
   });
 
   it('a scaled enemy upgrades different guns one step each, and has a use for every extra hand', () => {
@@ -513,9 +604,10 @@ describe('sectors, provisions and the chandler', () => {
         const changed = s.guns.map((g, i) => [base.guns[i].weapon, g.weapon]).filter(([a, b]) => a !== b);
         for (const [from, to] of changed) expect(to, `${e.id} tier ${tier}`).toBe(step[from]);
         expect(changed.length).toBeLessThanOrEqual(tier);
-        expect(s.systems.bulwarks).toBe((base.systems.bulwarks ?? 0) + 1);
-        // Every new hand goes on a heavier gun or the extra bulwark layer.
-        expect(s.hands - base.hands).toBe(hands(s.guns) - hands(base.guns) + 1);
+        const sails = tier >= 2 ? 1 : 0;
+        expect(s.systems.sails).toBe((base.systems.sails ?? 0) + sails);
+        // Every new hand goes on a heavier gun or the extra sail.
+        expect(s.hands - base.hands).toBe(hands(s.guns) - hands(base.guns) + sails);
         expect(s.systems.guns).toBeGreaterThanOrEqual(hands(s.guns));
       }
     }

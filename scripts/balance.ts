@@ -66,25 +66,28 @@ if (!ONLY || ONLY === 'voyages') {
   for (const { label, focus, board } of CAPTAINS) {
     for (const def of PLAYER_SHIPS) {
       let won = 0;
-      let cols = 0;
+      let legs = 0;
       let gold = 0;
+      let left = 0;
       let ambushes = 0;
       let fights = 0;
       const killers: Record<string, number> = {};
       for (let seed = 1; seed <= VOYAGES; seed++) {
         const { run, battles } = autoRun(new Run(def.id, seed), { focus, boardWith: board });
         if (run.status === 'won') won++;
-        cols += run.node.col;
+        legs += run.legs.sailed;
         gold += run.plunderTaken;
+        left += run.gold;
         fights += battles.length;
-        ambushes += battles.filter((b) => b.enemy === 'cutter').length;
+        ambushes += battles.filter((b) => b.ambush).length;
         if (run.status === 'lost') {
-          const last = battles.at(-1)?.enemy ?? run.ending;
-          killers[last] = (killers[last] ?? 0) + 1;
+          const last = battles.at(-1);
+          const key = last ? `${last.enemy}@${last.sector + 1}` : run.ending;
+          killers[key] = (killers[key] ?? 0) + 1;
         }
       }
       console.log(
-        `${label.padEnd(10)} ${def.name.padEnd(16)} win ${pct(won, VOYAGES).padStart(4)}  reached col ${(cols / VOYAGES).toFixed(1)}  fights ${(fights / VOYAGES).toFixed(1)} (cutters ${(ambushes / VOYAGES).toFixed(1)})  plunder ${(gold / VOYAGES).toFixed(0)}  lost to`,
+        `${label.padEnd(10)} ${def.name.padEnd(16)} win ${pct(won, VOYAGES).padStart(4)}  legs ${(legs / VOYAGES).toFixed(1)}  fights ${(fights / VOYAGES).toFixed(1)} (ambushes ${(ambushes / VOYAGES).toFixed(1)})  plunder ${(gold / VOYAGES).toFixed(0)}  gold left ${(left / VOYAGES).toFixed(0)}  lost to (enemy@sector)`,
         Object.entries(killers)
           .map(([k, n]) => `${k}:${n}`)
           .join(' '),

@@ -228,7 +228,6 @@ export const CORSAIR_LUGGER: ShipDef = {
     { name: 'Matelot Riou', room: 'berth' },
     { name: 'Matelot Morvan', room: 'berth' },
     { name: 'Matelot Quéré', room: 'berth' },
-    { name: 'Matelot Tanguy', room: 'berth' },
   ],
 };
 
@@ -314,7 +313,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     id: 'corsair',
     ship: CORSAIR_LUGGER,
     faction: 'privateer',
-    ai: { fleeAt: 0.25, surrenderChance: 0.3, surrenderAt: 0.2, boardWith: 3 },
+    ai: { fleeAt: 0.25, surrenderChance: 0.3, surrenderAt: 0.2, boardWith: 2 },
     plunder: [40, 60],
     names: ['La Mouette', 'Le Furet', "L'Hirondelle", 'La Belle Poule', 'Le Requin', 'La Sorcière'],
     sighting: 'A French corsair lugger, lean as a knife, runs up the white ensign and comes on hard.',
@@ -399,7 +398,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     ship: NAVY_FRIGATE,
     faction: 'navy',
     ai: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0, boardWith: 2 },
-    plunder: [150, 150],
+    // Beating her ends the voyage: she pays in freedom, not gold.
+    plunder: [0, 0],
     names: ['HMS Relentless'],
     sighting: 'HMS Relentless bars the channel. The Commodore means to finish this here.',
   },
