@@ -1,45 +1,92 @@
 import Phaser from 'phaser';
-import { playSfx } from './sound';
-import { COLORS, textStyle } from './theme';
+import { cycleVolume, isMuted, isSoft, playSfx, SOUND_CHANGED } from './sound';
+import { COLORS, SCREEN, textStyle } from './theme';
+
+/** Gold edge of a hovered control. */
+const HOVER_EDGE = 0xf2c45a;
+/** Fill of a button in the instant it is pressed. */
+const PRESSED = 0x132331;
 
 export interface ButtonOptions {
   size?: number;
   color?: number;
   onRightClick?: () => void;
+  /** Its keyboard shortcut, shown small at the right end ('Enter', 'Esc', '1'). The scene binds the key and calls press(). */
+  hint?: string;
+  /** Shown on hover. For a disabled button, say why it is disabled. */
+  tip?: string;
 }
 
-/** A flat rectangular button with hover, active and disabled states. */
+/** A flat rectangular button with hover, pressed, active and disabled states. */
 export class Button extends Phaser.GameObjects.Container {
   readonly bg: Phaser.GameObjects.Rectangle;
   readonly label: Phaser.GameObjects.Text;
+  private readonly hintText: Phaser.GameObjects.Text | null = null;
   private enabled = true;
   private toggled = false;
   private hover = false;
+  private pressed = false;
+  private tip: string | null;
   private readonly baseColor: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string, onClick: () => void, opts: ButtonOptions = {}) {
+  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string, private readonly onClick: () => void, opts: ButtonOptions = {}) {
     super(scene, x, y);
     this.baseColor = opts.color ?? COLORS.button;
+    this.tip = opts.tip ?? null;
     this.bg = scene.add.rectangle(0, 0, w, h, this.baseColor).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge);
     this.label = scene.add.text(w / 2, h / 2, text, textStyle(opts.size ?? 14)).setOrigin(0.5);
     this.add([this.bg, this.label]);
+    if (opts.hint) {
+      this.hintText = scene.add.text(w - 8, h / 2, opts.hint, textStyle(12, COLORS.textDim)).setOrigin(1, 0.5).setAlpha(0.8);
+      this.add(this.hintText);
+      // The label stays centred in the room the hint leaves.
+      this.label.setX((w - this.hintText.width - 8) / 2);
+    }
     this.setSize(w, h);
     this.bg.setInteractive({ useHandCursor: true });
-    this.bg.on('pointerover', () => {
+    this.bg.on('pointerover', (p: Phaser.Input.Pointer) => {
       this.hover = true;
       this.refresh();
+      if (this.tip) tooltip(scene).show(this.tip, p.x, p.y);
+    });
+    this.bg.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (this.tip) tooltip(scene).move(p.x, p.y);
     });
     this.bg.on('pointerout', () => {
       this.hover = false;
       this.refresh();
+      if (this.tip) tooltip(scene).hide();
     });
     this.bg.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.enabled) return;
-      playSfx(scene, 'click', 0.35);
-      if (p.rightButtonDown()) opts.onRightClick?.();
-      else onClick();
+      if (!p.rightButtonDown()) this.press();
+      else if (this.enabled && opts.onRightClick) {
+        playSfx(scene, 'click', 0.35);
+        opts.onRightClick();
+      }
+    });
+    // A button destroyed under the pointer (a port rebuilding its stock) must not leave its tip behind.
+    this.once(Phaser.GameObjects.Events.DESTROY, () => {
+      if (this.hover && this.tip) tooltips.get(scene)?.hide();
     });
     scene.add.existing(this);
+  }
+
+  /** Click it, from a key or the pointer: a brief pressed look, the click sound and the action. False if it is disabled. */
+  press(): boolean {
+    if (!this.enabled || !this.visible) return false;
+    playSfx(this.scene, 'click', 0.35);
+    this.pressed = true;
+    this.refresh();
+    this.scene.time.delayedCall(110, () => {
+      this.pressed = false;
+      if (this.bg.active) this.refresh();
+    });
+    this.onClick();
+    return true;
+  }
+
+  get isEnabled(): boolean {
+    return this.enabled;
   }
 
   setEnabled(on: boolean): this {
@@ -63,16 +110,157 @@ export class Button extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /** Change or clear the hover text, updating it in place if it is showing. */
+  setTip(tip: string | null): this {
+    if (tip === this.tip) return this;
+    this.tip = tip;
+    if (this.hover) {
+      const p = this.scene.input.activePointer;
+      if (tip) tooltip(this.scene).show(tip, p.x, p.y);
+      else tooltips.get(this.scene)?.hide();
+    }
+    return this;
+  }
+
   private refresh(): void {
+    const lit = this.enabled && (this.hover || this.pressed);
     const color = !this.enabled
       ? COLORS.buttonDisabled
-      : this.toggled
-        ? COLORS.buttonActive
-        : this.hover
-          ? COLORS.buttonHover
-          : this.baseColor;
+      : this.pressed
+        ? PRESSED
+        : this.toggled
+          ? COLORS.buttonActive
+          : this.hover
+            ? COLORS.buttonHover
+            : this.baseColor;
     this.bg.setFillStyle(color);
+    this.bg.setStrokeStyle(lit ? 1.5 : 1, lit ? HOVER_EDGE : COLORS.panelEdge);
+    if (this.bg.input) this.bg.input.cursor = this.enabled ? 'pointer' : 'default';
     this.label.setAlpha(this.enabled ? 1 : 0.4);
+    this.hintText?.setAlpha(this.enabled ? 0.8 : 0.3);
+    // Pressed, the label sinks a pixel.
+    this.label.setY(this.bg.height / 2 + (this.pressed ? 1 : 0));
+  }
+}
+
+/** A small note that follows the pointer. One per scene: get it with tooltip(scene). */
+export class Tooltip {
+  private readonly bg: Phaser.GameObjects.Graphics;
+  private readonly text: Phaser.GameObjects.Text;
+
+  constructor(scene: Phaser.Scene) {
+    this.bg = scene.add.graphics().setDepth(1000).setVisible(false);
+    this.text = scene.add
+      .text(0, 0, '', textStyle(13, COLORS.text, { wordWrap: { width: 320 }, lineSpacing: 2, padding: { x: 10, y: 6 } }))
+      .setDepth(1001)
+      .setVisible(false);
+  }
+
+  get alive(): boolean {
+    return this.text.active;
+  }
+
+  show(text: string, x: number, y: number): void {
+    if (!this.alive) return;
+    if (text !== this.text.text || !this.text.visible) {
+      this.text.setText(text);
+      const { width: w, height: h } = this.text;
+      this.bg
+        .clear()
+        .fillStyle(0x000000, 0.35)
+        .fillRect(3, 4, w, h)
+        .fillStyle(COLORS.panel, 0.97)
+        .fillRect(0, 0, w, h)
+        .lineStyle(1, COLORS.panelEdge, 1)
+        .strokeRect(0, 0, w, h);
+    }
+    this.move(x, y);
+    this.bg.setVisible(true);
+    this.text.setVisible(true);
+  }
+
+  /** Below and right of the pointer, flipped above or left where the screen runs out. */
+  move(px: number, py: number): void {
+    if (!this.alive) return;
+    const { width: w, height: h } = this.text;
+    const x = px + 14 + w > SCREEN.w - 6 ? px - 10 - w : px + 14;
+    const y = py + 22 + h > SCREEN.h - 6 ? py - 10 - h : py + 22;
+    const at = { x: Math.round(Phaser.Math.Clamp(x, 6, SCREEN.w - w - 6)), y: Math.round(Phaser.Math.Clamp(y, 6, SCREEN.h - h - 6)) };
+    this.bg.setPosition(at.x, at.y);
+    this.text.setPosition(at.x, at.y);
+  }
+
+  hide(): void {
+    if (!this.alive) return;
+    this.bg.setVisible(false);
+    this.text.setVisible(false);
+  }
+}
+
+const tooltips = new WeakMap<Phaser.Scene, Tooltip>();
+
+/** The scene's tooltip, made on first use. */
+export function tooltip(scene: Phaser.Scene): Tooltip {
+  let tip = tooltips.get(scene);
+  if (!tip || !tip.alive) {
+    tip = new Tooltip(scene);
+    tooltips.set(scene, tip);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => tooltips.delete(scene));
+  }
+  return tip;
+}
+
+/** Give any interactive object a hover tip. The text can be a function, read each time the tip opens. */
+export function addTip(obj: Phaser.GameObjects.GameObject, text: string | (() => string)): void {
+  const scene = obj.scene;
+  obj.on('pointerover', (p: Phaser.Input.Pointer) => {
+    const t = typeof text === 'string' ? text : text();
+    if (t) tooltip(scene).show(t, p.x, p.y);
+  });
+  obj.on('pointermove', (p: Phaser.Input.Pointer) => tooltips.get(scene)?.move(p.x, p.y));
+  obj.on('pointerout', () => tooltips.get(scene)?.hide());
+}
+
+/** The speaker: click to step through loud, soft and off. M toggles mute on every screen. */
+export class SoundButton extends Button {
+  private readonly icon: Phaser.GameObjects.Graphics;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, size = 34) {
+    super(scene, x, y, size, size, '', () => cycleVolume(scene.game));
+    this.icon = scene.add.graphics();
+    this.add(this.icon);
+    const redraw = () => this.draw(size);
+    scene.game.events.on(SOUND_CHANGED, redraw);
+    this.once(Phaser.GameObjects.Events.DESTROY, () => scene.game.events.off(SOUND_CHANGED, redraw));
+    this.draw(size);
+  }
+
+  private draw(size: number): void {
+    const muted = isMuted();
+    const soft = isSoft();
+    this.setTip(`Sound: ${muted ? 'off' : soft ? 'soft' : 'on'}. Click to change, or press M to mute.`);
+    const g = this.icon.clear();
+    const s = size / 34;
+    const cy = size / 2;
+    const ink = 0xefe6d0;
+    // Box and cone of the speaker.
+    g.fillStyle(ink, muted ? 0.55 : 1);
+    g.fillRect(8 * s, cy - 4 * s, 5 * s, 8 * s);
+    g.fillTriangle(12 * s, cy - 4 * s, 19 * s, cy - 10 * s, 19 * s, cy + 10 * s);
+    g.fillTriangle(12 * s, cy - 4 * s, 12 * s, cy + 4 * s, 19 * s, cy + 10 * s);
+    if (muted) {
+      g.lineStyle(2.5 * s, 0xe0452f, 1);
+      g.lineBetween(22 * s, cy - 5 * s, 29 * s, cy + 5 * s);
+      g.lineBetween(29 * s, cy - 5 * s, 22 * s, cy + 5 * s);
+      return;
+    }
+    g.lineStyle(2 * s, ink, 1);
+    const arcs = soft ? [5] : [5, 10];
+    for (const r of arcs) {
+      g.beginPath();
+      g.arc(19 * s, cy, r * s, -Math.PI / 4, Math.PI / 4);
+      g.strokePath();
+    }
   }
 }
 

@@ -1,30 +1,69 @@
 import Phaser from 'phaser';
 
 const MUTE_KEY = 'slower-than-light.muted';
+const VOLUME_KEY = 'slower-than-light.volume';
+/** Emitted on game.events whenever the mute or volume setting changes, so speaker icons can redraw. */
+export const SOUND_CHANGED = 'sound-changed';
+/** Volume when not muted: full, or soft for playing alongside something else. */
+const LOUD = 1;
+const SOFT = 0.4;
 
 /** Cache key for a sound file: "cannon-2.ogg" → "sfx:cannon-2". */
 export function soundKey(file: string): string {
   return `sfx:${file.replace(/\.[a-z0-9]+$/i, '')}`;
 }
 
-export function isMuted(): boolean {
+function read(key: string): string | null {
   try {
-    return localStorage.getItem(MUTE_KEY) === '1';
+    return localStorage.getItem(key);
   } catch {
-    return false;
+    return null;
   }
+}
+
+function write(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Fine: it just won't be remembered.
+  }
+}
+
+export function isMuted(): boolean {
+  return read(MUTE_KEY) === '1';
+}
+
+/** True when sound is on but turned down. */
+export function isSoft(): boolean {
+  return read(VOLUME_KEY) === 'soft';
+}
+
+/** Apply the remembered settings to the game's sound manager. */
+export function applySound(game: Phaser.Game): void {
+  game.sound.mute = isMuted();
+  game.sound.volume = isSoft() ? SOFT : LOUD;
+  game.events.emit(SOUND_CHANGED);
 }
 
 /** Flip the mute setting, remember it, and apply it to every sound playing. */
 export function toggleMute(game: Phaser.Game): boolean {
   const muted = !isMuted();
-  try {
-    localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
-  } catch {
-    // Fine: it just won't be remembered.
-  }
-  game.sound.mute = muted;
+  write(MUTE_KEY, muted ? '1' : '0');
+  applySound(game);
   return muted;
+}
+
+/** The speaker button's cycle: loud, soft, off, and back to loud. */
+export function cycleVolume(game: Phaser.Game): void {
+  if (isMuted()) {
+    write(MUTE_KEY, '0');
+    write(VOLUME_KEY, 'loud');
+  } else if (isSoft()) {
+    write(MUTE_KEY, '1');
+  } else {
+    write(VOLUME_KEY, 'soft');
+  }
+  applySound(game);
 }
 
 /** Every loaded variant of a sound: "cannon" matches cannon, cannon-1, cannon-2... */

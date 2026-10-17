@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { toggleMute } from './render/sound';
 import { SCREEN } from './render/theme';
 import { BattleScene } from './scenes/BattleScene';
 import { EventScene } from './scenes/EventScene';
@@ -27,8 +28,14 @@ const game = new Phaser.Game({
 });
 
 // Every scene fades in from the deep, so screens follow one another instead of cutting.
+// M mutes on every screen; the battle binds its own.
 game.events.once('ready', () => {
-  for (const scene of game.scene.scenes) scene.events.on('create', () => scene.cameras.main.fadeIn(260, 6, 20, 32));
+  for (const scene of game.scene.scenes) {
+    scene.events.on('create', () => {
+      scene.cameras.main.fadeIn(260, 6, 20, 32);
+      if (scene.scene.key !== 'Battle') scene.input.keyboard?.on('keydown-M', () => toggleMute(game));
+    });
+  }
 });
 
 if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;

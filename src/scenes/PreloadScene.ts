@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { isMuted, soundKey } from '../render/sound';
+import { applySound, soundKey } from '../render/sound';
 import { COLORS, SCREEN, textStyle } from '../render/theme';
 
 interface ArtManifest {
@@ -32,7 +32,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.sound.mute = isMuted();
+    applySound(this.game);
     this.scene.start('Title');
   }
 }
