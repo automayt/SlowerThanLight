@@ -18,3 +18,10 @@ The game picks variants by prefix: `cannon-1.ogg`, `cannon-2.ogg`... all play fo
 `gen_long2.py`, `selfextend.py`, `gen_yue.py` and `gen_yue_abc.py` made the other candidates; they were written in a
 scratch folder, so check their paths before re-running. Candidates (including the original 20 s loop) live in the
 gitignored `candidates/` folder.
+
+## Second batch (jobs3.json)
+
+`click`, `coins`, `breach`, `explosion`, `boarders` and the `creak` loop came from `jobs3.json` with the same recipe
+(one take each; seeds in the file). Each was checked by duration, loudness and spectral centroid rather than by ear,
+so listen through and regenerate any that miss: `python gen_sfx.py jobs3.json`, then
+`python finish_sfx.py click=click_a coins=coins_a ...`.
