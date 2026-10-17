@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
 import type { SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
-import { ART_SCALE, paintShip, type ShipGeometry } from './ShipArt';
+import { ART_SCALE, paintShip, type Ensign, type ShipGeometry } from './ShipArt';
 import { COLORS, TITLE_FONT } from './theme';
 
 export interface ShipViewState {
@@ -30,7 +30,7 @@ export type Finale = 'sink' | 'explode' | 'sail';
 
 export interface ShipViewOptions {
   showLabels?: boolean;
-  flag?: 'pirate' | 'navy' | 'merchant';
+  flag?: Ensign;
 }
 
 /** Draw order of a ship's layers. Projectiles and effects in the battle scene sit above these. */
@@ -405,20 +405,26 @@ export class ShipView {
       const r = this.roomRect(room.def.id);
       const sys = room.def.system ? ship.system(room.def.system) : undefined;
 
-      if (room.water > 0) {
-        const a = 0.22 + (room.water / 100) * 0.5;
-        g.fillStyle(0x1f7fc4, a).fillRect(r.x, r.y, r.width, r.height);
-        g.fillStyle(0x7fc8ff, 0.08 + (room.water / 100) * 0.1).fillRect(r.x, r.y, r.width, r.height * 0.35);
-        g.lineStyle(1.5, 0xd8f0ff, 0.3 + (room.water / 100) * 0.3);
-        for (let y = r.y + 7; y < r.bottom - 3; y += 9) {
+      if (room.water >= 1) {
+        // Water reads as a level: a faint wash over the room that deepens with it, and the water itself
+        // filling the room from the bottom edge up to a tide line, so a few inches look like a few inches.
+        const level = Math.min(1, room.water / 100);
+        g.fillStyle(0x1f7fc4, 0.04 + level * 0.2).fillRect(r.x, r.y, r.width, r.height);
+        const top = r.bottom - Math.max(2, r.height * level);
+        const wave = (x: number, y: number) => y + Math.sin(t * 3 + x * 0.25 + y) * 1.4;
+        const waterline = (y: number) => {
           g.beginPath();
           for (let x = r.x + 2; x <= r.right - 2; x += 4) {
-            const yy = y + Math.sin(t * 3 + x * 0.25 + y) * 1.4;
-            if (x === r.x + 2) g.moveTo(x, yy);
-            else g.lineTo(x, yy);
+            if (x === r.x + 2) g.moveTo(x, wave(x, y));
+            else g.lineTo(x, wave(x, y));
           }
           g.strokePath();
-        }
+        };
+        g.fillStyle(0x1f7fc4, 0.3 + level * 0.3).fillRect(r.x, top, r.width, r.bottom - top);
+        g.lineStyle(1.5, 0xd8f0ff, 0.25 + level * 0.25);
+        for (let y = top + 9; y < r.bottom - 3; y += 9) waterline(y);
+        g.lineStyle(2, 0xe8f6ff, 0.85);
+        waterline(top);
       }
 
       if (room.breach) {

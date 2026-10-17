@@ -128,6 +128,9 @@ function pattern(ctx: Ctx, img: CanvasImageSource | null, scale: number): Canvas
   return pat;
 }
 
+/** The colours a ship flies at her stern. */
+export type Ensign = 'pirate' | 'navy' | 'spanish' | 'trade';
+
 export interface ShipTextures {
   base: string;
   rig: string;
@@ -138,7 +141,7 @@ export interface ShipTextures {
  * Paint a ship's hull, deck, compartments and fittings (base) and its masts, yards and sails (rig) into two canvas
  * textures. Both are painted bow-right; the view flips them for the enemy.
  */
-export function paintShip(scene: Phaser.Scene, ship: Ship, tile: number, keyPrefix: string, flag: 'pirate' | 'navy' | 'merchant'): ShipTextures {
+export function paintShip(scene: Phaser.Scene, ship: Ship, tile: number, keyPrefix: string, flag: Ensign): ShipTextures {
   const geom = shipGeometry(ship);
   const u = tile * ART_SCALE;
   const w = (geom.padL + ship.width + geom.padR) * u;
@@ -766,7 +769,7 @@ function coil(ctx: Ctx, x: number, y: number, r: number): void {
 
 // --- Rig ---------------------------------------------------------------------
 
-function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: 'pirate' | 'navy' | 'merchant'): void {
+function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
   const { ctx, u, X, Y } = p;
   const mid = ship.height / 2;
   const sorted = [...g.masts].sort((a, b) => a.x - b.x);
@@ -891,50 +894,137 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: 'pirate' | 'nav
   });
 
   // Ensign on a staff at the stern, streaming astern over the water.
-  const fx = X(g.stern + 0.1);
-  const fy = Y(mid);
+  paintEnsign(ctx, X(g.stern + 0.1), Y(mid), u, flag);
+}
+
+/**
+ * A small ensign streaming astern from a staff at (fx, fy): the Jolly Roger, the red ensign, Spain's Burgundy cross
+ * or a merchant's house flag. Painted bow-right, so it flies toward -x; the view mirrors it for the enemy.
+ */
+function paintEnsign(ctx: Ctx, fx: number, fy: number, u: number, flag: Ensign): void {
+  const L = 1.05 * u;
+  const H = 0.27 * u;
+  /** Flag-local point: t runs 0 (hoist, at the staff) to 1 (fly), v from -1 (top edge) to 1 (bottom edge). */
+  const at = (t: number, v: number) => ({ x: fx - t * L, y: fy + v * H });
+
   ctx.fillStyle = '#3d2410';
   ctx.beginPath();
   ctx.arc(fx, fy, 0.05 * u, 0, Math.PI * 2);
   ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(fx, fy - 0.2 * u);
-  ctx.bezierCurveTo(fx - 0.3 * u, fy - 0.3 * u, fx - 0.55 * u, fy - 0.08 * u, fx - 0.85 * u, fy - 0.2 * u);
-  ctx.lineTo(fx - 0.85 * u, fy + 0.22 * u);
-  ctx.bezierCurveTo(fx - 0.55 * u, fy + 0.34 * u, fx - 0.3 * u, fy + 0.1 * u, fx, fy + 0.2 * u);
-  ctx.closePath();
+
+  const outline = () => {
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - H);
+    ctx.bezierCurveTo(fx - 0.35 * L, fy - H * 1.45, fx - 0.65 * L, fy - H * 0.45, fx - L, fy - H * 0.95);
+    ctx.lineTo(fx - L, fy + H * 1.05);
+    ctx.bezierCurveTo(fx - 0.65 * L, fy + H * 1.55, fx - 0.35 * L, fy + H * 0.55, fx, fy + H);
+    ctx.closePath();
+  };
+  const field: Record<Ensign, string> = { pirate: '#141414', navy: '#b3261e', spanish: '#efe9da', trade: '#1f4f8a' };
+  outline();
   ctx.save();
   ctx.shadowColor = 'rgba(0,10,20,0.4)';
   ctx.shadowBlur = 0.15 * u;
   ctx.shadowOffsetY = 0.15 * u;
-  ctx.fillStyle = flag === 'pirate' ? '#151515' : flag === 'navy' ? '#b3261e' : '#e4ddc8';
+  ctx.fillStyle = field[flag];
   ctx.fill();
   ctx.restore();
+
+  ctx.save();
+  outline();
+  ctx.clip();
+  const band = (t0: number, v0: number, t1: number, v1: number, width: number, color: string) => {
+    const a = at(t0, v0);
+    const b = at(t1, v1);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  };
+  switch (flag) {
+    case 'pirate': {
+      // Crossed bones beneath a skull: knobbed ends so they read as bones, not a cross.
+      const bone = (t0: number, v0: number, t1: number, v1: number) => {
+        band(t0, v0, t1, v1, 0.045 * u, '#ece6d6');
+        ctx.fillStyle = '#ece6d6';
+        for (const [t, v] of [
+          [t0, v0],
+          [t1, v1],
+        ]) {
+          const p = at(t, v);
+          ctx.beginPath();
+          ctx.arc(p.x - 0.025 * u, p.y - 0.012 * u, 0.028 * u, 0, Math.PI * 2);
+          ctx.arc(p.x + 0.025 * u, p.y + 0.012 * u, 0.028 * u, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      };
+      bone(0.3, 0.05, 0.7, 0.8);
+      bone(0.7, 0.05, 0.3, 0.8);
+      const s = at(0.5, -0.3);
+      const r = 0.105 * u;
+      ctx.fillStyle = '#ece6d6';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(s.x - r * 0.55, s.y + r * 0.4, r * 1.1, r * 0.75);
+      ctx.fillStyle = '#141414';
+      ctx.beginPath();
+      ctx.arc(s.x - r * 0.4, s.y + r * 0.05, r * 0.28, 0, Math.PI * 2);
+      ctx.arc(s.x + r * 0.4, s.y + r * 0.05, r * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(s.x - r * 0.05, s.y + r * 0.85, r * 0.1, r * 0.3);
+      break;
+    }
+    case 'navy': {
+      // The red ensign: the Union in the canton at the hoist.
+      const c0 = at(0, -1.2);
+      const cw = 0.42 * L;
+      const ch = H * 1.2;
+      ctx.fillStyle = '#1d2f6b';
+      ctx.fillRect(c0.x - cw, c0.y, cw, ch);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(c0.x - cw, c0.y, cw, ch);
+      ctx.clip();
+      band(0, -1.2, 0.42, 0, 0.06 * u, '#f2efe6');
+      band(0.42, -1.2, 0, 0, 0.06 * u, '#f2efe6');
+      band(0.21, -1.2, 0.21, 0, 0.09 * u, '#f2efe6');
+      band(0, -0.6, 0.42, -0.6, 0.09 * u, '#f2efe6');
+      band(0.21, -1.2, 0.21, 0, 0.05 * u, '#c8202a');
+      band(0, -0.6, 0.42, -0.6, 0.05 * u, '#c8202a');
+      ctx.restore();
+      break;
+    }
+    case 'spanish': {
+      // The Cross of Burgundy: a red saltire of rough-hewn staves, knots left on the branches.
+      band(0.1, -1.05, 0.9, 1.05, 0.075 * u, '#b8231c');
+      band(0.1, 1.05, 0.9, -1.05, 0.075 * u, '#b8231c');
+      ctx.fillStyle = '#b8231c';
+      for (const k of [0.25, 0.4, 0.6, 0.75]) {
+        for (const dir of [1, -1]) {
+          const p = at(0.1 + 0.8 * k, dir * (-1.05 + 2.1 * k));
+          ctx.beginPath();
+          ctx.arc(p.x + ((k * 7) % 2 > 1 ? 1 : -1) * 0.04 * u, p.y - dir * 0.03 * u, 0.026 * u, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case 'trade':
+      // A merchant house flag: blue, with a broad white band and a red ball.
+      band(0, 0, 1.1, 0, H * 0.7, '#efe9da');
+      ctx.fillStyle = '#b8231c';
+      ctx.beginPath();
+      ctx.arc(at(0.45, 0).x, at(0.45, 0).y, 0.07 * u, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+  }
+  ctx.restore();
+  outline();
   ctx.strokeStyle = 'rgba(0,0,0,0.7)';
   ctx.lineWidth = 0.02 * u;
   ctx.stroke();
-  if (flag === 'pirate') {
-    // Skull and crossbones, near enough at this size.
-    const sx = fx - 0.42 * u;
-    const sy = fy + 0.01 * u;
-    ctx.strokeStyle = '#eee';
-    ctx.lineWidth = 0.035 * u;
-    ctx.beginPath();
-    ctx.moveTo(sx - 0.12 * u, sy - 0.1 * u);
-    ctx.lineTo(sx + 0.12 * u, sy + 0.12 * u);
-    ctx.moveTo(sx + 0.12 * u, sy - 0.1 * u);
-    ctx.lineTo(sx - 0.12 * u, sy + 0.12 * u);
-    ctx.stroke();
-    ctx.fillStyle = '#eee';
-    ctx.beginPath();
-    ctx.arc(sx, sy - 0.02 * u, 0.07 * u, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (flag === 'navy') {
-    // Union canton.
-    ctx.fillStyle = '#f2efe6';
-    ctx.fillRect(fx - 0.32 * u, fy - 0.2 * u, 0.32 * u, 0.2 * u);
-    ctx.fillStyle = '#b3261e';
-    ctx.fillRect(fx - 0.19 * u, fy - 0.2 * u, 0.06 * u, 0.2 * u);
-    ctx.fillRect(fx - 0.32 * u, fy - 0.13 * u, 0.32 * u, 0.06 * u);
-  }
 }
