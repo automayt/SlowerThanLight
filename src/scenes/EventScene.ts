@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playLoop } from '../render/sound';
 import { placeArt } from '../render/art';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -37,6 +38,8 @@ export class EventScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     saveRun(run);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
+    playLoop(this, 'waves', 0.22);
+    playLoop(this, 'creak', 0.2);
     this.bar = new RunBar(this, run);
     this.choiceButtons = [];
     const ev = run.currentEvent();

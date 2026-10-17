@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { currentRun } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, Sea } from '../render/ui';
+import { playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
 import type { ResultData } from './BattleScene';
 import { saveRun } from './save';
@@ -51,6 +52,7 @@ export class ResultScene extends Phaser.Scene {
     });
     this.add.text(cx, 470, `Battle lasted ${mins}:${secs}`, textStyle(14, COLORS.textDim)).setOrigin(0.5, 0);
     this.spoils(cx, 496);
+    if (report.plunder > 0) this.time.delayedCall(350, () => playSfx(this, 'coins', 0.55));
     if (report.lines.length) this.add.text(cx, 232, report.lines.join('  '), textStyle(16, COLORS.gold, { align: 'center', wordWrap: { width: 600 } })).setOrigin(0.5, 0);
 
     const next = run.over

@@ -1,0 +1,8 @@
+[
+ {"name":"click_a","seconds":1.5,"seed":601,"prompt":"Close view of a hand pressing a small wooden toggle on an old ship's chart table. Audio: one single short soft wooden click, a dry knock of wood on wood, then complete silence."},
+ {"name":"coins_a","seconds":2,"seed":611,"prompt":"A handful of old gold and silver coins is poured onto a wooden table in a dim ship's cabin. Audio: bright metallic clinking and jingling of coins falling and settling, nothing else."},
+ {"name":"breach_a","seconds":2.5,"seed":621,"prompt":"A cannonball punches through the hull of a wooden ship below the waterline and seawater bursts in through the jagged hole. Audio: a loud wooden crack and splinter followed by a rushing gush of pouring water, no voices."},
+ {"name":"explosion_a","seconds":3,"seed":631,"prompt":"At sea, the powder magazine of a wooden warship explodes in a huge fireball, timber and spars flying into the air. Audio: one enormous deep explosion with a long rumbling roar and crackling debris falling into the water."},
+ {"name":"boarders_a","seconds":2.5,"seed":641,"prompt":"A crowd of rough sailors with cutlasses swing on ropes across to an enemy ship in battle. Audio: a crowd of men roaring a fierce battle cry together, shouting and yelling, with the clash of steel."},
+ {"name":"creak_a","seconds":10,"seed":651,"prompt":"Inside the dim wooden hold of an old sailing ship rolling gently on a calm sea, lanterns swaying. Audio: slow continuous creaking and groaning of ship timbers and ropes, soft water lapping against the hull, calm and steady."}
+]

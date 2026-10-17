@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playSfx } from './sound';
 import { COLORS, textStyle } from './theme';
 
 export interface ButtonOptions {
@@ -34,6 +35,7 @@ export class Button extends Phaser.GameObjects.Container {
     });
     this.bg.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!this.enabled) return;
+      playSfx(scene, 'click', 0.35);
       if (p.rightButtonDown()) opts.onRightClick?.();
       else onClick();
     });
@@ -106,12 +108,25 @@ export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: n
 /** Animated sea backdrop. Call `draw(time)` each frame. */
 export class Sea {
   private readonly g: Phaser.GameObjects.Graphics;
+  /** The painted sea, when its texture is loaded; otherwise a drawn gradient with wave marks. */
+  private readonly img: Phaser.GameObjects.Image | null = null;
 
-  constructor(scene: Phaser.Scene, private readonly w: number, private readonly h: number) {
+  /** `dim` darkens the painting so text on top stays readable (0 for the battle, where the sea is the stage). */
+  constructor(scene: Phaser.Scene, private readonly w: number, private readonly h: number, dim = 0.4) {
     this.g = scene.add.graphics().setDepth(-10);
+    if (scene.textures.exists('art:tex-sea')) {
+      this.img = scene.add.image(w / 2, h / 2, 'art:tex-sea').setDepth(-10);
+      this.img.setScale(Math.max(w / this.img.width, h / this.img.height) * 1.04);
+      if (dim > 0) scene.add.rectangle(0, 0, w, h, 0x061420, dim).setOrigin(0).setDepth(-9.5);
+    }
   }
 
   draw(timeMs: number): void {
+    if (this.img) {
+      // A slow drift, as if the swell were moving under you.
+      this.img.setPosition(this.w / 2 + Math.sin(timeMs / 4000) * 8, this.h / 2 + Math.cos(timeMs / 5200) * 5);
+      return;
+    }
     const g = this.g;
     const t = timeMs / 1000;
     g.clear();

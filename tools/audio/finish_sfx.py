@@ -29,6 +29,12 @@ SPEC = {
     "fire": dict(dur=3.0, loop=True, rms=-22, kbps=72, maxkb=400),
     "waves": dict(dur=10.0, loop=True, rms=-24, kbps=64, maxkb=400),
     "shanty": dict(dur=20.0, loop=True, rms=-18, kbps=80, maxkb=400),
+    "click": dict(dur=0.35, loop=False, rms=-22, kbps=64, maxkb=20),
+    "coins": dict(dur=1.2, loop=False, rms=-19, kbps=72, maxkb=50),
+    "breach": dict(dur=1.6, loop=False, rms=-16, kbps=80, maxkb=60),
+    "explosion": dict(dur=2.5, loop=False, rms=-13, kbps=80, maxkb=80),
+    "boarders": dict(dur=2.0, loop=False, rms=-17, kbps=80, maxkb=70),
+    "creak": dict(dur=8.0, loop=True, rms=-27, kbps=64, maxkb=300),
 }
 
 

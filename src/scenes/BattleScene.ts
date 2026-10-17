@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
 import { Hud } from '../render/Hud';
-import { playLoop, playSfx, toggleMute } from '../render/sound';
+import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
 import { ShipView, type AimMark } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -29,7 +29,6 @@ export class BattleScene extends Phaser.Scene {
   private playerView!: ShipView;
   private enemyView!: ShipView;
   private fx!: Phaser.GameObjects.Graphics;
-  private seaImage: Phaser.GameObjects.Image | null = null;
   private readonly swingers = new Map<number, Phaser.GameObjects.Image>();
   private ambient!: Phaser.GameObjects.Graphics;
   private clouds: { x: number; y: number; s: number; v: number }[] = [];
@@ -63,11 +62,7 @@ export class BattleScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     saveRun(run);
     const battle = (this.battle = run.startBattle());
-    this.sea = new Sea(this, SCREEN.w, SCREEN.h);
-    if (this.textures.exists('art:tex-sea')) {
-      this.seaImage = this.add.image(SCREEN.w / 2, SCREEN.h / 2, 'art:tex-sea').setDepth(-9);
-      this.seaImage.setScale(Math.max(SCREEN.w / this.seaImage.width, SCREEN.h / this.seaImage.height) * 1.04);
-    }
+    this.sea = new Sea(this, SCREEN.w, SCREEN.h, 0);
 
     const faction = run.encounter.kind === 'battle' ? run.currentEnemy().faction : 'navy';
     setEnemyStyle(faction === 'navy' ? 'navy' : faction === 'merchant' ? 'merchant' : 'pirate');
@@ -114,6 +109,7 @@ export class BattleScene extends Phaser.Scene {
     kb.on('keydown-B', () => battle.setBroadside(!battle.player.broadside));
     kb.on('keydown-M', () => toggleMute(this.game));
     playLoop(this, 'waves', 0.25);
+    stopLoop(this, 'creak');
     kb.on('keydown-ESC', () => {
       this.aimingGun = null;
       this.selected.clear();
@@ -229,10 +225,7 @@ export class BattleScene extends Phaser.Scene {
       if (g.target && g.powered) threats.push({ room: g.target, gun: i + 1, charge: g.charge / g.def.loadTime, hostile: true });
     });
 
-    if (this.seaImage) {
-      const k = Math.sin(time / 4000);
-      this.seaImage.setPosition(SCREEN.w / 2 + k * 8, SCREEN.h / 2 + Math.cos(time / 5200) * 5);
-    } else this.sea.draw(time);
+    this.sea.draw(time);
     const alive = new Set([...b.crewOf('player'), ...b.crewOf('enemy')].map((c) => c.id));
     this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer, alive, targets: threats });
     this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null, alive });
@@ -481,12 +474,14 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'breach': {
+        playSfx(this, 'breach', ours ? 0.55 : 0.35);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y + 10, 'HOLED!', '#7fc4ff');
         if (ours) this.hud.addLog(`We're holed in the ${view.ship.room(ev.room).def.name}, she's taking water!`);
         break;
       }
       case 'board': {
+        playSfx(this, 'boarders', 0.5);
         const target = this.viewFor(ev.side === 'player' ? 'enemy' : 'player').ship.room(ev.room).def.name;
         if (ev.side === 'player') this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
         else this.hud.addLog(`BOARDERS! ${ev.count} of them coming over the side for our ${target}!`, COLORS.textWarn);
@@ -561,6 +556,7 @@ export class BattleScene extends Phaser.Scene {
     this.ending = true;
     const o = this.battle.outcome!;
     if (o.won) playSfx(this, 'bell', 0.6);
+    if (o.kind === 'victory' || o.kind === 'defeat') playSfx(this, 'explosion', 0.7);
     if (o.kind === 'captured') bumpProfile('captures');
     const report = this.run.finishBattle(this.battle);
     const now = this.time.now;

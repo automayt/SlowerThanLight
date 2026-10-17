@@ -6,6 +6,7 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { type Run } from '../sim/Run';
 import { SECTORS } from '../data/voyage';
+import { chartIcon, chartShip, SEAL } from '../render/chartIcons';
 import type { NodeKind, SeaNode } from '../sim/SeaChart';
 import { saveRun } from './save';
 
@@ -14,6 +15,11 @@ const RIGHT = SCREEN.w - 90;
 const TOP = 130;
 const BOTTOM = 560;
 const NODE_R = 20;
+/** The parchment chart the voyage is laid out on. */
+const CHART = { x: 30, y: 106, w: SCREEN.w - 60, h: 482 };
+/** Ink colours on parchment. */
+const INK = 0x2a170a;
+const RED_INK = 0x8a1c1c;
 
 const KIND_STYLE: Record<NodeKind, { color: number; label: string; glyph: string }> = {
   start: { color: 0x9fb1bf, label: 'Tortuga', glyph: '⚓' },
@@ -34,6 +40,7 @@ export class SeaMapScene extends Phaser.Scene {
   private hover: SeaNode | null = null;
   private tip!: Phaser.GameObjects.Text;
   private dialog: Phaser.GameObjects.GameObject[] = [];
+  private ship!: Phaser.GameObjects.Image;
   /** Enter-key shortcut of the open dialog, removed when the dialog closes. */
   private dialogEnter: (() => void) | null = null;
 
@@ -52,18 +59,21 @@ export class SeaMapScene extends Phaser.Scene {
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     stopLoop(this, 'shanty');
     playLoop(this, 'waves', 0.25);
+    playLoop(this, 'creak', 0.2);
+    this.parchment();
     this.g = this.add.graphics();
     this.bar = new RunBar(this, run);
 
     const sectorLine = `${run.sectorDef.name}  ·  Sector ${run.sector + 1} of ${SECTORS.length}`;
-    this.add.text(SCREEN.w / 2, 84, sectorLine, { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0);
+    this.add.text(SCREEN.w / 2, 76, sectorLine, { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0);
 
     for (const node of run.chart.nodes) {
       const { x, y } = this.pos(node);
       const style = KIND_STYLE[node.kind];
-      this.add.text(x, y, style.glyph, textStyle(node.kind === 'boss' || node.kind === 'exit' ? 22 : 18, '#ffffff', { fontStyle: 'bold' })).setOrigin(0.5).setDepth(2);
+      this.add.image(x, y, chartIcon(this, node.kind)).setScale(node.kind === 'boss' || node.kind === 'exit' ? 0.62 : 0.5).setDepth(2);
       const label = node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
-      this.add.text(x, y + NODE_R + 4, label, textStyle(12, COLORS.textDim)).setOrigin(0.5, 0).setDepth(2);
+      const big = node.kind === 'boss' || node.kind === 'exit' ? 6 : 0;
+      this.add.text(x, y + NODE_R + big + 4, label, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#2a170a', fontStyle: 'italic' }).setOrigin(0.5, 0).setDepth(2);
       const hit = this.add.circle(x, y, NODE_R + 6, 0x000000, 0.001).setDepth(3);
       hit.setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => (this.hover = node));
@@ -79,6 +89,8 @@ export class SeaMapScene extends Phaser.Scene {
         : 'Click a highlighted node to sail on, or across to explore its neighbour (a jump and a day’s provisions). The red tide is the Navy: nodes it overruns become ambushes.';
     this.add.text(20, SCREEN.h - 32, hint, textStyle(12, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim));
 
+    this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
+
     this.tip = this.add
       .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 280 } }))
       .setDepth(20)
@@ -90,6 +102,28 @@ export class SeaMapScene extends Phaser.Scene {
       this.showDialog(title, text, [['Continue', () => this.closeDialog()]], run.encounter.title ? 'blockade' : undefined);
     }
     this.registry.set('fresh-jump', false);
+  }
+
+  /** Lay out the aged chart, with a dark frame, on the table of the sea. */
+  private parchment(): void {
+    const { x, y, w, h } = CHART;
+    this.add.rectangle(x + 6, y + 8, w, h, 0x000000, 0.45).setOrigin(0).setDepth(-1);
+    if (this.textures.exists('art:tex-chart')) {
+      const img = this.add.image(x + w / 2, y + h / 2, 'art:tex-chart').setDepth(-1);
+      const scale = Math.max(w / img.width, h / img.height);
+      img.setScale(scale);
+      img.setCrop((img.width - w / scale) / 2, (img.height - h / scale) / 2, w / scale, h / scale);
+    } else {
+      this.add.rectangle(x, y, w, h, 0xd9c49a).setOrigin(0).setDepth(-1);
+    }
+    // Darkened, worn edges.
+    const edge = this.add.graphics().setDepth(-1);
+    for (let i = 0; i < 10; i++) {
+      edge.lineStyle(3, 0x3a2410, 0.06 + i * 0.012);
+      edge.strokeRect(x + i * 2, y + i * 2, w - i * 4, h - i * 4);
+    }
+    edge.lineStyle(3, 0x2a170a, 1).strokeRect(x, y, w, h);
+    edge.lineStyle(1, 0x2a170a, 0.6).strokeRect(x + 7, y + 7, w - 14, h - 14);
   }
 
   /** The most recent thing that happened, for the footer. */
@@ -184,24 +218,26 @@ export class SeaMapScene extends Phaser.Scene {
     const reach = new Set(run.reachable().map((n) => n.id));
     const visited = new Set(run.visited);
 
-    // The fleet: a red tide from the west edge up to its front.
-    const front = Math.max(0, this.colX(run.navy));
-    if (front > 0) {
-      g.fillStyle(0x8a1c1c, 0.28).fillRect(0, 78, front, SCREEN.h - 74 - 78);
-      g.lineStyle(3, 0xd23c3c, 0.8);
+    // The fleet: a wash of red ink from the west edge up to its front.
+    const top = CHART.y + 3;
+    const bottom = CHART.y + CHART.h - 3;
+    const front = Math.min(CHART.x + CHART.w - 3, Math.max(CHART.x, this.colX(run.navy)));
+    if (front > CHART.x) {
+      g.fillStyle(RED_INK, 0.22).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
+      g.lineStyle(3, RED_INK, 0.85);
       g.beginPath();
-      for (let y = 78; y <= SCREEN.h - 74; y += 6) {
+      for (let y = top; y <= bottom; y += 6) {
         const x = front + Math.sin(y / 18 + time / 400) * 5;
-        if (y === 78) g.moveTo(x, y);
+        if (y === top) g.moveTo(x, y);
         else g.lineTo(x, y);
       }
       g.strokePath();
     }
     // Where the fleet will be after your next jump.
     const next = this.colX(run.navy + run.navySpeed);
-    if (next > 0 && run.status === 'chart') {
-      g.lineStyle(1, 0xd23c3c, 0.45);
-      for (let y = 82; y < SCREEN.h - 80; y += 16) g.lineBetween(next, y, next, y + 8);
+    if (next > CHART.x && run.status === 'chart') {
+      g.lineStyle(1.5, RED_INK, 0.55);
+      for (let y = top + 4; y < bottom - 6; y += 16) g.lineBetween(next, y, next, y + 8);
     }
 
     // Cross-channels within a column: exploring sideways costs a jump.
@@ -211,7 +247,7 @@ export class SeaMapScene extends Phaser.Scene {
         const a = this.pos(column[i]);
         const b = this.pos(column[i + 1]);
         const open = (column[i].id === run.nodeId && reach.has(column[i + 1].id)) || (column[i + 1].id === run.nodeId && reach.has(column[i].id));
-        g.lineStyle(open ? 2.5 : 1.5, open ? 0xffffff : 0x9fb1bf, open ? 0.7 : 0.18);
+        g.lineStyle(open ? 2.5 : 1.5, INK, open ? 0.85 : 0.25);
         for (let t = 0; t < 1; t += 0.12) {
           const t2 = Math.min(1, t + 0.06);
           g.lineBetween(a.x + (b.x - a.x) * t, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t, a.x + (b.x - a.x) * t2, a.y + NODE_R + (b.y - a.y - 2 * NODE_R) * t2);
@@ -227,7 +263,7 @@ export class SeaMapScene extends Phaser.Scene {
         const b = this.pos(m);
         const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
         const open = n.id === run.nodeId && reach.has(m.id);
-        g.lineStyle(sailed ? 4 : open ? 3 : 2, sailed ? 0xf2c45a : open ? 0xffffff : 0x9fb1bf, sailed ? 0.9 : open ? 0.8 : 0.3);
+        g.lineStyle(sailed ? 3.5 : open ? 3 : 1.8, sailed ? RED_INK : INK, sailed ? 0.9 : open ? 0.9 : 0.35);
         g.lineBetween(a.x, a.y, b.x, b.y);
       }
     }
@@ -235,25 +271,24 @@ export class SeaMapScene extends Phaser.Scene {
     // Nodes.
     for (const n of run.chart.nodes) {
       const { x, y } = this.pos(n);
-      const style = KIND_STYLE[n.kind];
       const overrun = n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy;
       const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
-      g.fillStyle(overrun ? 0x4a1414 : style.color, visited.has(n.id) && n.id !== run.nodeId ? 0.45 : 1).fillCircle(x, y, r);
+      const faded = visited.has(n.id) && n.id !== run.nodeId;
+      // A wax seal with a darker rim.
+      g.fillStyle(0x000000, 0.25).fillCircle(x + 2, y + 3, r);
+      g.fillStyle(overrun ? 0x5a2a20 : SEAL[n.kind], faded ? 0.5 : 1).fillCircle(x, y, r);
+      g.fillStyle(0xffffff, faded ? 0.04 : 0.12).fillCircle(x - r * 0.3, y - r * 0.3, r * 0.5);
+      g.lineStyle(2.5, INK, faded ? 0.5 : 0.95).strokeCircle(x, y, r);
       if (reach.has(n.id)) {
-        const pulse = 3 + Math.sin(time / 200) * 2;
-        g.lineStyle(3, run.willBeOverrun(n) ? 0xff5050 : COLORS.select, 1).strokeCircle(x, y, r + pulse);
-      } else {
-        g.lineStyle(2, 0x000000, 0.6).strokeCircle(x, y, r);
+        const pulse = 4 + Math.sin(time / 200) * 2;
+        g.lineStyle(3, run.willBeOverrun(n) ? 0xc0201a : 0xb8860b, 1).strokeCircle(x, y, r + pulse);
       }
-      if (this.hover === n) g.lineStyle(2, 0xffffff, 1).strokeCircle(x, y, r + 9);
+      if (this.hover === n) g.lineStyle(2, INK, 1).strokeCircle(x, y, r + 10);
     }
 
-    // Your ship.
+    // Your ship, riding just above her node.
     const here = this.pos(run.node);
-    const bob = Math.sin(time / 300) * 2;
-    g.fillStyle(0x2b1a0d, 1).fillTriangle(here.x - 16, here.y - 30 + bob, here.x + 16, here.y - 30 + bob, here.x, here.y - 20 + bob);
-    g.fillStyle(0xf3e3b5, 1).fillTriangle(here.x - 2, here.y - 54 + bob, here.x - 2, here.y - 31 + bob, here.x + 14, here.y - 33 + bob);
-    g.lineStyle(2, 0x2b1a0d, 1).lineBetween(here.x - 2, here.y - 56 + bob, here.x - 2, here.y - 30 + bob);
+    this.ship.setPosition(here.x, here.y - NODE_R - 2 + Math.sin(time / 300) * 2).setAngle(Math.sin(time / 520) * 3);
 
     this.updateTip();
     this.bar.refresh();

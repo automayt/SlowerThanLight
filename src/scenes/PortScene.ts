@@ -3,6 +3,7 @@ import { placeBackdrop } from '../render/art';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
+import { playLoop, playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
 import { FITTINGS } from '../data/fittings';
 import { CREW_PRICE, HULL_PRICE, MAX_GUNS, PROVISION_PRICE, type Run } from '../sim/Run';
@@ -43,6 +44,8 @@ export class PortScene extends Phaser.Scene {
   create(): void {
     const run = (this.run = currentRun(this));
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
+    playLoop(this, 'waves', 0.22);
+    playLoop(this, 'creak', 0.2);
     this.bar = new RunBar(this, run);
     this.dyn = [];
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
@@ -91,7 +94,9 @@ export class PortScene extends Phaser.Scene {
 
   private button(x: number, y: number, w: number, label: string, enabled: boolean, fn: () => void, detail?: string, tip?: string): void {
     const b = new Button(this, x, y, w, 40, label, () => {
+      const gold = this.run.gold;
       fn();
+      if (this.run.gold !== gold) playSfx(this, 'coins', 0.5);
       this.later();
     }, { size: 14 }).setEnabled(enabled);
     b.label.setOrigin(0, 0.5).setX(12);

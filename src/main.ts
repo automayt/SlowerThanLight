@@ -26,4 +26,9 @@ const game = new Phaser.Game({
   scene: [PreloadScene, TitleScene, ShipSelectScene, SeaMapScene, EventScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene],
 });
 
+// Every scene fades in from the deep, so screens follow one another instead of cutting.
+game.events.once('ready', () => {
+  for (const scene of game.scene.scenes) scene.events.on('create', () => scene.cameras.main.fadeIn(260, 6, 20, 32));
+});
+
 if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;
