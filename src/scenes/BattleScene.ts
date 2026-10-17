@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
-import { Hud } from '../render/Hud';
+import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
 import { ShipView, type AimMark } from '../render/ShipView';
@@ -11,7 +11,7 @@ import type { BattleReport, Run } from '../sim/Run';
 import { BOARD_TIME, grappleSpeed, partyStrength } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
-import { SYSTEM_NAMES, type Side } from '../sim/types';
+import { SHOT_TYPES, SYSTEM_NAMES, type Side } from '../sim/types';
 import { bumpProfile, saveRun } from './save';
 
 const TILE = 42;
@@ -47,6 +47,13 @@ export class BattleScene extends Phaser.Scene {
   private startAt = 0;
   /** Whether the opening pause (orders before the first shot) has been applied. */
   private armed = false;
+  /** Game speed: the battle is ticked this many times faster than real time. */
+  private speed = 1;
+  /** Crew in muster-roll order, for the crew hotkeys. */
+  private crewIds: number[] = [];
+  /** Moments that unlock first-battle hints. */
+  private wasHit = false;
+  private volleyLanded = false;
 
   constructor() {
     super('Battle');
@@ -60,6 +67,9 @@ export class BattleScene extends Phaser.Scene {
     this.armed = false;
     this.drag = null;
     this.swingers.clear();
+    this.speed = (this.registry.get('battle-speed') as number | undefined) ?? 1;
+    this.wasHit = false;
+    this.volleyLanded = false;
   }
 
   create(): void {
@@ -99,7 +109,9 @@ export class BattleScene extends Phaser.Scene {
         battle.aimGun(i, null);
         if (this.aimingGun === i) this.aimingGun = null;
       },
+      toggleSpeed: () => this.toggleSpeed(),
     });
+    this.crewIds = p.crew.map((c) => c.id);
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
     this.hud.addLog(`${e.def.name} bears down on you. Run out the guns!`, COLORS.gold);
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
@@ -115,8 +127,12 @@ export class BattleScene extends Phaser.Scene {
     this.introduce();
 
     const kb = this.input.keyboard!;
-    kb.on('keydown-SPACE', () => battle.togglePause());
+    kb.on('keydown-SPACE', () => {
+      battle.togglePause();
+      this.hud.hintDone('pause');
+    });
     kb.on('keydown-B', () => battle.setBroadside(!battle.player.broadside));
+    kb.on('keydown-F', () => this.toggleSpeed());
     kb.on('keydown-M', () => toggleMute(this.game));
     playLoop(this, 'waves', 0.25);
     stopLoop(this, 'creak');
@@ -124,11 +140,44 @@ export class BattleScene extends Phaser.Scene {
       this.aimingGun = null;
       this.selected.clear();
     });
+    // 1-4 picks a gun to aim; Shift+1-4 cycles its shot.
     ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((k, i) =>
-      kb.on(`keydown-${k}`, () => {
-        if (i < battle.player.guns.length) this.aimingGun = this.aimingGun === i ? null : i;
+      kb.on(`keydown-${k}`, (e: KeyboardEvent) => {
+        const gun = battle.player.guns[i];
+        if (!gun || battle.outcome) return;
+        if (e.shiftKey) {
+          battle.setShot(i, SHOT_TYPES[(SHOT_TYPES.indexOf(gun.shot) + 1) % SHOT_TYPES.length]);
+          this.hud.hintDone('shot');
+        } else this.aimingGun = this.aimingGun === i ? null : i;
       }),
     );
+    // Crew by the key shown on their row; Shift adds to the selection.
+    CREW_KEYS.forEach((k, i) =>
+      kb.on(`keydown-${k}`, (e: KeyboardEvent) => {
+        const id = this.crewIds[i];
+        if (id === undefined || battle.outcome || !battle.crewOf('player').some((c) => c.id === id)) return;
+        if (!e.shiftKey) this.selected.clear();
+        this.selected.add(id);
+      }),
+    );
+  }
+
+  private toggleSpeed(): void {
+    this.speed = this.speed > 1 ? 1 : 2;
+    this.registry.set('battle-speed', this.speed);
+  }
+
+  /** First-battle hints, offered in order as the moment for each comes; the HUD shows one at a time, once ever. */
+  private offerHints(): void {
+    const b = this.battle;
+    const hud = this.hud;
+    if (b.outcome || this.time.now < this.startAt) return;
+    if (b.player.guns.some((g) => g.target)) hud.hintDone('aim');
+    else hud.hint('aim');
+    hud.hint('crew');
+    if (!b.paused) hud.hint('pause');
+    if (this.wasHit) hud.hint('hands');
+    if (this.volleyLanded) hud.hint('shot');
   }
 
   private onPointerUp(ptr: Phaser.Input.Pointer): void {
@@ -189,14 +238,17 @@ export class BattleScene extends Phaser.Scene {
     // An order is given once: the selection is spent, so a later click on her deck (to aim) can't send a boarding party.
     const room = this.playerView.roomAt(ptr.x, ptr.y);
     if (room && this.selected.size) {
-      b.orderCrew(this.selected, room, 'player');
+      if (b.orderCrew(this.selected, room, 'player')) this.hud.hintDone('crew');
       for (const c of b.player.crew) if (this.selected.has(c.id) && c.waypoints.length) this.playerView.markMove(c.slot);
       this.selected.clear();
       return;
     }
     if (enemyRoom && this.selected.size) {
       const sent = b.orderCrew(this.selected, enemyRoom, 'enemy');
-      if (sent) this.selected.clear();
+      if (sent) {
+        this.selected.clear();
+        this.hud.hintDone('crew');
+      }
       else if (!b.canBoard()) this.hud.addLog('She is too fast to grapple. Cripple her sails or helm first.', COLORS.textWarn);
       return;
     }
@@ -216,13 +268,16 @@ export class BattleScene extends Phaser.Scene {
         this.armed = true;
         b.paused = true;
       }
-      b.update(delta / 1000);
+      b.update((delta / 1000) * this.speed);
     }
     for (const ev of b.drainEvents()) this.onEvent(ev);
+    this.offerHints();
 
     // Drop selections of crew who died.
-    const mine = new Set(b.crewOf('player').map((c) => c.id));
-    for (const id of this.selected) if (!mine.has(id)) this.selected.delete(id);
+    const alive = new Set<number>();
+    for (const c of b.crewOf('player')) alive.add(c.id);
+    for (const id of this.selected) if (!alive.has(id)) this.selected.delete(id);
+    for (const c of b.crewOf('enemy')) alive.add(c.id);
 
     const ptr = this.input.activePointer;
     const hoverEnemy = this.enemyView.roomAt(ptr.x, ptr.y);
@@ -239,7 +294,6 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.sea.draw(time);
-    const alive = new Set([...b.crewOf('player'), ...b.crewOf('enemy')].map((c) => c.id));
     this.playerView.draw(time, { selected: this.selected, hoverRoom: hoverPlayer, alive, targets: threats });
     this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null, alive });
     this.drawAmbient(time, delta / 1000);
@@ -249,6 +303,7 @@ export class BattleScene extends Phaser.Scene {
       selectedCrew: this.selected,
       aimingGun: this.aimingGun,
       hoverText: this.hoverText(hoverPlayer, hoverEnemy),
+      speed: this.speed,
     });
 
     if (b.outcome && !this.ending) this.endBattle();
@@ -344,9 +399,14 @@ export class BattleScene extends Phaser.Scene {
     if (room.fire > 0) parts.push('ON FIRE');
     if (room.breach) parts.push('HOLED');
     if (room.water > 5) parts.push(`water ${Math.round(room.water)}%`);
+    const boarding = !!enemyRoom && this.selected.size > 0 && this.aimingGun === null;
+    // What a ball would find in there (the boarding odds below say it for a party).
+    if (enemyRoom && !boarding) {
+      const hers = side.own().filter((c) => c.room === id).length;
+      parts.push(hers ? `${hers} of her crew` : 'no crew');
+    }
     if (enemyRoom && this.aimingGun !== null) parts.push('click to aim');
     if (playerRoom && this.selected.size) parts.push('click to send crew');
-    const boarding = !!enemyRoom && this.selected.size > 0 && this.aimingGun === null;
     if (boarding) {
       parts.push(b.canBoard() ? 'click to BOARD' : `too fast to grapple (her speed ${grappleSpeed(b.enemy).toFixed(0)}, yours ${grappleSpeed(b.player).toFixed(0)})`);
     }
@@ -444,6 +504,10 @@ export class BattleScene extends Phaser.Scene {
   private onEvent(ev: BattleEvent): void {
     const view = this.viewFor(ev.side);
     const ours = ev.side === 'player';
+    if (ev.t === 'hit' || ev.t === 'block' || ev.t === 'miss') {
+      if (ours) this.wasHit = true;
+      else this.volleyLanded = true;
+    }
     switch (ev.t) {
       case 'shot': {
         playSfx(this, 'cannon', ours ? 0.55 : 0.4);
@@ -468,10 +532,11 @@ export class BattleScene extends Phaser.Scene {
         this.burst(c.x + jx, c.y + jy, ev.shot === 'hot' ? COLORS.fire : 0xffb050, 22, 380);
         this.splinters(c.x + jx, c.y + jy);
         if (ev.hull > 0 || ev.shot === 'hot') view.addScorch(ev.room);
-        if (ev.hull > 0) {
-          view.addHullScar(ev.room);
-          this.floatText(c.x + jx, c.y + jy - 18, `-${ev.hull}`, ours ? '#ff6a5a' : '#ffd27a');
-        }
+        if (ev.hull > 0) view.addHullScar(ev.room);
+        // What the ball struck, so a hit on a station reads even when it does no hull damage.
+        const sys = view.ship.room(ev.room).def.system;
+        const struck = `${ev.hull > 0 ? `-${ev.hull}` : 'HIT'}${sys ? ` ${SYSTEM_NAMES[sys].toUpperCase()}` : ''}`;
+        this.floatText(c.x + jx, c.y - 22, struck, ours ? '#ff6a5a' : '#ffd27a');
         if (ours) this.cameras.main.shake(140, 0.004);
         const name = view.ship.room(ev.room).def.name;
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
@@ -497,14 +562,14 @@ export class BattleScene extends Phaser.Scene {
       case 'fire': {
         playSfx(this, 'fire', 0.9);
         const c = view.roomCenter(ev.room);
-        this.floatText(c.x, c.y - 10, 'FIRE!', '#ffb050');
+        this.floatText(c.x, c.y + 2, 'FIRE!', '#ffb050');
         if (ours) this.hud.addLog(`Fire in the ${view.ship.room(ev.room).def.name}!`);
         break;
       }
       case 'breach': {
         playSfx(this, 'breach', ours ? 0.55 : 0.35);
         const c = view.roomCenter(ev.room);
-        this.floatText(c.x, c.y + 10, 'HOLED!', '#7fc4ff');
+        this.floatText(c.x, c.y + 20, 'HOLED!', '#7fc4ff');
         if (ours) this.hud.addLog(`We're holed in the ${view.ship.room(ev.room).def.name}, she's taking water!`);
         break;
       }
