@@ -75,7 +75,7 @@ export function chartIcon(scene: Phaser.Scene, kind: NodeKind): string {
       break;
     }
     case 'event': {
-      ctx.font = 'bold 30px Georgia, serif';
+      ctx.font = 'bold 32px "STL Fell", Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('?', c, c + 2);
@@ -126,6 +126,178 @@ export function chartIcon(scene: Phaser.Scene, kind: NodeKind): string {
       break;
     }
   }
+  tex.refresh();
+  return key;
+}
+
+/** A compass rose in sepia and red ink: sixteen points, a ring of degrees, a fleur-de-lis to the north. 256px, painted once. */
+export function chartRose(scene: Phaser.Scene): string {
+  const key = 'charticon:rose';
+  if (scene.textures.exists(key)) return key;
+  const S = 256;
+  const c = S / 2;
+  const tex = scene.textures.createCanvas(key, S, S)!;
+  const ctx = tex.getContext();
+  const ink = '#2a170a';
+  const red = '#8a1c1c';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.2;
+  for (const r of [118, 112, 84]) {
+    ctx.beginPath();
+    ctx.arc(c, c, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // Degree ticks between the outer rings.
+  for (let i = 0; i < 128; i++) {
+    const a = (i / 128) * Math.PI * 2;
+    const r0 = i % 4 === 0 ? 104 : 109;
+    ctx.beginPath();
+    ctx.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0);
+    ctx.lineTo(c + Math.cos(a) * 112, c + Math.sin(a) * 112);
+    ctx.stroke();
+  }
+  // Points, longest last so they lie on top: each half shaded, half plain, like an engraved rose.
+  const point = (a: number, len: number, wide: number, dark: string, light: string) => {
+    const tip = { x: c + Math.cos(a) * len, y: c + Math.sin(a) * len };
+    for (const [side, fill] of [
+      [-1, dark],
+      [1, light],
+    ] as const) {
+      const sa = a + (side * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.moveTo(c, c);
+      ctx.lineTo(c + Math.cos(sa) * wide, c + Math.sin(sa) * wide);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.stroke();
+    }
+  };
+  for (let i = 0; i < 16; i++) if (i % 2) point((i / 16) * Math.PI * 2 - Math.PI / 2, 66, 6, ink, '#efe2bf');
+  for (let i = 0; i < 8; i += 2) point((i / 8) * Math.PI * 2 - Math.PI / 4, 82, 9, red, '#efe2bf');
+  for (let i = 0; i < 4; i++) point((i / 4) * Math.PI * 2 - Math.PI / 2, 116, 13, ink, '#efe2bf');
+  ctx.fillStyle = '#efe2bf';
+  ctx.beginPath();
+  ctx.arc(c, c, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = red;
+  ctx.beginPath();
+  ctx.arc(c, c, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // A fleur-de-lis crowning the north point.
+  ctx.fillStyle = red;
+  ctx.beginPath();
+  ctx.moveTo(c, 0);
+  ctx.quadraticCurveTo(c + 7, 6, c, 14);
+  ctx.quadraticCurveTo(c - 7, 6, c, 0);
+  ctx.fill();
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(c, 13);
+    ctx.quadraticCurveTo(c + s * 12, 2, c + s * 9, 12);
+    ctx.quadraticCurveTo(c + s * 6, 14, c, 15);
+    ctx.fill();
+  }
+  tex.refresh();
+  return key;
+}
+
+/** A sea serpent rising from the waves in three coils, drawn in ink. 220x120, painted once. */
+export function chartSerpent(scene: Phaser.Scene): string {
+  const key = 'charticon:serpent';
+  if (scene.textures.exists(key)) return key;
+  const W = 220;
+  const H = 120;
+  const tex = scene.textures.createCanvas(key, W, H)!;
+  const ctx = tex.getContext();
+  const ink = '#2a170a';
+  const sea = 92;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // The coils: arches out of the water, back shaded, belly pale, with scale marks across.
+  const coils: [number, number, number][] = [
+    [62, 22, 30],
+    [112, 20, 34],
+    [158, 15, 26],
+  ];
+  for (const [x, r, h] of coils) {
+    ctx.beginPath();
+    ctx.moveTo(x - r, sea);
+    ctx.bezierCurveTo(x - r, sea - h * 1.3, x + r, sea - h * 1.3, x + r, sea);
+    ctx.lineTo(x + r - 9, sea);
+    ctx.bezierCurveTo(x + r - 9, sea - h * 0.9, x - r + 9, sea - h * 0.9, x - r + 9, sea);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(70,52,30,0.55)';
+    ctx.fill();
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.lineWidth = 0.8;
+    for (let t = 0.12; t < 0.9; t += 0.1) {
+      const a = Math.PI * (1 - t);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * (r - 8), sea - Math.sin(a) * h * 0.72);
+      ctx.lineTo(x + Math.cos(a) * r, sea - Math.sin(a) * h * 0.98);
+      ctx.stroke();
+    }
+  }
+  // The tail fin, flicking up at the far end.
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(184, sea);
+  ctx.quadraticCurveTo(196, sea - 14, 206, sea - 30);
+  ctx.quadraticCurveTo(200, sea - 14, 214, sea - 22);
+  ctx.quadraticCurveTo(204, sea - 6, 190, sea);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(70,52,30,0.55)';
+  ctx.fill();
+  ctx.stroke();
+  // The neck and head, jaws open, rearing at the left.
+  ctx.beginPath();
+  ctx.moveTo(40, sea);
+  ctx.bezierCurveTo(30, sea - 40, 14, sea - 52, 26, sea - 70);
+  ctx.lineTo(10, sea - 74);
+  ctx.lineTo(28, sea - 78);
+  ctx.bezierCurveTo(44, sea - 82, 52, sea - 66, 50, sea - 50);
+  ctx.bezierCurveTo(48, sea - 30, 56, sea - 12, 52, sea);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(70,52,30,0.55)';
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(26, sea - 70);
+  ctx.lineTo(4, sea - 62);
+  ctx.lineTo(22, sea - 64);
+  ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.beginPath();
+  ctx.arc(34, sea - 74, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // A crest of spines down the neck.
+  for (let i = 0; i < 5; i++) {
+    const y = sea - 72 + i * 11;
+    const x = 44 + i * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 9, y + 2);
+    ctx.lineTo(x + 2, y + 7);
+    ctx.stroke();
+  }
+  // Waves where it breaks the surface.
+  ctx.lineWidth = 1.2;
+  for (let row = 0; row < 3; row++) {
+    ctx.beginPath();
+    for (let x = 8 + row * 10; x < W - 8 - row * 6; x += 2) {
+      const y = sea + 4 + row * 8 + Math.sin(x / 7 + row) * 2;
+      if (x === 8 + row * 10) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.globalAlpha = 0.8 - row * 0.25;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
   tex.refresh();
   return key;
 }

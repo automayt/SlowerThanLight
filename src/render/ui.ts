@@ -371,10 +371,13 @@ export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: n
 }
 
 /** A brass frame and a soft shadow for a painting or a card: the panel's rim without its fill. */
-export function frame(scene: Phaser.Scene, x: number, y: number, w: number, h: number, depth = 0): Phaser.GameObjects.GameObject[] {
-  const shadow = scene.add.rectangle(x + 4, y + 6, w, h, 0x000000, 0.4).setOrigin(0).setDepth(depth - 0.001);
-  if (!painted(scene)) return [shadow, scene.add.rectangle(x, y, w, h).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge).setDepth(depth)];
-  return [shadow, scene.add.nineslice(x, y, 'ui:frame', undefined, w, h, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE).setOrigin(0).setDepth(depth)];
+export function frame(scene: Phaser.Scene, x: number, y: number, w: number, h: number, depth = 0, shadow = true): Phaser.GameObjects.GameObject[] {
+  const parts: Phaser.GameObjects.GameObject[] = [];
+  // The shadow goes under whatever is framed, so make the frame after the picture.
+  if (shadow) parts.push(scene.add.rectangle(x + 4, y + 6, w, h, 0x000000, 0.4).setOrigin(0).setDepth(depth - 0.01));
+  if (!painted(scene)) parts.push(scene.add.rectangle(x, y, w, h).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge).setDepth(depth));
+  else parts.push(scene.add.nineslice(x, y, 'ui:frame', undefined, w, h, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE).setOrigin(0).setDepth(depth));
+  return parts;
 }
 
 /** An ornamental rule: two tapering brass arms from a diamond. Static: draw it once. */
