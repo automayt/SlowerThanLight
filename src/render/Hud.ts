@@ -238,8 +238,10 @@ export class Hud {
       const c = mine.find((x) => x.id === id);
       if (!c) {
         row.bg.setAlpha(0.35).disableInteractive();
-        row.name.setAlpha(0.4);
-        row.task.setText('lost');
+        row.name.setAlpha(0.45);
+        row.task.setText('fallen');
+        // Struck through in red, like a name crossed off the muster roll.
+        g.lineStyle(1.5, 0xc0201a, 0.9).lineBetween(row.name.x - 2, row.name.y + 8, row.name.x + row.name.width + 2, row.name.y + 8);
         return;
       }
       row.bg.setStrokeStyle(state.selectedCrew.has(id) ? 2 : 1, state.selectedCrew.has(id) ? COLORS.select : COLORS.panelEdge);
