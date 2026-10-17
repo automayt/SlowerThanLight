@@ -1,4 +1,4 @@
-"""finish_music.py in.flac out.ogg [--start S] [--end E] [--lufs L] [--xf X] [--kbps K] [--mono]
+"""finish_music.py in.flac out.ogg [--start S] [--end E] [--lufs L] [--xf X] [--kbps K] [--mono] [--flatten DB]
 
 Turns a generated music pass into a seamless loop bed for the music director (see finish_title.py for the title shanty):
 - keeps the stretch [start, end] (seconds; skip a bad intro or a glitch),
@@ -24,6 +24,7 @@ ap.add_argument("--kbps", type=int, default=96)
 ap.add_argument("--maxkb", type=int, default=1400)
 ap.add_argument("--mono", action="store_true")
 ap.add_argument("--peak", type=float, default=-1.5)
+ap.add_argument("--flatten", type=float, default=0.0, help="even out slow level swells by up to this many dB")
 a = ap.parse_args()
 
 y, sr = sf.read(a.src, always_2d=True)
@@ -65,6 +66,22 @@ body = y[s0:bt].copy()
 tail = y[bt:bt + xf]
 ang = np.linspace(0, np.pi / 2, xf)[:, None]
 body[:xf] = body[:xf] * np.sin(ang) + tail * np.cos(ang)
+
+if a.flatten > 0:
+    # Even out slow swells (a pass that builds up would otherwise step down in level at the seam): 1 s block RMS,
+    # smoothed over a window that wraps around the loop, turned into a gain of at most +-flatten dB.
+    blk = sr
+    nb = len(body) // blk
+    r = np.sqrt((body[: nb * blk].mean(1).reshape(nb, blk) ** 2).mean(1) + 1e-12)
+    k = 4  # 9 s window
+    pad_r = np.concatenate([r[-k:], r, r[:k]])
+    sm = np.convolve(np.log(pad_r), np.ones(2 * k + 1) / (2 * k + 1), "same")[k:-k]
+    gdb = np.clip(20 / np.log(10) * (sm.mean() - sm), -a.flatten, a.flatten)
+    centres = (np.arange(nb) + 0.5) * blk
+    x = np.arange(len(body))
+    g = np.interp(x, np.concatenate([[centres[-1] - nb * blk], centres, [centres[0] + nb * blk]]),
+                  np.concatenate([[gdb[-1]], gdb, [gdb[0]]]))
+    body = body * (10 ** (g / 20))[:, None]
 
 tmp = tempfile.mkdtemp()
 w1 = os.path.join(tmp, "a.wav"); w2 = os.path.join(tmp, "b.wav")
