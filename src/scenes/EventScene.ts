@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { playLoop } from '../render/sound';
 import { placeArt } from '../render/art';
-import { currentRun, RunBar } from '../render/RunBar';
+import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
@@ -13,14 +13,6 @@ const Y = 88;
 const W = SCREEN.w - 80;
 const H = SCREEN.h - Y - 16;
 const ART = { x: X + 28, y: Y + 76, w: 640, h: 360 };
-
-/** The crew's hunger on the jump just made, if it has not yet been shown in an event or port. */
-export function freshHunger(scene: Phaser.Scene, run: Run): string {
-  const jump = `${run.sector}:${run.jumps}`;
-  if (!run.hungerNote || scene.registry.get('hunger-shown') === jump) return '';
-  scene.registry.set('hunger-shown', jump);
-  return run.hungerNote;
-}
 
 /** A text event: read the situation, make a choice, live with the result. */
 export class EventScene extends Phaser.Scene {
