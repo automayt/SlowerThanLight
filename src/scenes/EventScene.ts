@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { playLoop } from '../render/sound';
 import { placeArt } from '../render/art';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
-import { Button, panel, Sea } from '../render/ui';
+import { CAPS_FONT, COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
+import { Button, divider, frame, gild, goldText, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
 import { loadArtOnDemand } from './PreloadScene';
 import { recordDiscovery, saveRun } from './save';
@@ -46,10 +46,17 @@ export class EventScene extends Phaser.Scene {
     recordDiscovery(ev.id);
 
     panel(this, X, Y, W, H);
-    this.add.text(SCREEN.w / 2, Y + 18, ev.title, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
-    const rarity = ev.rarity === 'legendary' ? 'LEGENDARY' : ev.rarity === 'rare' ? 'RARE' : '';
-    if (rarity) this.add.text(X + W - 24, Y + 20, rarity, textStyle(12, ev.rarity === 'legendary' ? '#ffb347' : '#8fc7ff', { fontStyle: 'bold' })).setOrigin(1, 0);
-    const art = placeArt(this, `event-${ev.id}`, ART.x, ART.y, ART.w, ART.h);
+    const title = goldText(this, SCREEN.w / 2, Y + 14, ev.title, 36).setOrigin(0.5, 0);
+    divider(this, SCREEN.w / 2, title.y + title.height + 4, Math.max(260, title.width + 120));
+    const rarity = ev.rarity === 'legendary' ? 'Legendary' : ev.rarity === 'rare' ? 'Rare' : '';
+    if (rarity) this.add.text(X + W - 26, Y + 22, `✦ ${rarity} ✦`, { fontFamily: CAPS_FONT, fontSize: '17px', color: ev.rarity === 'legendary' ? '#ffb347' : '#8fc7ff' }).setOrigin(1, 0);
+    const art = placeArt(this, `event-${ev.id}`, ART.x, ART.y, ART.w, ART.h, false);
+    if (art) {
+      frame(this, ART.x - 4, ART.y - 4, ART.w + 8, ART.h + 8);
+      // A caption under the picture, as in a bound log.
+      const caption = `${run.sectorDef.name}  ·  leg ${run.legs.sailed} of ${run.legs.total}`;
+      this.add.text(ART.x + ART.w / 2, ART.y + ART.h + 14, caption, { fontFamily: TITLE_FONT, fontSize: '17px', color: COLORS.textDim, fontStyle: 'italic' }).setOrigin(0.5, 0);
+    }
     this.tx = art ? ART.x + ART.w + 32 : X + 120;
     this.tw = art ? X + W - this.tx - 28 : W - 240;
 
@@ -60,7 +67,7 @@ export class EventScene extends Phaser.Scene {
       const note = this.add.text(this.tx, top, `⚠ ${hunger}`, textStyle(15, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: this.tw }, lineSpacing: 3 }));
       top += note.height + 14;
     }
-    const body = this.add.text(this.tx, top, run.eventText(), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
+    let body = this.tale(run.eventText(), this.tx, top, this.tw, 17, 5);
 
     // Each choice wraps to the column, with its warnings on a smaller second line, and the button grows to fit.
     const choices = ev.choices.map((choice, i) => {
@@ -83,8 +90,11 @@ export class EventScene extends Phaser.Scene {
     const gap = 10;
     const total = choices.reduce((n, c) => n + c.h + gap, -gap);
     // Long tales give up a little type size before the choices are pushed out of the panel.
-    if (body.y + body.height + 28 + total > Y + H - 16) body.setFontSize(15).setLineSpacing(3);
-    this.choicesY = body.y + body.height + Math.max(12, Math.min(28, Y + H - 16 - total - body.y - body.height));
+    if (body.bottom + 28 + total > Y + H - 16) {
+      body.parts.forEach((o) => o.destroy());
+      body = this.tale(run.eventText(), this.tx, top, this.tw, 15, 3);
+    }
+    this.choicesY = body.bottom + Math.max(12, Math.min(28, Y + H - 16 - total - body.bottom));
 
     let cy = this.choicesY;
     choices.forEach(({ blocked, text, hint, h }, i) => {
@@ -104,6 +114,33 @@ export class EventScene extends Phaser.Scene {
     ev.choices.forEach((_, i) => this.input.keyboard!.once(`keydown-${keys[i]}`, () => this.choiceButtons.length && run.canChoose(i) && this.choose(i)));
   }
 
+  /**
+   * The tale, set like a page of a book: its first letter a gilt drop cap two lines deep, the opening lines wrapped
+   * beside it, the rest at full measure below. Tales that open with a quotation mark go without.
+   */
+  private tale(text: string, x: number, y: number, w: number, size: number, spacing: number): { parts: Phaser.GameObjects.Text[]; bottom: number } {
+    const style = (width: number) => textStyle(size, COLORS.text, { wordWrap: { width }, lineSpacing: spacing });
+    if (!/^[A-Z]/.test(text)) {
+      const t = this.add.text(x, y, text, style(w));
+      return { parts: [t], bottom: t.y + t.height };
+    }
+    const cap = gild(this.add.text(x - 2, y - size * 0.32, text[0], { fontFamily: TITLE_FONT, fontSize: `${Math.round(size * 3.3)}px`, color: COLORS.gold, stroke: '#1a0e05', strokeThickness: 3 }));
+    const indent = cap.width + 6;
+    const rest = text.slice(1);
+    const head = this.add.text(x + indent, y, rest, style(w - indent));
+    const lines = head.getWrappedText();
+    if (lines.length <= 2) return { parts: [cap, head], bottom: Math.max(head.y + head.height, cap.y + cap.height) };
+    // Cut the text after the second wrapped line: find where those lines end in the original.
+    let at = 0;
+    for (const line of lines.slice(0, 2)) {
+      const found = rest.indexOf(line.trim(), at);
+      if (found >= 0) at = found + line.trim().length;
+    }
+    head.setText(rest.slice(0, at));
+    const tail = this.add.text(x, head.y + head.height + spacing, rest.slice(at).replace(/^[ \t]*\n?/, ''), style(w));
+    return { parts: [cap, head, tail], bottom: tail.y + tail.height };
+  }
+
   private choose(index: number): void {
     const run = this.run;
     if (!this.choiceButtons.length || !run.canChoose(index)) return;
@@ -112,7 +149,8 @@ export class EventScene extends Phaser.Scene {
     for (const b of this.choiceButtons) b.destroy();
     this.choiceButtons = [];
 
-    const said = this.add.text(this.tx, this.choicesY, result.effect.text, textStyle(17, COLORS.gold, { wordWrap: { width: this.tw }, lineSpacing: 5, fontStyle: 'italic' }));
+    divider(this, this.tx + this.tw / 2, this.choicesY - 4, Math.min(240, this.tw), COLORS.brass, 0.6);
+    const said = this.add.text(this.tx, this.choicesY + 12, result.effect.text, textStyle(17, COLORS.gold, { wordWrap: { width: this.tw }, lineSpacing: 5, fontStyle: 'italic' }));
     if (result.changes.length) {
       this.add.text(this.tx, said.y + said.height + 18, result.changes.join('\n'), textStyle(15, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 4 }));
     }

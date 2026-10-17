@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { placeBackdrop } from '../render/art';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
-import { Button, panel, Sea } from '../render/ui';
+import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
+import { Button, divider, goldText, panel, Sea } from '../render/ui';
 import { playLoop, playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
 import { FITTINGS } from '../data/fittings';
@@ -65,17 +65,19 @@ export class PortScene extends Phaser.Scene {
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
 
     const painted = placeBackdrop(this, 'port', SCREEN.w, SCREEN.h, 0);
-    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.9 : 0.92);
-    this.add.text(SCREEN.w / 2, TOP + 8, name, { fontFamily: TITLE_FONT, fontSize: '34px', color: COLORS.gold }).setOrigin(0.5, 0);
+    // The harbour shows faintly through the panel.
+    panel(this, 24, TOP, SCREEN.w - 48, SCREEN.h - TOP - 12).setFillStyle(COLORS.panel, painted ? 0.84 : 0.92);
+    const title = goldText(this, SCREEN.w / 2, TOP + 6, name, 38).setOrigin(0.5, 0);
+    for (const s of [-1, 1]) divider(this, SCREEN.w / 2 + s * (title.width / 2 + 80), title.y + title.height / 2 + 2, 100);
     this.add
-      .text(SCREEN.w / 2, TOP + 52, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
+      .text(SCREEN.w / 2, TOP + 54, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
     // Hunger on the way in, tucked in the corner beside the port's name.
     const hunger = freshHunger(this, run);
     if (hunger) this.add.text(COLS[0].x, TOP + 10, `⚠ ${hunger}`, textStyle(13, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 }));
     for (const c of COLS) {
-      this.add.text(c.x, COL_Y - 30, c.title.toUpperCase(), textStyle(14, COLORS.gold, { fontStyle: 'bold' }));
-      this.add.rectangle(c.x, COL_Y - 8, c.w, 1, COLORS.panelEdge).setOrigin(0);
+      this.add.text(c.x, COL_Y - 31, c.title, { fontFamily: CAPS_FONT, fontSize: '20px', color: COLORS.gold }).setShadow(0, 1, '#000000', 3, false, true);
+      this.add.rectangle(c.x, COL_Y - 6, c.w, 1, COLORS.brass, 0.45).setOrigin(0);
     }
 
     this.note = this.add.text(SCREEN.w / 2, SCREEN.h - 92, '', textStyle(15, COLORS.textGood, { fontStyle: 'italic' })).setOrigin(0.5, 0);
@@ -171,7 +173,7 @@ export class PortScene extends Phaser.Scene {
     y += ROW + 10;
 
     // Chandler: victuals and fittings.
-    this.dyn.push(this.add.text(x, y - 6, 'CHANDLER', textStyle(12, COLORS.gold, { fontStyle: 'bold' })));
+    this.dyn.push(this.add.text(x, y - 10, 'Chandler', { fontFamily: CAPS_FONT, fontSize: '17px', color: COLORS.gold }));
     y += 12;
     const room = run.maxProvisions - run.provisions;
     const lot = Math.min(5, room);

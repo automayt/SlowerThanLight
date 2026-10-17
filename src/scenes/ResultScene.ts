@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { placeArt } from '../render/art';
 import { currentRun } from '../render/RunBar';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
-import { Button, panel, Sea } from '../render/ui';
+import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
+import { Button, coin, divider, frame, gild, goldText, panel, Sea } from '../render/ui';
 import { playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
 import { MAX_GUNS } from '../sim/Run';
@@ -29,15 +29,16 @@ export class ResultScene extends Phaser.Scene {
     const cx = SCREEN.w / 2;
 
     panel(this, BOX.x, BOX.y, BOX.w, BOX.h);
-    this.add
-      .text(cx, BOX.y + 18, o.title, { fontFamily: TITLE_FONT, fontSize: '44px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 5 })
-      .setOrigin(0.5, 0);
+    const title = goldText(this, cx, BOX.y + 12, o.title, 46).setOrigin(0.5, 0);
+    if (!o.won) gild(title, ['#ffc2a8', '#ef6a4c', '#b8321e', '#7a1408']);
+    divider(this, cx, title.y + title.height + 4, Math.max(280, title.width + 140));
 
     // Left: the painting of her (or of your ruin), and what happened, in a column that flows down.
     const lx = BOX.x + 30;
     const top = BOX.y + 86;
     const art = !o.won && (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') ? 'defeat' : battle.enemy.def.id === 'frigate' ? 'blockade' : `enemy-${battle.enemy.def.id}`;
-    const painted = placeArt(this, art, lx, top, ART.w, ART.h);
+    const painted = placeArt(this, art, lx, top, ART.w, ART.h, false);
+    if (painted) frame(this, lx - 4, top - 4, ART.w + 8, ART.h + 8);
     let y = top + (painted ? ART.h + 14 : 0);
     const story = this.add.text(lx, y, o.text, textStyle(16, COLORS.text, { wordWrap: { width: ART.w }, lineSpacing: 3 }));
     y += story.height + 10;
@@ -49,14 +50,31 @@ export class ResultScene extends Phaser.Scene {
     // Right: the plunder counted out, then the tally.
     const rx = lx + ART.w + 40;
     const rw = BOX.x + BOX.w - 30 - rx;
-    this.add.text(rx, top, 'PLUNDER', { fontFamily: TITLE_FONT, fontSize: '15px', color: COLORS.gold, fontStyle: 'bold' });
-    const purse = this.add.text(rx, top + 20, report.plunder > 0 ? '+0 gold' : '—', { fontFamily: TITLE_FONT, fontSize: '36px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 });
+    this.add.text(rx, top - 4, 'Plunder', { fontFamily: CAPS_FONT, fontSize: '20px', color: COLORS.gold });
+    const chest = coin(this, rx + 18, top + 41, 34);
+    const purse = this.add.text(rx + 44, top + 20, report.plunder > 0 ? '+0 gold' : '—', textStyle(32, COLORS.gold, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }));
     if (report.plunder > 0) {
       const count = { n: 0 };
       this.tweens.add({ targets: count, n: report.plunder, duration: 900, delay: 300, ease: 'Cubic.easeOut', onUpdate: () => purse.setText(`+${Math.round(count.n)} gold`) });
       this.time.delayedCall(350, () => playSfx(this, 'coins', 0.55));
+      // A shower of coins tumbling into the purse as it is counted.
+      for (let i = 0; i < Math.min(14, 4 + Math.round(report.plunder / 10)); i++) {
+        const c = coin(this, chest.x + Phaser.Math.Between(-30, 160), chest.y - Phaser.Math.Between(60, 110), 18).setAlpha(0).setAngle(Phaser.Math.Between(0, 360));
+        this.tweens.add({
+          targets: c,
+          x: chest.x + Phaser.Math.Between(-6, 6),
+          y: chest.y,
+          alpha: { from: 1, to: 0.2 },
+          angle: c.angle + Phaser.Math.Between(180, 540),
+          delay: 300 + i * 55,
+          duration: 520,
+          ease: 'Quad.easeIn',
+          onComplete: () => c.destroy(),
+        });
+      }
+      this.tweens.add({ targets: chest, scale: chest.scale * 1.18, yoyo: true, duration: 120, delay: 820, repeat: 2 });
     }
-    this.add.text(rx, top + 66, `Purse ${run.gold} gold  ·  Provisions ${run.provisions}/${run.maxProvisions}`, textStyle(13, COLORS.textDim));
+    this.add.text(rx, top + 70, `Purse ${run.gold} gold  ·  Provisions ${run.provisions}/${run.maxProvisions}`, textStyle(13, COLORS.textDim));
 
     const us = battle.stats.player;
     const them = battle.stats.enemy;
@@ -75,9 +93,11 @@ export class ResultScene extends Phaser.Scene {
       ['Time', `${mins}:${secs}`, ''],
     ];
     const ty = top + 104;
-    this.add.rectangle(rx, ty - 8, rw, 1, COLORS.panelEdge).setOrigin(0);
+    this.add.rectangle(rx, ty - 8, rw, 1, COLORS.brass, 0.5).setOrigin(0);
     rows.forEach(([label, a, b], i) => {
       const ry = ty + i * 28;
+      // Every other row lightly banded, like a ruled ledger.
+      if (i % 2 === 0 && i > 0) this.add.rectangle(rx - 6, ry - 4, rw + 12, 28, 0xffffff, 0.04).setOrigin(0);
       const style = textStyle(15, i === 0 ? COLORS.gold : COLORS.text, { fontStyle: i === 0 ? 'bold' : 'normal' });
       this.add.text(rx, ry, label, textStyle(15, COLORS.textDim));
       this.add.text(rx + rw - 150, ry, a, style).setOrigin(0.5, 0);
@@ -122,7 +142,7 @@ export class ResultScene extends Phaser.Scene {
         : []),
     ];
     if (!picks.length) return;
-    const label = this.add.text(x, y, 'SPOILS: pick one (or press its number)', { fontFamily: TITLE_FONT, fontSize: '15px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: w } });
+    const label = this.add.text(x, y - 4, 'Spoils: pick one (or press its number)', { fontFamily: CAPS_FONT, fontSize: '18px', color: COLORS.gold, wordWrap: { width: w } });
     const buttons: Button[] = [];
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
     picks.forEach(([text, take], i) => {

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Run } from '../sim/Run';
 import { SYSTEM_NAMES, type SystemId } from '../sim/types';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
-import { drawBar, panel, SoundButton } from './ui';
+import { coin, drawBar, panel, SoundButton } from './ui';
 
 /** The scene that holds the current voyage. Scenes share it through the game registry. */
 export function currentRun(scene: Phaser.Scene): Run {
@@ -47,12 +47,16 @@ export class RunBar {
 
   constructor(scene: Phaser.Scene, private readonly run: Run) {
     panel(scene, 8, 8, SCREEN.w - 16, 62).setDepth(5);
-    scene.add.text(20, 14, run.def.name, { fontFamily: TITLE_FONT, fontSize: '22px', color: COLORS.gold }).setDepth(6);
+    // Brass rules between the groups.
+    const rules = scene.add.graphics().setDepth(6).lineStyle(1, COLORS.brass, 0.3);
+    for (const x of [218, 548, 1012]) rules.lineBetween(x, 18, x, 60);
+    scene.add.text(20, 14, run.def.name, { fontFamily: TITLE_FONT, fontSize: '23px', color: COLORS.gold }).setDepth(6).setShadow(0, 1, '#000000', 3, false, true);
     scene.add.text(20, 44, run.def.className, textStyle(13, COLORS.textDim, { fontStyle: 'italic' })).setDepth(6);
     this.g = scene.add.graphics().setDepth(6);
     this.hull = scene.add.text(230, 14, '', textStyle(14)).setDepth(6);
     this.crew = scene.add.text(230, 44, '', textStyle(13)).setDepth(6);
-    this.gold = scene.add.text(560, 14, '', textStyle(18, COLORS.gold, { fontStyle: 'bold' })).setDepth(6);
+    coin(scene, 572, 25, 20).setDepth(6);
+    this.gold = scene.add.text(588, 14, '', textStyle(18, COLORS.gold, { fontStyle: 'bold' })).setDepth(6);
     this.damage = scene.add.text(560, 44, '', textStyle(12, COLORS.textWarn)).setDepth(6);
     this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(6);
     this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(6);

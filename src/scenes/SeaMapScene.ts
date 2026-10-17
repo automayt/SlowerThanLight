@@ -1,12 +1,11 @@
 import Phaser from 'phaser';
 import { placeArt } from '../render/art';
-import { playLoop, stopLoop } from '../render/sound';
+import { playLoop, playSfx, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
-import { Button, panel, Sea } from '../render/ui';
+import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import { type Run } from '../sim/Run';
-import { SECTORS } from '../data/voyage';
-import { chartIcon, chartShip, SEAL } from '../render/chartIcons';
+import { chartIcon, chartRose, chartSerpent, chartShip, SEAL } from '../render/chartIcons';
 import type { NodeKind, SeaNode } from '../sim/SeaChart';
 import { saveRun } from './save';
 
@@ -29,6 +28,42 @@ const NUMBER_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
 /** The chart's key, in the footer's right-hand corner. */
 const LEGEND_W = 430;
 const LEGEND_H = 60;
+
+interface SectorLook {
+  /** Multiplied into the parchment. */
+  tint: number;
+  islands: number;
+  serpent: boolean;
+  /** A wash over the paper: the King's Waters are colder and darker. */
+  wash: number;
+  washAlpha: number;
+}
+
+/** Each stretch of sea is drawn by a different hand: bright islands to windward, ochre and serpents on the Main, cold grey near the King. */
+const SECTOR_LOOKS: SectorLook[] = [
+  { tint: 0xfff8ea, islands: 6, serpent: false, wash: 0x000000, washAlpha: 0 },
+  { tint: 0xf4d6a0, islands: 4, serpent: true, wash: 0x5a2a08, washAlpha: 0.06 },
+  { tint: 0xd6d4cc, islands: 3, serpent: true, wash: 0x0e2234, washAlpha: 0.12 },
+];
+
+/** A small seeded random, so a chart's ornaments stay put when you come back to it. */
+function seeded(seed: number): () => number {
+  let a = seed | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** How far a point lies from a segment. */
+function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const t = Phaser.Math.Clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
 
 const KIND_STYLE: Record<NodeKind, { color: number; label: string; glyph: string }> = {
   start: { color: 0x9fb1bf, label: 'Tortuga', glyph: '⚓' },
@@ -62,6 +97,8 @@ export class SeaMapScene extends Phaser.Scene {
   private ship!: Phaser.GameObjects.Image;
   /** Enter-key shortcut of the open dialog, removed when the dialog closes. */
   private dialogEnter: (() => void) | null = null;
+  /** The passage being inked in, while the ship sails it. */
+  private sailing: { from: { x: number; y: number }; to: { x: number; y: number }; t: number; ink: Phaser.GameObjects.Graphics } | null = null;
 
   constructor() {
     super('SeaMap');
@@ -71,6 +108,11 @@ export class SeaMapScene extends Phaser.Scene {
     this.hover = null;
     this.dialog = [];
     this.badges = [];
+    this.sailing = null;
+  }
+
+  preload(): void {
+    if (!this.textures.exists('art:chart-paper')) this.load.image('art:chart-paper', 'art/chart-paper.jpg');
   }
 
   create(): void {
@@ -86,8 +128,11 @@ export class SeaMapScene extends Phaser.Scene {
     this.g = this.add.graphics().setDepth(0.5);
     this.bar = new RunBar(this, run);
 
-    const sectorLine = `${run.sectorDef.name}  ·  Sector ${run.sector + 1} of ${SECTORS.length}`;
-    this.add.text(SCREEN.w / 2, 76, sectorLine, { fontFamily: TITLE_FONT, fontSize: '24px', color: COLORS.gold, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5, 0);
+    // The sector's name between two brass flourishes (the strip above says which of the three it is).
+    const heading = goldText(this, SCREEN.w / 2, 72, run.sectorDef.name, 28).setOrigin(0.5, 0);
+    const mid = heading.y + heading.height / 2 + 1;
+    divider(this, SCREEN.w / 2 - heading.width / 2 - 80, mid, 130);
+    divider(this, SCREEN.w / 2 + heading.width / 2 + 80, mid, 130);
 
     for (const node of run.chart.nodes) {
       const { x, y } = this.pos(node);
@@ -250,26 +295,154 @@ export class SeaMapScene extends Phaser.Scene {
     }
   }
 
-  /** Lay out the aged chart, with a dark frame, on the table of the sea. */
+  /**
+   * Lay out the chart on the table of the sea: blank parchment tinted for the sector, then everything the
+   * cartographer inked on it, drawn once: rhumb lines, a compass rose, islands, wave marks, perhaps a serpent,
+   * and a neatline with a scale of degrees. All of it keeps clear of the seals and the routes.
+   */
   private parchment(): void {
     const { x, y, w, h } = CHART;
-    this.add.rectangle(x + 6, y + 8, w, h, 0x000000, 0.45).setOrigin(0).setDepth(-1);
-    if (this.textures.exists('art:tex-chart')) {
-      const img = this.add.image(x + w / 2, y + h / 2, 'art:tex-chart').setDepth(-1);
+    const look = SECTOR_LOOKS[Math.min(this.run.sector, SECTOR_LOOKS.length - 1)];
+    this.add.rectangle(x + 6, y + 9, w, h, 0x000000, 0.45).setOrigin(0).setDepth(-1);
+    const paper = this.textures.exists('art:chart-paper') ? 'art:chart-paper' : this.textures.exists('art:tex-chart') ? 'art:tex-chart' : null;
+    if (paper) {
+      const img = this.add.image(x + w / 2, y + h / 2, paper).setDepth(-1).setTint(look.tint);
       const scale = Math.max(w / img.width, h / img.height);
       img.setScale(scale);
       img.setCrop((img.width - w / scale) / 2, (img.height - h / scale) / 2, w / scale, h / scale);
     } else {
       this.add.rectangle(x, y, w, h, 0xd9c49a).setOrigin(0).setDepth(-1);
     }
+    if (look.washAlpha) this.add.rectangle(x, y, w, h, look.wash, look.washAlpha).setOrigin(0).setDepth(-1);
+
+    const rand = seeded(this.run.seed * 7 + this.run.sector * 101 + 3);
+    const nodes = this.run.chart.nodes.map((n) => this.pos(n));
+    const routes = this.run.chart.nodes.flatMap((n) => n.next.map((id) => [this.pos(n), this.pos(this.run.chart.nodes[id])]));
+    const placed: { x: number; y: number; r: number }[] = [];
+    /** Room for an ornament of radius r: off the seals (and their names below), the routes and each other. */
+    const clearance = (px: number, py: number) =>
+      Math.min(
+        px - x - 14,
+        x + w - 14 - px,
+        py - y - 14,
+        y + h - 14 - py,
+        ...nodes.map((n) => Math.min(Math.hypot(px - n.x, py - n.y), Math.hypot(px - n.x, py - n.y - NODE_R - 14)) - NODE_R - 26),
+        ...routes.map(([a, b]) => segDist(px, py, a.x, a.y, b.x, b.y) - 6),
+        ...placed.map((o) => Math.hypot(px - o.x, py - o.y) - o.r - 10),
+      );
+    /** The roomiest of a few hundred random spots, or null if none has room for r. */
+    const spot = (r: number, tries = 260, padX = 20) => {
+      let best: { x: number; y: number; room: number } | null = null;
+      for (let i = 0; i < tries; i++) {
+        const px = x + padX + rand() * (w - 2 * padX);
+        const py = y + 20 + rand() * (h - 40);
+        const room = clearance(px, py);
+        if (room >= r && (!best || room > best.room)) best = { x: px, y: py, room };
+      }
+      return best;
+    };
+
+    const g = this.add.graphics().setDepth(-1);
+    // The rose sits in the roomiest water; rhumb lines run out from it and from a second, unmarked centre.
+    const rose = spot(60, 400) ?? { x: x + 140, y: y + h - 120, room: 60 };
+    const roseR = Phaser.Math.Clamp(rose.room, 60, 92);
+    const centres = [rose, { x: x + w - (rose.x - x), y: y + h - (rose.y - y) }];
+    for (const c of centres) {
+      for (let i = 0; i < 32; i++) {
+        const a = (i / 32) * Math.PI * 2;
+        const dx = Math.cos(a);
+        const dy = Math.sin(a);
+        // Out to the edge of the chart.
+        const t = Math.min(dx > 0 ? (x + w - 10 - c.x) / dx : dx < 0 ? (x + 10 - c.x) / dx : Infinity, dy > 0 ? (y + h - 10 - c.y) / dy : dy < 0 ? (y + 10 - c.y) / dy : Infinity);
+        g.lineStyle(i % 4 === 0 ? 1.1 : 0.8, i % 8 === 4 ? RED_INK : INK, i % 4 === 0 ? 0.2 : 0.11);
+        g.lineBetween(c.x, c.y, c.x + dx * t, c.y + dy * t);
+      }
+    }
+    this.add.image(rose.x, rose.y, chartRose(this)).setDepth(-1).setScale((roseR * 2) / 256).setAlpha(0.8).setAngle(-8 + rand() * 16);
+    placed.push({ x: rose.x, y: rose.y, r: roseR });
+
+    // Islands: an inked coast, ringed by the fading water-lines of an engraved chart, with a few hills.
+    for (let i = 0; i < look.islands; i++) {
+      const r = 16 + rand() * 20;
+      const at = spot(r * 1.5 + 4);
+      if (!at) break;
+      this.island(g, at.x, at.y, Math.min(r, (at.room - 4) / 1.5), rand);
+      placed.push({ x: at.x, y: at.y, r: r * 1.5 });
+    }
+    if (look.serpent) {
+      // It is wider than it is tall: keep its ends off the neatline.
+      // Smaller, if the chart is crowded.
+      for (const scale of [1, 0.72]) {
+        const at = spot(62 * scale, 400, 126 * scale);
+        if (!at) continue;
+        this.add.image(at.x, at.y, chartSerpent(this)).setDepth(-1).setAlpha(0.75).setScale(scale).setFlipX(rand() < 0.5);
+        placed.push({ x: at.x, y: at.y, r: 62 * scale });
+        break;
+      }
+    }
+    // Wave marks scattered over the open water.
+    for (let i = 0; i < 26; i++) {
+      const at = spot(12, 30);
+      if (!at) continue;
+      g.lineStyle(1, INK, 0.28);
+      for (const dx of [-5, 5]) {
+        g.beginPath();
+        g.arc(at.x + dx, at.y, 5, Math.PI * 1.15, Math.PI * 1.85);
+        g.strokePath();
+      }
+      placed.push({ x: at.x, y: at.y, r: 8 });
+    }
+
     // Darkened, worn edges.
     const edge = this.add.graphics().setDepth(-1);
     for (let i = 0; i < 10; i++) {
-      edge.lineStyle(3, 0x3a2410, 0.06 + i * 0.012);
+      edge.lineStyle(3, 0x3a2410, 0.05 + i * 0.01);
       edge.strokeRect(x + i * 2, y + i * 2, w - i * 4, h - i * 4);
     }
-    edge.lineStyle(3, 0x2a170a, 1).strokeRect(x, y, w, h);
-    edge.lineStyle(1, 0x2a170a, 0.6).strokeRect(x + 7, y + 7, w - 14, h - 14);
+    // The neatline: a double rule with a scale of degrees between, in alternate black and white.
+    edge.lineStyle(1.5, INK, 0.9).strokeRect(x + 6, y + 6, w - 12, h - 12);
+    edge.lineStyle(1, INK, 0.9).strokeRect(x + 11, y + 11, w - 22, h - 22);
+    edge.fillStyle(INK, 0.75);
+    const step = 24;
+    for (let px = x + 11, k = 0; px < x + w - 11; px += step, k++) {
+      if (k % 2) continue;
+      const len = Math.min(step, x + w - 11 - px);
+      edge.fillRect(px, y + 6, len, 5).fillRect(px, y + h - 11, len, 5);
+    }
+    for (let py = y + 11, k = 0; py < y + h - 11; py += step, k++) {
+      if (k % 2) continue;
+      const len = Math.min(step, y + h - 11 - py);
+      edge.fillRect(x + 6, py, 5, len).fillRect(x + w - 11, py, 5, len);
+    }
+    frame(this, x - 4, y - 4, w + 8, h + 8, -0.9, false);
+  }
+
+  private island(g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number, rand: () => number): void {
+    const k = [rand() * 6.3, rand() * 6.3, rand() * 6.3];
+    const stretch = 0.7 + rand() * 0.6;
+    const coast = Array.from({ length: 36 }, (_, i) => {
+      const a = (i / 36) * Math.PI * 2;
+      const rr = r * (1 + 0.24 * Math.sin(2 * a + k[0]) + 0.13 * Math.sin(3 * a + k[1]) + 0.08 * Math.sin(5 * a + k[2]));
+      return new Phaser.Math.Vector2(cx + Math.cos(a) * rr * stretch * 1.25, cy + Math.sin(a) * rr / stretch * 0.8);
+    });
+    const ring = (s: number) => coast.map((p) => new Phaser.Math.Vector2(cx + (p.x - cx) * s + 0, cy + (p.y - cy) * s));
+    for (const [s, alpha] of [
+      [1.5, 0.1],
+      [1.32, 0.16],
+      [1.16, 0.26],
+    ]) g.lineStyle(1, INK, alpha).strokePoints(ring(s), true, true);
+    g.fillStyle(0xc9a86a, 0.45).fillPoints(coast, true, true);
+    g.lineStyle(1.6, INK, 0.75).strokePoints(coast, true, true);
+    // Hills, as little inked arches.
+    const hills = 1 + Math.floor(r / 12);
+    g.lineStyle(1, INK, 0.5);
+    for (let i = 0; i < hills; i++) {
+      const hx = cx + (rand() - 0.5) * r * 0.8;
+      const hy = cy + (rand() - 0.5) * r * 0.4;
+      g.beginPath();
+      g.arc(hx, hy + 4, 5, Math.PI * 1.1, Math.PI * 1.9);
+      g.strokePath();
+    }
   }
 
   /** The most recent thing that happened, for the footer. */
@@ -289,10 +462,37 @@ export class SeaMapScene extends Phaser.Scene {
     return LEFT + ((RIGHT - LEFT) * col) / (this.run.chart.columns - 1);
   }
 
+  /** Ink the passage in red as the ship sails it, then make the jump. */
   private sailTo(node: SeaNode): void {
-    if (this.dialog.length) return;
+    if (this.dialog.length || this.sailing) return;
+    if (!this.run.reachable().some((n) => n.id === node.id)) return;
+    this.hover = null;
+    this.updateTip();
+    const sail = (this.sailing = { from: this.pos(this.run.node), to: this.pos(node), t: 0, ink: this.add.graphics().setDepth(0.4) });
+    playSfx(this, 'click', 0.2);
+    this.tweens.add({
+      targets: sail,
+      t: 1,
+      duration: 560,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const { from, to, t, ink } = sail;
+        const x = from.x + (to.x - from.x) * t;
+        const y = from.y + (to.y - from.y) * t;
+        ink.clear().lineStyle(3.5, RED_INK, 0.9).lineBetween(from.x, from.y, x, y);
+        // A wet blot at the pen's tip.
+        ink.fillStyle(RED_INK, 0.9).fillCircle(x, y, 2.6);
+      },
+      onComplete: () => {
+        sail.ink.destroy();
+        this.sailing = null;
+        this.arrive(node);
+      },
+    });
+  }
+
+  private arrive(node: SeaNode): void {
     const run = this.run;
-    if (!run.reachable().some((n) => n.id === node.id)) return;
     const enc = run.jump(node.id);
     saveRun(run);
     this.registry.set('chart-note', '');
@@ -323,7 +523,7 @@ export class SeaMapScene extends Phaser.Scene {
     const w = 520;
     // Measure the words first; the box (and the painting, if it must) is sized around them.
     const body = this.add.text(0, 0, text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
-    const head = 66;
+    const head = 76;
     const foot = 20 + 42 + 18;
     const room = SCREEN.h - 24 - head - body.height - foot;
     // A 16:9 painting, shrunk to fit beside long text, or left out if it would be a postage stamp.
@@ -334,11 +534,11 @@ export class SeaMapScene extends Phaser.Scene {
     const y = Math.max(12, (SCREEN.h - h) / 2);
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(30).setInteractive();
     const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
-    const t = this.add.text(SCREEN.w / 2, y + 18, title, { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(32);
-    this.dialog = [shade, box, t];
+    const t = goldText(this, SCREEN.w / 2, y + 16, title, 32).setOrigin(0.5, 0).setDepth(32);
+    this.dialog = [shade, box, t, divider(this, SCREEN.w / 2, y + 62, 220).setDepth(32)];
     if (pic && art) {
-      const img = placeArt(this, art, x + (w - pic.w) / 2, y + 62, pic.w, pic.h, false);
-      if (img) this.dialog.push(img.setDepth(32));
+      const img = placeArt(this, art, x + (w - pic.w) / 2, y + 72, pic.w, pic.h, false);
+      if (img) this.dialog.push(img.setDepth(32), ...frame(this, x + (w - pic.w) / 2 - 3, y + 69, pic.w + 6, pic.h + 6, 32.1, false));
     }
     body.setPosition(x + 26, y + head + (pic ? pic.h + 12 : 0));
     this.dialog.push(body);
@@ -400,9 +600,11 @@ export class SeaMapScene extends Phaser.Scene {
       g.lineStyle(2, INK, 1).strokeCircle(x, y, r + 10);
     }
 
-    // Your ship, riding just above her node.
-    const here = this.pos(run.node);
+    // Your ship, riding just above her node, or on her way along the passage being inked.
+    const sail = this.sailing;
+    const here = sail ? { x: sail.from.x + (sail.to.x - sail.from.x) * sail.t, y: sail.from.y + (sail.to.y - sail.from.y) * sail.t } : this.pos(run.node);
     this.ship.setPosition(here.x, here.y - NODE_R - 2 + Math.sin(time / 300) * 2).setAngle(Math.sin(time / 520) * 3);
+    this.ship.setFlipX(!!sail && sail.to.x < sail.from.x);
     this.bar.refresh();
   }
 
