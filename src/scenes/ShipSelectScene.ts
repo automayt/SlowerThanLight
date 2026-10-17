@@ -79,29 +79,35 @@ export class ShipSelectScene extends Phaser.Scene {
       this.views.push(view);
       if (this.views.length === 1) this.events.once('shutdown', () => this.views.forEach((v) => v.destroy()));
 
-      this.add.text(x + 14, CARD_Y + 266, def.description, textStyle(13, COLORS.text, { wordWrap: { width: CARD_W - 28 }, lineSpacing: 2 }));
+      const desc = this.add.text(x + 14, CARD_Y + 266, def.description, textStyle(13, COLORS.text, { wordWrap: { width: CARD_W - 28 }, lineSpacing: 2 }));
 
       const guns = def.guns.map((g) => weapon(g.weapon).name).join(', ');
       const evasion = def.speedBonus > 0 ? `+${def.speedBonus}%` : def.speedBonus < 0 ? `${def.speedBonus}%` : '±0%';
       const melee = def.melee && def.melee !== 1 ? `   Boarders ×${def.melee}` : '';
       const stats = [`Hull ${def.hull}   Deckhands ${def.hands}   Crew ${def.crew.length}${melee}`, `Hull speed ${evasion} evasion`, `Guns: ${guns}`];
-      this.add.text(x + 14, CARD_Y + 370, stats.join('\n'), textStyle(12, COLORS.text, { lineSpacing: 4, wordWrap: { width: CARD_W - 28 } }));
+      // Stats and system pips flow down from the description, keeping clear of the card's foot.
+      const statY = Math.max(CARD_Y + 360, desc.y + desc.height + 10);
+      const statText = this.add.text(x + 14, statY, stats.join('\n'), textStyle(13, COLORS.text, { lineSpacing: 3, wordWrap: { width: CARD_W - 28 } }));
+      const pipY = Math.min(CARD_Y + CARD_H - 72, Math.max(CARD_Y + 460, statText.y + statText.height + 12));
 
       SYSTEMS.forEach((id, j) => {
         const sx = x + 14 + (j % 3) * Math.floor((CARD_W - 28) / 3);
-        const sy = CARD_Y + 464 + Math.floor(j / 3) * 30;
-        this.add.text(sx, sy, SYSTEM_NAMES[id], textStyle(11, COLORS.textDim));
-        card.setData(`pip-${id}`, { x: sx, y: sy + 15, max: def.systems[id] ?? 0 });
+        const sy = pipY + Math.floor(j / 3) * 32;
+        this.add.text(sx, sy, SYSTEM_NAMES[id], textStyle(12, COLORS.textDim));
+        card.setData(`pip-${id}`, { x: sx, y: sy + 18, max: def.systems[id] ?? 0 });
       });
 
       const locked = lockReason(def);
       if (locked) {
-        this.add.rectangle(x, CARD_Y, CARD_W, CARD_H, 0x05090d, 0.86).setOrigin(0).setDepth(3);
-        this.add.text(x + CARD_W / 2, CARD_Y + CARD_H / 2 - 30, 'LOCKED', { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.textWarn }).setOrigin(0.5).setDepth(4);
-        this.add
-          .text(x + CARD_W / 2, CARD_Y + CARD_H / 2 + 10, locked, textStyle(14, COLORS.text, { align: 'center', wordWrap: { width: CARD_W - 40 }, backgroundColor: '#05090d', padding: { x: 8, y: 4 } }))
+        // Above everything on the card, the ship's crew, rigging and badges included.
+        this.add.rectangle(x, CARD_Y, CARD_W, CARD_H, 0x05090d, 0.86).setOrigin(0).setDepth(20);
+        this.add.text(x + CARD_W / 2, CARD_Y + CARD_H / 2 - 30, 'LOCKED', { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.textWarn, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(22);
+        const why = this.add
+          .text(x + CARD_W / 2, CARD_Y + CARD_H / 2 + 14, locked, textStyle(14, COLORS.text, { align: 'center', wordWrap: { width: CARD_W - 40 } }))
           .setOrigin(0.5, 0)
-          .setDepth(4);
+          .setDepth(22);
+        // A solid band across the card behind the unlock condition, so the description does not show through.
+        this.add.rectangle(x + 2, why.y - 8, CARD_W - 4, why.height + 16, 0x05090d, 1).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge, 0.8).setDepth(21);
       }
     });
 
@@ -111,7 +117,7 @@ export class ShipSelectScene extends Phaser.Scene {
     const levels = Object.keys(DIFFICULTY) as Difficulty[];
     const saved = this.registry.get('difficulty') as Difficulty | undefined;
     this.difficulty = saved && levels.includes(saved) ? saved : 'normal';
-    const blurb = this.add.text(SCREEN.w - MARGIN, CARD_Y + CARD_H + 62, '', textStyle(12, COLORS.textDim)).setOrigin(1, 0);
+    const blurb = this.add.text(SCREEN.w - MARGIN, CARD_Y + CARD_H + 62, '', textStyle(13, COLORS.textDim)).setOrigin(1, 0);
     const label = () => `Difficulty: ${DIFFICULTY[this.difficulty].label}`;
     const diff = new Button(this, SCREEN.w - MARGIN - 200, CARD_Y + CARD_H + 24, 200, 32, label(), () => {
       this.difficulty = levels[(levels.indexOf(this.difficulty) + 1) % levels.length];
