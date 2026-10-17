@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { placeBackdrop } from '../render/art';
-import { currentRun, RunBar } from '../render/RunBar';
+import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import { playLoop, playSfx } from '../render/sound';
@@ -56,6 +56,9 @@ export class PortScene extends Phaser.Scene {
     this.add
       .text(SCREEN.w / 2, TOP + 52, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
+    // Hunger on the way in, tucked in the corner beside the port's name.
+    const hunger = freshHunger(this, run);
+    if (hunger) this.add.text(COLS[0].x, TOP + 10, `⚠ ${hunger}`, textStyle(13, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 }));
     for (const c of COLS) {
       this.add.text(c.x, COL_Y - 30, c.title.toUpperCase(), textStyle(14, COLORS.gold, { fontStyle: 'bold' }));
       this.add.rectangle(c.x, COL_Y - 8, c.w, 1, COLORS.panelEdge).setOrigin(0);
@@ -104,7 +107,11 @@ export class PortScene extends Phaser.Scene {
     if (tip) {
       b.bg.on('pointerover', () => this.say(tip));
     }
-    if (detail) this.dyn.push(this.add.text(x + w + 10, y + 12, detail, textStyle(12, COLORS.textDim)));
+    if (detail) {
+      // Beside the button, centred on it and wrapped to what is left of its column.
+      const col = COLS.find((c) => c.x === x) ?? COLS[0];
+      this.dyn.push(this.add.text(x + w + 10, y + 20, detail, textStyle(12, COLORS.textDim, { wordWrap: { width: col.x + col.w - (x + w + 10) } })).setOrigin(0, 0.5));
+    }
   }
 
   private harbour(): void {
@@ -152,13 +159,14 @@ export class PortScene extends Phaser.Scene {
       y += ROW;
     }
     if (run.fittings.length) {
-      this.dyn.push(this.add.text(x, y + 2, `Aboard: ${run.fittings.map((id) => fittingName(id)).join(', ')}`, textStyle(11, COLORS.textDim, { wordWrap: { width: COLS[0].w } })));
-      y += 22;
+      const aboard = this.add.text(x, y + 2, `Aboard: ${run.fittings.map((id) => fittingName(id)).join(', ')}`, textStyle(12, COLORS.textDim, { wordWrap: { width: COLS[0].w } }));
+      this.dyn.push(aboard);
+      y += aboard.height + 8;
     }
     y += 6;
     // Crew, compactly: the chandler's goods push the roster down the column.
     const roster = run.condition.crew.map((c) => `${c.name} ${c.hp}%${badges(c) ? ` ${badges(c)}` : ''}`).join('  ·  ');
-    this.dyn.push(this.add.text(x, y, roster, textStyle(11, COLORS.text, { lineSpacing: 2, wordWrap: { width: COLS[0].w } })));
+    this.dyn.push(this.add.text(x, y, roster, textStyle(12, COLORS.text, { lineSpacing: 2, wordWrap: { width: COLS[0].w } })));
   }
 
   private shipwright(): void {
@@ -190,15 +198,15 @@ export class PortScene extends Phaser.Scene {
     run.fit.guns.forEach((g, i) => {
       const wdef = weapon(g.weapon);
       this.dyn.push(this.add.text(x, y + 4, wdef.name, textStyle(13)));
-      this.dyn.push(this.add.text(x, y + 22, gunStats(wdef), textStyle(11, COLORS.textDim)));
+      this.dyn.push(this.add.text(x, y + 22, gunStats(wdef), textStyle(12, COLORS.textDim)));
       const b = new Button(this, x + w - 110, y + 2, 110, 34, `Sell ${run.sellPrice(i)}g`, () => {
         if (run.sellGun(i)) this.say(`The ${wdef.name} is sold.`);
         this.later();
-      }, { size: 13 }).setEnabled(run.canSellGun(i));
+      }, { size: 14 }).setEnabled(run.canSellGun(i));
       this.dyn.push(b);
       y += 44;
     });
-    this.dyn.push(this.add.text(x, y + 4, `Gun Deck ${run.fit.systems.guns ?? 0}: that many hands can work guns at once.`, textStyle(11, COLORS.textDim, { wordWrap: { width: w } })));
+    this.dyn.push(this.add.text(x, y + 4, `Gun Deck ${run.fit.systems.guns ?? 0}: that many hands can work guns at once.`, textStyle(12, COLORS.textDim, { wordWrap: { width: w } })));
   }
 
   update(time: number): void {

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { playLoop } from '../render/sound';
 import { placeArt } from '../render/art';
-import { currentRun, RunBar } from '../render/RunBar';
+import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, panel, Sea } from '../render/ui';
 import type { Run } from '../sim/Run';
@@ -53,20 +53,46 @@ export class EventScene extends Phaser.Scene {
     this.tx = art ? ART.x + ART.w + 32 : X + 120;
     this.tw = art ? X + W - this.tx - 28 : W - 240;
 
-    const body = this.add.text(this.tx, ART.y, run.eventText(), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
-    this.choicesY = body.y + body.height + 28;
+    // Hunger on the way here comes first, once: a chained event that follows does not repeat it.
+    let top = ART.y;
+    const hunger = freshHunger(this, run);
+    if (hunger) {
+      const note = this.add.text(this.tx, top, `⚠ ${hunger}`, textStyle(15, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: this.tw }, lineSpacing: 3 }));
+      top += note.height + 14;
+    }
+    const body = this.add.text(this.tx, top, run.eventText(), textStyle(17, COLORS.text, { wordWrap: { width: this.tw }, lineSpacing: 5 }));
 
-    ev.choices.forEach((choice, i) => {
+    // Each choice wraps to the column, with its warnings on a smaller second line, and the button grows to fit.
+    const choices = ev.choices.map((choice, i) => {
       const blocked = run.choiceBlocker(i);
       // Warn about hidden costs: time lost to the fleet, or a fight.
       const time = choice.outcomes.filter((o) => (o.effect.navy ?? 0) > 0).length;
       const fight = choice.outcomes.some((o) => o.effect.battle);
       const hints = [time ? (time === choice.outcomes.length ? 'costs time' : 'may cost time') : '', fight ? 'may mean a fight' : ''].filter(Boolean);
-      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}${hints.length ? `  · ${hints.join(', ')}` : ''}`;
-      const b = new Button(this, this.tx, this.choicesY + i * 54, this.tw, 44, label, () => this.choose(i), { size: 16 });
-      b.label.setOrigin(0, 0.5).setX(16);
+      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
+      const text = this.add.text(0, 0, label, textStyle(16, COLORS.text, { wordWrap: { width: this.tw - 32 }, lineSpacing: 2 }));
+      const hint = hints.length ? this.add.text(0, 0, `· ${hints.join(', ')}`, textStyle(13, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: this.tw - 32 } })) : null;
+      const h = Math.max(44, 10 + text.height + (hint ? 2 + hint.height : 0) + 10);
+      return { blocked, text, hint, h };
+    });
+    const gap = 10;
+    const total = choices.reduce((n, c) => n + c.h + gap, -gap);
+    // Long tales give up a little type size before the choices are pushed out of the panel.
+    if (body.y + body.height + 28 + total > Y + H - 16) body.setFontSize(15).setLineSpacing(3);
+    this.choicesY = body.y + body.height + Math.max(12, Math.min(28, Y + H - 16 - total - body.y - body.height));
+
+    let cy = this.choicesY;
+    choices.forEach(({ blocked, text, hint, h }, i) => {
+      const b = new Button(this, this.tx, cy, this.tw, h, '', () => this.choose(i));
+      // The button's own one-line label is unused; the wrapped lines ride in the button instead.
+      b.label.setVisible(false);
+      text.setPosition(16, 10);
+      hint?.setPosition(16, 10 + text.height + 2);
+      b.add(hint ? [text, hint] : [text]);
       b.setEnabled(!blocked);
+      if (blocked) [text, hint].forEach((o) => o?.setAlpha(0.4));
       this.choiceButtons.push(b);
+      cy += h + gap;
     });
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR'];
     ev.choices.forEach((_, i) => this.input.keyboard!.once(`keydown-${keys[i]}`, () => this.choiceButtons.length && run.canChoose(i) && this.choose(i)));

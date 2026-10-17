@@ -15,13 +15,21 @@ export function setRun(scene: Phaser.Scene, run: Run): void {
   scene.registry.set('run', run);
 }
 
+/** The crew's hunger on the jump just made, if it has not yet been shown in an event or port. */
+export function freshHunger(scene: Phaser.Scene, run: Run): string {
+  const jump = `${run.sector}:${run.jumps}`;
+  if (!run.hungerNote || scene.registry.get('hunger-shown') === jump) return '';
+  scene.registry.set('hunger-shown', jump);
+  return run.hungerNote;
+}
+
 /** How far astern the fleet is, in plain words. */
 export function fleetDistance(run: Run): string {
   const gap = run.node.col - run.navy;
   if (gap <= 0) return 'The Navy fleet is upon you!';
   const halves = Math.round(gap * 2) / 2;
   const n = `${Math.floor(halves) || ''}${halves % 1 ? '½' : ''}`;
-  return `Navy fleet ${n} jump${halves === 1 ? '' : 's'} astern`;
+  return `Navy fleet ${n} jump${halves > 1 ? 's' : ''} astern`;
 }
 
 /** Top-of-screen status strip for chart, event and port scenes: hull, crew, gold, damage and the fleet. */

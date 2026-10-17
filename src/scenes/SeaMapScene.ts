@@ -20,6 +20,8 @@ const CHART = { x: 30, y: 106, w: SCREEN.w - 60, h: 482 };
 /** Ink colours on parchment. */
 const INK = 0x2a170a;
 const RED_INK = 0x8a1c1c;
+/** Clean parchment, for labels and notes laid over the chart. */
+const PAPER = 0xefe2bf;
 
 const KIND_STYLE: Record<NodeKind, { color: number; label: string; glyph: string }> = {
   start: { color: 0x9fb1bf, label: 'Tortuga', glyph: '⚓' },
@@ -39,6 +41,7 @@ export class SeaMapScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
   private hover: SeaNode | null = null;
   private tip!: Phaser.GameObjects.Text;
+  private tipBg!: Phaser.GameObjects.Graphics;
   private dialog: Phaser.GameObjects.GameObject[] = [];
   private ship!: Phaser.GameObjects.Image;
   /** Enter-key shortcut of the open dialog, removed when the dialog closes. */
@@ -73,7 +76,17 @@ export class SeaMapScene extends Phaser.Scene {
       this.add.image(x, y, chartIcon(this, node.kind)).setScale(node.kind === 'boss' || node.kind === 'exit' ? 0.62 : 0.5).setDepth(2);
       const label = node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
       const big = node.kind === 'boss' || node.kind === 'exit' ? 6 : 0;
-      this.add.text(x, y + NODE_R + big + 4, label, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#2a170a', fontStyle: 'italic' }).setOrigin(0.5, 0).setDepth(2);
+      // The name under the seal, on a scrap of clean parchment, kept inside the chart's frame.
+      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: '#2a170a', fontStyle: 'italic' }).setDepth(2);
+      const inset = 16;
+      name.setX(Phaser.Math.Clamp(x - name.width / 2, CHART.x + inset, CHART.x + CHART.w - inset - name.width));
+      this.add
+        .graphics()
+        .setDepth(1.9)
+        .fillStyle(PAPER, 0.82)
+        .fillRoundedRect(name.x - 5, name.y - 1, name.width + 10, name.height + 2, 6)
+        .lineStyle(1, INK, 0.3)
+        .strokeRoundedRect(name.x - 5, name.y - 1, name.width + 10, name.height + 2, 6);
       const hit = this.add.circle(x, y, NODE_R + 6, 0x000000, 0.001).setDepth(3);
       hit.setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => (this.hover = node));
@@ -81,19 +94,26 @@ export class SeaMapScene extends Phaser.Scene {
       hit.on('pointerdown', () => this.sailTo(node));
     }
 
-    panel(this, 8, SCREEN.h - 74, SCREEN.w - 16, 66);
-    this.add.text(20, SCREEN.h - 66, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 60 } }));
+    // Footer: the last thing that happened, then a hint, stacked by their measured heights.
     const hint =
       run.provisions <= 3
         ? `⚠ ${run.provisions === 0 ? 'No provisions left: every jump now costs the crew health' : `Only ${run.provisions} provisions left`}. Buy more in port, or take them from prizes.`
         : 'Click a highlighted node to sail on, or across to explore its neighbour (a jump and a day’s provisions). The red tide is the Navy: nodes it overruns become ambushes.';
-    this.add.text(20, SCREEN.h - 32, hint, textStyle(12, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim));
+    const words = this.add.text(20, 0, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 3 })).setDepth(6);
+    const help = this.add.text(20, 0, hint, textStyle(13, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 2 })).setDepth(6);
+    const footH = 8 + words.height + 4 + help.height + 8;
+    const footY = Math.max(CHART.y + CHART.h + 10, SCREEN.h - 8 - footH);
+    panel(this, 8, footY, SCREEN.w - 16, SCREEN.h - 8 - footY).setDepth(5);
+    words.setY(footY + 8);
+    help.setY(words.y + words.height + 4);
 
     this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
 
+    // The tooltip: a note in ink on a slip of parchment.
+    this.tipBg = this.add.graphics().setDepth(20).setVisible(false);
     this.tip = this.add
-      .text(0, 0, '', textStyle(13, COLORS.text, { backgroundColor: '#000000dd', padding: { x: 8, y: 5 }, wordWrap: { width: 280 } }))
-      .setDepth(20)
+      .text(0, 0, '', { fontFamily: TITLE_FONT, fontSize: '14px', color: '#2a170a', lineSpacing: 2, padding: { x: 10, y: 7 }, wordWrap: { width: 270 } })
+      .setDepth(21)
       .setVisible(false);
 
     if (run.encounter.kind === 'empty' && run.status === 'chart' && this.registry.get('fresh-jump')) {
@@ -172,20 +192,27 @@ export class SeaMapScene extends Phaser.Scene {
   }
 
   private showDialog(title: string, text: string, buttons: [string, () => void][], art?: string): void {
-    const pic = art && this.textures.exists(`art:${art}`) ? { w: 480, h: 270 } : null;
     const w = 520;
-    const h = 250 + (pic ? pic.h + 12 : 0);
+    // Measure the words first; the box (and the painting, if it must) is sized around them.
+    const body = this.add.text(0, 0, text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
+    const head = 66;
+    const foot = 20 + 42 + 18;
+    const room = SCREEN.h - 24 - head - body.height - foot;
+    // A 16:9 painting, shrunk to fit beside long text, or left out if it would be a postage stamp.
+    const picH = art && this.textures.exists(`art:${art}`) ? Math.min(270, room - 12) : 0;
+    const pic = picH >= 120 ? { w: Math.round(picH * (16 / 9)), h: picH } : null;
+    const h = head + (pic ? pic.h + 12 : 0) + body.height + foot;
     const x = (SCREEN.w - w) / 2;
-    const y = (SCREEN.h - h) / 2;
+    const y = Math.max(12, (SCREEN.h - h) / 2);
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(30).setInteractive();
-    const box = panel(this, x, y, w, h).setDepth(31);
+    const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
     const t = this.add.text(SCREEN.w / 2, y + 18, title, { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(32);
     this.dialog = [shade, box, t];
     if (pic && art) {
       const img = placeArt(this, art, x + (w - pic.w) / 2, y + 62, pic.w, pic.h, false);
       if (img) this.dialog.push(img.setDepth(32));
     }
-    const body = this.add.text(x + 26, y + 66 + (pic ? pic.h + 12 : 0), text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
+    body.setPosition(x + 26, y + head + (pic ? pic.h + 12 : 0));
     this.dialog.push(body);
     buttons.forEach(([label, fn], i) => {
       const bw = 220;
@@ -277,7 +304,8 @@ export class SeaMapScene extends Phaser.Scene {
       // A wax seal with a darker rim.
       g.fillStyle(0x000000, 0.25).fillCircle(x + 2, y + 3, r);
       g.fillStyle(overrun ? 0x5a2a20 : SEAL[n.kind], faded ? 0.5 : 1).fillCircle(x, y, r);
-      g.fillStyle(0xffffff, faded ? 0.04 : 0.12).fillCircle(x - r * 0.3, y - r * 0.3, r * 0.5);
+      // The pressed ring where the seal's stamp met the wax.
+      g.lineStyle(1.5, 0x000000, faded ? 0.12 : 0.28).strokeCircle(x, y, r * 0.8);
       g.lineStyle(2.5, INK, faded ? 0.5 : 0.95).strokeCircle(x, y, r);
       if (reach.has(n.id)) {
         const pulse = 4 + Math.sin(time / 200) * 2;
@@ -298,6 +326,7 @@ export class SeaMapScene extends Phaser.Scene {
     const n = this.hover;
     if (!n || this.dialog.length) {
       this.tip.setVisible(false);
+      this.tipBg.setVisible(false);
       return;
     }
     const run = this.run;
@@ -316,9 +345,37 @@ export class SeaMapScene extends Phaser.Scene {
     if (reachable && run.willBeOverrun(n)) lines.push('⚠ The fleet will overrun this before you get there: a Navy ambush.');
     else if (n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy) lines.push('Overrun by the Navy fleet.');
     if (!reachable && n.id !== run.nodeId) lines.push('(Not reachable from here)');
-    const { x, y } = this.pos(n);
     this.tip.setText(lines.join('\n'));
-    this.tip.setPosition(Math.min(x + 28, SCREEN.w - this.tip.width - 10), Math.max(80, y - this.tip.height - 10));
-    this.tip.setVisible(true);
+    const at = this.tipSpot(n, this.tip.width, this.tip.height);
+    this.tip.setPosition(at.x, at.y).setVisible(true);
+    this.tipBg
+      .clear()
+      .fillStyle(0x000000, 0.3)
+      .fillRoundedRect(at.x + 3, at.y + 4, this.tip.width, this.tip.height, 5)
+      .fillStyle(PAPER, 0.98)
+      .fillRoundedRect(at.x, at.y, this.tip.width, this.tip.height, 5)
+      .lineStyle(1.5, INK, 0.8)
+      .strokeRoundedRect(at.x, at.y, this.tip.width, this.tip.height, 5)
+      .setVisible(true);
+  }
+
+  /** Where the note for a node goes: beside, above or below it, wherever it hides the fewest other nodes. */
+  private tipSpot(n: SeaNode, w: number, h: number): { x: number; y: number } {
+    const { x, y } = this.pos(n);
+    const r = NODE_R + 10;
+    const spots = [
+      { x: x + r + 8, y: y - h / 2 },
+      { x: x - r - 8 - w, y: y - h / 2 },
+      { x: x - w / 2, y: y - r - 12 - h },
+      { x: x - w / 2, y: y + r + 26 },
+    ].map((p) => ({ x: Phaser.Math.Clamp(p.x, 10, SCREEN.w - w - 10), y: Phaser.Math.Clamp(p.y, CHART.y + 4, SCREEN.h - h - 10) }));
+    // Nodes (with their labels below) under the note; covering the hovered node itself is worst of all.
+    const covers = (p: { x: number; y: number }) =>
+      this.run.chart.nodes.reduce((count, m) => {
+        const q = this.pos(m);
+        const hit = q.x + 40 > p.x && q.x - 40 < p.x + w && q.y + NODE_R + 24 > p.y && q.y - NODE_R - 6 < p.y + h;
+        return count + (hit ? (m.id === n.id ? 10 : 1) : 0);
+      }, 0);
+    return spots.reduce((best, p) => (covers(p) < covers(best) ? p : best));
   }
 }

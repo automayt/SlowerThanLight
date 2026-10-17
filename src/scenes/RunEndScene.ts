@@ -23,16 +23,17 @@ export class RunEndScene extends Phaser.Scene {
     const won = run.status === 'won';
     placeBackdrop(this, won ? 'victory' : 'defeat', SCREEN.w, SCREEN.h, 0.25);
 
-    this.add.rectangle(cx - 340, 100, 680, 480, COLORS.panel, 0.93).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
-    this.add
-      .text(cx, 160, run.endingTitle || (won ? 'Free on the Open Sea!' : 'The Voyage Ends'), { fontFamily: TITLE_FONT, fontSize: '46px', color: won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 5 })
-      .setOrigin(0.5);
+    // Everything is measured first, then stacked and centred, so a long epilogue pushes the rest down.
+    const box = this.add.rectangle(cx - 340, 0, 680, 0, COLORS.panel, 0.93).setOrigin(0).setStrokeStyle(2, COLORS.panelEdge);
+    const title = this.add
+      .text(cx, 0, run.endingTitle || (won ? 'Free on the Open Sea!' : 'The Voyage Ends'), { fontFamily: TITLE_FONT, fontSize: '46px', color: won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 5, align: 'center', wordWrap: { width: 620 } })
+      .setOrigin(0.5, 0);
     const epilogue = run.endingTitle
       ? run.ending
       : won
       ? `HMS Relentless falls astern, and with her the last of the King's reach. ${run.def.name} sails west with ${run.gold} gold in her hold and a legend in her wake.`
       : `${run.ending} ${run.def.name} never saw the open ocean. Her story will be told in waterfront taverns, if it is told at all.`;
-    this.add.text(cx, 210, epilogue, textStyle(17, COLORS.text, { align: 'center', wordWrap: { width: 600 }, lineSpacing: 4 })).setOrigin(0.5, 0);
+    const story = this.add.text(cx, 0, epilogue, textStyle(17, COLORS.text, { align: 'center', wordWrap: { width: 600 }, lineSpacing: 4 })).setOrigin(0.5, 0);
 
     const rows: [string, string][] = [
       ['Ship', `${run.def.name} (${run.def.className})`],
@@ -42,15 +43,26 @@ export class RunEndScene extends Phaser.Scene {
       ['Gold in the hold', `${run.gold}`],
       ['Crew left', `${run.condition.crew.length}`],
     ];
-    rows.forEach(([label, value], i) => {
-      const y = 320 + i * 30;
+    const ROW_H = 30;
+    const pad = 28;
+    const height = pad + title.height + 14 + story.height + 24 + rows.length * ROW_H + 20 + 44 + pad;
+    let y = Math.max(12, (SCREEN.h - height) / 2);
+    box.setPosition(cx - 340, y).setSize(680, height);
+    y += pad;
+    title.setY(y);
+    y += title.height + 14;
+    story.setY(y);
+    y += story.height + 24;
+    rows.forEach(([label, value]) => {
       this.add.text(cx - 230, y, label, textStyle(16, COLORS.textDim));
       this.add.text(cx + 230, y, value, textStyle(16, COLORS.text)).setOrigin(1, 0);
+      y += ROW_H;
     });
+    y += 20;
 
     const again = () => this.scene.start('ShipSelect', { shipId: run.def.id });
-    new Button(this, cx - 250, 516, 230, 44, 'New Voyage', again, { size: 18 });
-    new Button(this, cx + 20, 516, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18 });
+    new Button(this, cx - 250, y, 230, 44, 'New Voyage', again, { size: 18 });
+    new Button(this, cx + 20, y, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18 });
     this.input.keyboard!.once('keydown-ENTER', again);
   }
 
