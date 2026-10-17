@@ -81,13 +81,18 @@ export class SeaMapScene extends Phaser.Scene {
       hit.on('pointerdown', () => this.sailTo(node));
     }
 
-    panel(this, 8, SCREEN.h - 74, SCREEN.w - 16, 66);
-    this.add.text(20, SCREEN.h - 66, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 60 } }));
+    // Footer: the last thing that happened, then a hint, stacked by their measured heights.
     const hint =
       run.provisions <= 3
         ? `⚠ ${run.provisions === 0 ? 'No provisions left: every jump now costs the crew health' : `Only ${run.provisions} provisions left`}. Buy more in port, or take them from prizes.`
         : 'Click a highlighted node to sail on, or across to explore its neighbour (a jump and a day’s provisions). The red tide is the Navy: nodes it overruns become ambushes.';
-    this.add.text(20, SCREEN.h - 32, hint, textStyle(12, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim));
+    const words = this.add.text(20, 0, this.lastWords(), textStyle(14, COLORS.text, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 3 })).setDepth(6);
+    const tip = this.add.text(20, 0, hint, textStyle(13, run.provisions <= 3 ? COLORS.textWarn : COLORS.textDim, { wordWrap: { width: SCREEN.w - 48 }, maxLines: 2 })).setDepth(6);
+    const footH = 8 + words.height + 4 + tip.height + 8;
+    const footY = Math.max(CHART.y + CHART.h + 10, SCREEN.h - 8 - footH);
+    panel(this, 8, footY, SCREEN.w - 16, SCREEN.h - 8 - footY).setDepth(5);
+    words.setY(footY + 8);
+    tip.setY(words.y + words.height + 4);
 
     this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
 
@@ -172,11 +177,18 @@ export class SeaMapScene extends Phaser.Scene {
   }
 
   private showDialog(title: string, text: string, buttons: [string, () => void][], art?: string): void {
-    const pic = art && this.textures.exists(`art:${art}`) ? { w: 480, h: 270 } : null;
     const w = 520;
-    const h = 250 + (pic ? pic.h + 12 : 0);
+    // Measure the words first; the box (and the painting, if it must) is sized around them.
+    const body = this.add.text(0, 0, text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
+    const head = 66;
+    const foot = 20 + 42 + 18;
+    const room = SCREEN.h - 24 - head - body.height - foot;
+    // A 16:9 painting, shrunk to fit beside long text, or left out if it would be a postage stamp.
+    const picH = art && this.textures.exists(`art:${art}`) ? Math.min(270, room - 12) : 0;
+    const pic = picH >= 120 ? { w: Math.round(picH * (16 / 9)), h: picH } : null;
+    const h = head + (pic ? pic.h + 12 : 0) + body.height + foot;
     const x = (SCREEN.w - w) / 2;
-    const y = (SCREEN.h - h) / 2;
+    const y = Math.max(12, (SCREEN.h - h) / 2);
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(30).setInteractive();
     const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
     const t = this.add.text(SCREEN.w / 2, y + 18, title, { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(32);
@@ -185,7 +197,7 @@ export class SeaMapScene extends Phaser.Scene {
       const img = placeArt(this, art, x + (w - pic.w) / 2, y + 62, pic.w, pic.h, false);
       if (img) this.dialog.push(img.setDepth(32));
     }
-    const body = this.add.text(x + 26, y + 66 + (pic ? pic.h + 12 : 0), text, textStyle(15, COLORS.text, { wordWrap: { width: w - 52 }, lineSpacing: 4 })).setDepth(32);
+    body.setPosition(x + 26, y + head + (pic ? pic.h + 12 : 0));
     this.dialog.push(body);
     buttons.forEach(([label, fn], i) => {
       const bw = 220;
