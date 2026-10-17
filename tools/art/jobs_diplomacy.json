@@ -1,0 +1,68 @@
+[
+  {
+    "name": "event-council",
+    "model": "flux",
+    "seed": 9301,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A council of rough pirate captains seated around a rum cask used as a table under a sailcloth awning on a white sandy cay, palm trees, several pirate sloops anchored in a turquoise lagoon behind them, captains in battered tricorn hats and long coats arguing and raising tankards, late afternoon golden light"
+  },
+  {
+    "name": "event-envoy",
+    "model": "flux",
+    "seed": 9302,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A Spanish grandee in black velvet coat with a white ruff collar and a sword standing in the stern of a small rowed pinnace flying a white flag of truce, approaching the side of a pirate brigantine on a calm sea, rowers in the boat, a distant Spanish galleon on the horizon, soft morning light"
+  },
+  {
+    "name": "event-compact",
+    "model": "flux",
+    "seed": 9303,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A plump merchant's agent in a powdered wig and fine brown coat standing on the deck of a pirate ship holding out a heavy purse of coins and a rolled strip of coloured bunting to a scarred pirate captain, the pirate crew looking on suspiciously, a merchant ship in the background, warm daylight"
+  },
+  {
+    "name": "event-bounty",
+    "model": "flux",
+    "seed": 9314,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A sleek fast two-masted schooner with raked masts and a British red ensign chasing on the horizon at dusk, seen from the stern rail of a pirate ship, a worried pirate captain looking back through a brass spyglass, ominous orange and purple sky, long shadows"
+  },
+  {
+    "name": "event-grudge",
+    "model": "flux",
+    "seed": 9305,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A battered pirate sloop with a plain blood red flag at the masthead bearing down under full sail, her crew massed at the rail waving cutlasses, seen from the deck of another ship, stormy grey sea and dark clouds, tense dramatic light"
+  },
+  {
+    "name": "event-truce",
+    "model": "flux",
+    "seed": 9316,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A French naval officer in a blue coat with gold lace and a plumed tricorn hat offering a quill pen and a sealed parchment treaty across a small table set on the quarterdeck of a frigate, several French corsair ships with white ensigns at anchor behind in a bay, bright clear sky"
+  }
+]
