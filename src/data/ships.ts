@@ -7,10 +7,10 @@ export const PLAYER_SHIPS: ShipDef[] = [
     name: 'The Wren',
     className: 'Sloop',
     description: 'A nimble sloop that dances out of the way of broadsides. Light guns, light hull, quick to slip away.',
-    hull: 20,
-    hands: 9,
+    hull: 22,
+    hands: 10,
     speedBonus: 10,
-    systems: { helm: 2, sails: 4, guns: 3, pumps: 2, surgeon: 1, bulwarks: 1 },
+    systems: { helm: 2, sails: 4, guns: 3, pumps: 2, surgeon: 1, bulwarks: 2 },
     rooms: [
       { id: 'helm', name: 'Quarterdeck', x: 0, y: 1, w: 2, h: 2, system: 'helm' },
       { id: 'surgeon', name: "Surgeon's Cabin", x: 2, y: 0, w: 2, h: 1, system: 'surgeon' },
