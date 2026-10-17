@@ -1,0 +1,92 @@
+[
+  {
+    "name": "event-starving",
+    "model": "flux",
+    "seed": 9101,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A battered open wooden longboat crammed with gaunt, sunburnt, ragged shipwreck survivors drifting on a flat glassy tropical sea, the men holding up their empty hands in silent appeal, a tattered petticoat tied to an oar as a flag, the bow of a sailing ship looming in the foreground, harsh midday glare"
+  },
+  {
+    "name": "event-starving_r1",
+    "model": "flux",
+    "seed": 9102,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "Seen from the deck of a sailing ship, a small crowded longboat of starving shipwrecked sailors in torn shirts drifts alongside on a calm turquoise sea, thin bearded men reaching up with outstretched hands, an oar raised with a white rag, pale hot sky"
+  },
+  {
+    "name": "event-victualler",
+    "model": "flux",
+    "seed": 9111,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A broad deep-laden three-masted Royal Navy victualling store ship riding low in the water, her deck stacked with barrels and casks of salt pork, biscuit and rum, a red ensign at her stern, wallowing slowly through a long swell, a single tiny escort sloop far away on the horizon, afternoon light, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "event-victualler_r1",
+    "model": "flux",
+    "seed": 9112,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A heavy slow merchant store ship with a fat round hull and three masts under plain sails, riding very low under a full cargo of barrels and crates lashed on deck, a red ensign, sailing alone through rolling grey-green sea, a tiny distant sail on the horizon, warm late light, broadside view"
+  },
+  {
+    "name": "event-banks",
+    "model": "flux",
+    "seed": 9121,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "Sailors leaning over the rail of a wooden sailing ship hauling up fish on hand lines, a big silver snapper flapping on deck in a bucket, the green shoal water below boiling with fish, seabirds wheeling and diving all around, bright sunny tropical sky, cheerful"
+  },
+  {
+    "name": "event-banks_r1",
+    "model": "flux",
+    "seed": 9122,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A sailing ship hove to over a patch of pale green shallow water teeming with leaping fish, flocks of white seabirds diving into the sea, sailors in striped shirts dangling fishing lines from the rail and the bowsprit, brilliant afternoon sunlight on the sea"
+  },
+  {
+    "name": "event-guarda_r2",
+    "model": "flux",
+    "seed": 9131,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A Spanish guarda costa coastguard schooner with two masts and a red and gold Spanish flag fires a single warning gun from her bow, a puff of white gunpowder smoke drifting over the water, a small white splash of the shot falling short in the foreground, green Caribbean sea, distant coastline, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "event-guarda_r3",
+    "model": "flux",
+    "seed": 9132,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A lean Spanish coastguard patrol schooner bearing down under full sail on a bright sea, a cloud of white smoke rolling from a gun port near her bow as she fires a warning shot, red and gold flag streaming, a low green island behind"
+  },
+  {
+    "name": "event-pardon_r2",
+    "model": "flux",
+    "seed": 9141,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "On the quarterdeck of a pirate ship a ragged pirate captain reads a royal proclamation, a large unrolled parchment sheet with a heavy red wax seal hanging from a ribbon, his crew crowded around listening, a small naval sloop flying a plain white flag of truce alongside, bright morning light"
+  },
+  {
+    "name": "event-pardon_r3",
+    "model": "flux",
+    "seed": 9142,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A naval officer in a blue coat standing in a rowing boat holds up an unrolled royal parchment with a red wax seal toward a pirate ship, a plain white flag of truce on the boat staff, pirates leaning over the rail above, calm blue sea"
+  }
+]

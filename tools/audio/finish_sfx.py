@@ -24,7 +24,7 @@ except Exception:
 SPEC = {
     "cannon": dict(dur=1.5, loop=False, rms=-14, kbps=80, maxkb=60),
     "hit-wood": dict(dur=1.0, loop=False, rms=-15, kbps=80, maxkb=60),
-    "splash": dict(dur=1.0, loop=False, rms=-17, kbps=80, maxkb=60),
+    "splash": dict(dur=1.4, loop=False, rms=-17, kbps=80, maxkb=60, onset_db=12),
     "bell": dict(dur=2.3, loop=False, rms=-18, kbps=72, maxkb=60),
     "fire": dict(dur=3.0, loop=True, rms=-22, kbps=72, maxkb=400),
     "waves": dict(dur=10.0, loop=True, rms=-24, kbps=64, maxkb=400),
@@ -35,6 +35,16 @@ SPEC = {
     "explosion": dict(dur=2.5, loop=False, rms=-13, kbps=80, maxkb=80),
     "boarders": dict(dur=2.0, loop=False, rms=-17, kbps=80, maxkb=70),
     "creak": dict(dur=8.0, loop=True, rms=-27, kbps=64, maxkb=300),
+    # jobs4.json
+    "sail": dict(dur=1.8, loop=False, rms=-19, kbps=72, maxkb=60),
+    "musket": dict(dur=2.0, loop=False, rms=-16, kbps=80, maxkb=70),
+    "cheer": dict(dur=3.0, loop=False, rms=-18, kbps=72, maxkb=90),
+    "groan": dict(dur=3.5, loop=False, rms=-18, kbps=72, maxkb=100),
+    "fanfare": dict(dur=3.5, loop=False, rms=-17, kbps=96, maxkb=110),
+    "defeat": dict(dur=3.5, loop=False, rms=-18, kbps=96, maxkb=110),
+    "quill": dict(dur=0.9, loop=False, rms=-24, kbps=64, maxkb=30),
+    "page": dict(dur=0.9, loop=False, rms=-23, kbps=64, maxkb=30),
+    "seal": dict(dur=0.6, loop=False, rms=-22, kbps=64, maxkb=25),
 }
 
 
@@ -64,8 +74,8 @@ def process(y, sr, s):
     if len(nz):
         y = y[max(0, nz[0] - int(0.01 * sr)): nz[-1] + 1]; e = env(y, sr)
     if not s["loop"]:
-        # start just before the first strong onset (within 25 dB of the max)
-        on = np.where(e > e.max() * 10 ** (-25 / 20))[0][0]
+        # start just before the first strong onset (within onset_db, default 25 dB, of the max)
+        on = np.where(e > e.max() * 10 ** (-s.get("onset_db", 25) / 20))[0][0]
         st = max(0, on - int(0.015 * sr))
         y = y[st: st + n]
         # trim the tail once it has decayed below -45 dB of the peak
