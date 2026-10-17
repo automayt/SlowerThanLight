@@ -13,12 +13,64 @@ export interface HudCallbacks {
   selectCrew(id: number, additive: boolean): void;
   selectGun(index: number): void;
   clearGunTarget(index: number): void;
+  toggleSpeed(): void;
 }
 
 export interface HudState {
   selectedCrew: Set<number>;
   aimingGun: number | null;
   hoverText: string;
+  /** Game speed multiplier (1 or 2). */
+  speed: number;
+}
+
+/** Keys that select crew, in muster-roll order. */
+export const CREW_KEYS = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O'] as const;
+
+/** One-line explanations of each station, for the deckhand rows. */
+const SYSTEM_TIPS: Record<SystemId, string> = {
+  helm: 'Helm: someone must stand at the wheel, or evasion and making sail drop to nothing.',
+  bulwarks: 'Bulwarks: each hand raises a layer that stops one ball (chain shot flies over). Layers rebuild after a hit.',
+  sails: 'Sails: hands here add evasion and speed for making sail. A crew member at the mast adds more.',
+  pumps: 'Pumps: hands bail out flood water. Send crew to patch holes, or she fills and sinks.',
+  surgeon: "Surgeon: hands here heal crew resting in the surgeon's cabin.",
+  guns: 'Gun Deck: manned guns draw their hands from here. Crew standing in the room load them faster.',
+};
+
+/** First-battle hints, each shown once and remembered. */
+export type HintId = 'aim' | 'crew' | 'pause' | 'hands' | 'shot';
+const HINT_TEXT: Record<HintId, string> = {
+  aim: 'Click a gun card (or press its number), then a room on her ship to aim it.',
+  crew: 'Click a crew member (or press their key), then a room to send them. Shift picks several.',
+  pause: 'Space pauses the fight. You can give every order while paused.',
+  hands: 'Deckhands work your stations with the + and − buttons. On Bulwarks, each raises a layer that stops a ball.',
+  shot: 'Try other shot: chain tears her sails, grape cuts down crew, hot shot starts fires. Shift+number cycles a gun’s shot.',
+};
+/** How long an informational hint stays up, in ms (aiming waits until it is done). */
+const HINT_MS: Partial<Record<HintId, number>> = { crew: 20000, pause: 9000, hands: 16000, shot: 16000 };
+const HINTS_KEY = 'slower-than-light.hints';
+let hintsSeen: Set<string> | null = null;
+
+function seenHints(): Set<string> {
+  if (!hintsSeen) {
+    try {
+      hintsSeen = new Set(JSON.parse(localStorage.getItem(HINTS_KEY) ?? '[]') as string[]);
+    } catch {
+      hintsSeen = new Set();
+    }
+  }
+  return hintsSeen;
+}
+
+function markHintSeen(id: HintId): void {
+  const seen = seenHints();
+  if (seen.has(id)) return;
+  seen.add(id);
+  try {
+    localStorage.setItem(HINTS_KEY, JSON.stringify([...seen]));
+  } catch {
+    // Storage may be blocked; the hint just comes back next time.
+  }
 }
 
 const BOTTOM_Y = 512;
@@ -27,7 +79,7 @@ const BOTTOM_Y = 512;
  * Draw order of the HUD: above the ships (1-6), drag band (25), ambient gulls and cloud shadows, and hit effects,
  * so nothing drifts over a panel; the scene's banners and outcome overlay sit above all of it (60+).
  */
-export const HUD_DEPTH = { panels: 50, alert: 52, banner: 53, hover: 55 } as const;
+export const HUD_DEPTH = { panels: 50, alert: 52, banner: 53, hint: 54, hover: 55 } as const;
 /** Hull bars start this far right of their HULL heading. */
 const HULL_BAR_DX = 58;
 /** Widest a hull bar may grow. */
@@ -37,6 +89,11 @@ const HULL_BAR_W = 390;
 function tint(text: Phaser.GameObjects.Text, color: string): Phaser.GameObjects.Text {
   if (text.style.color !== color) text.setColor(color);
   return text;
+}
+
+/** A small boxed key label, like a keycap, showing the hotkey for a control. */
+function keycap(scene: Phaser.Scene, x: number, y: number, key: string): Phaser.GameObjects.Text {
+  return scene.add.text(x, y, key, textStyle(10, COLORS.textDim, { backgroundColor: '#05101acc', padding: { x: 3, y: 1 } }));
 }
 
 /** Small-caps section heading in the serif face. */
@@ -76,7 +133,18 @@ export class Hud {
   private readonly cards: GunCard[] = [];
   private readonly crewRows: CrewRow[] = [];
   private readonly logText: Phaser.GameObjects.Text;
-  private readonly log: { text: string; color: string }[] = [];
+  /** Recent log lines; a line repeated back to back is counted rather than written again. */
+  private readonly log: { text: string; color: string; count: number }[] = [];
+  private logDirty = true;
+  private readonly pauseBtn: Button;
+  private readonly speedBtn: Button;
+  private readonly hintBox: Phaser.GameObjects.Container;
+  private readonly hintG: Phaser.GameObjects.Graphics;
+  private readonly hintText: Phaser.GameObjects.Text;
+  private readonly hintAnchors: Record<HintId, { x: number; y: number; dir: 'up' | 'down' | 'left' }>;
+  private readonly hintClose: Phaser.GameObjects.Text;
+  private hintId: HintId | null = null;
+  private hintUntil = 0;
   private readonly pauseBanner: Phaser.GameObjects.Text;
   private readonly alert: Phaser.GameObjects.Text;
   /** A short-lived headline (a crew death) that outranks the standing alerts. */
@@ -100,6 +168,17 @@ export class Hud {
     this.playerStats = scene.add.text(18, 50, '', textStyle(13));
     this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => battle.escape(), { size: 13 });
 
+    // --- Top centre: the clock ---
+    this.pauseBtn = new Button(scene, SCREEN.w / 2 - 122, 10, 118, 26, '', () => {
+      battle.togglePause();
+      this.hintDone('pause');
+    }, { size: 13 });
+    this.pauseBtn.add(keycap(scene, 116, 13, 'Space').setOrigin(1, 0.5));
+    this.speedBtn = new Button(scene, SCREEN.w / 2 + 4, 10, 118, 26, '2× speed', () => cb.toggleSpeed(), { size: 13 });
+    this.speedBtn.add(keycap(scene, 116, 13, 'F').setOrigin(1, 0.5));
+    this.pauseBtn.label.setX(46);
+    this.speedBtn.label.setX(50);
+
     // --- Top: enemy status ---
     panel(scene, SCREEN.w - 478, 8, 470, 66);
     this.enemyTitle = heading(scene, SCREEN.w - 468, 14, 'HULL', 15);
@@ -117,6 +196,7 @@ export class Hud {
       scene.add.image(26, y + 4, `${crewTextures(scene, c)}:idle0`).setOrigin(0.5, 0).setCrop(10, 2, 36, 34).setScale(0.82).setDisplayOrigin(28, 3);
       const name = scene.add.text(44, y + 3, c.name, textStyle(12, COLORS.text, { fontStyle: 'bold' }));
       const task = scene.add.text(44, y + 18, '', textStyle(10, COLORS.textDim));
+      if (i < CREW_KEYS.length) keycap(scene, 10, y + 21, CREW_KEYS[i]);
       bg.setData('crewId', c.id);
       this.crewRows.push({ bg, name, task });
     });
@@ -133,15 +213,24 @@ export class Hud {
     systems.filter((id) => player.system(id)).forEach((id, i) => {
       const y = BOTTOM_Y + 38 + i * 26;
       if (scene.textures.exists(`sysicon:${id}`)) scene.add.image(27, y + 8, `sysicon:${id}`).setScale(0.48);
-      this.sysLabels.set(id, scene.add.text(42, y, SYSTEM_NAMES[id], textStyle(13)));
+      const label = scene.add.text(42, y, SYSTEM_NAMES[id], textStyle(13)).setInteractive();
+      label.on('pointerover', () => this.showTooltip(SYSTEM_TIPS[id], 18, BOTTOM_Y - 8));
+      label.on('pointerout', () => this.tooltip.setVisible(false));
+      this.sysLabels.set(id, label);
       this.sysStatus.set(id, scene.add.text(264, y, '', textStyle(12, COLORS.textDim)));
       if (id === 'bulwarks' || id === 'sails' || id === 'pumps' || id === 'surgeon') {
-        new Button(scene, 112, y - 2, 22, 22, '−', () => battle.addHands(id, -1), { size: 15 });
-        new Button(scene, 236, y - 2, 22, 22, '+', () => battle.addHands(id, 1), { size: 15 });
+        const hands = (d: number) => {
+          battle.addHands(id, d);
+          this.hintDone('hands');
+        };
+        new Button(scene, 112, y - 2, 22, 22, '−', () => hands(-1), { size: 15 });
+        new Button(scene, 236, y - 2, 22, 22, '+', () => hands(1), { size: 15 });
       }
     });
 
     this.broadsideBtn = new Button(scene, 222, BOTTOM_Y + 6, 108, 22, '', () => battle.setBroadside(!battle.player.broadside), { size: 12 });
+    this.broadsideBtn.add(keycap(scene, 104, 11, 'B').setOrigin(1, 0.5));
+    this.broadsideBtn.label.setX(48);
     this.broadsideBtn.bg.on('pointerover', () =>
       this.showTooltip('Broadside (B): hold every aimed gun until all are loaded, then fire together. Swamps bulwarks, which stop one ball per layer.', 222, BOTTOM_Y - 8),
     );
@@ -161,9 +250,13 @@ export class Hud {
       const status = scene.add.text(x + 8, BOTTOM_Y + 97, '', textStyle(12, COLORS.textDim, { wordWrap: { width: CARD_W - 16 }, lineSpacing: -2 }));
       const target = scene.add.text(x + 8, BOTTOM_Y + 113, '', textStyle(12));
       const shots = SHOT_TYPES.map((s, j) => {
-        const b = new Button(scene, x + 9 + j * 35.5, BOTTOM_Y + 143, 33, 24, '', () => battle.setShot(i, s), { size: 13 });
+        const b = new Button(scene, x + 9 + j * 35.5, BOTTOM_Y + 143, 33, 24, '', () => {
+          battle.setShot(i, s);
+          this.hintDone('shot');
+        }, { size: 13 });
         b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));
-        b.bg.on('pointerover', () => this.showTooltip(`${SHOT_EFFECTS[s].label} shot: ${SHOT_EFFECTS[s].blurb}`, x, BOTTOM_Y - 8));
+        b.bg.on('pointerover', () => this.showTooltip(`${SHOT_EFFECTS[s].label} shot: ${SHOT_EFFECTS[s].blurb}
+Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
         b.bg.on('pointerout', () => this.tooltip.setVisible(false));
         return b;
       });
@@ -204,6 +297,56 @@ export class Hud {
       .setOrigin(0, 1)
       .setDepth(HUD_DEPTH.hover)
       .setVisible(false);
+
+    // A hint box with a pointer, beside (never over) the control it explains.
+    this.hintG = scene.add.graphics();
+    this.hintText = scene.add.text(12, 9, '', textStyle(13, COLORS.text, { wordWrap: { width: 270 }, lineSpacing: 1 }));
+    this.hintClose = scene.add.text(0, 4, '×', textStyle(16, COLORS.textDim)).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+    this.hintClose.on('pointerdown', () => this.hintId && this.hintDone(this.hintId));
+    this.hintBox = scene.add.container(0, 0, [this.hintG, this.hintText, this.hintClose]).setDepth(HUD_DEPTH.hint).setVisible(false);
+    const card0 = this.cards[0]?.x ?? 346;
+    this.hintAnchors = {
+      aim: { x: card0 + CARD_W / 2, y: BOTTOM_Y - 3, dir: 'down' },
+      shot: { x: card0 + CARD_W / 2, y: BOTTOM_Y - 3, dir: 'down' },
+      crew: { x: 180, y: 128, dir: 'left' },
+      pause: { x: SCREEN.w / 2 - 63, y: 39, dir: 'up' },
+      hands: { x: 140, y: BOTTOM_Y - 3, dir: 'down' },
+    };
+  }
+
+  /** Offer a first-battle hint, unless it has been seen or another is up. */
+  hint(id: HintId): void {
+    if (this.hintId || seenHints().has(id)) return;
+    this.hintId = id;
+    const ms = HINT_MS[id];
+    this.hintUntil = ms ? performance.now() + ms : Infinity;
+    // The pause hint sits in the narrow gap between the two top panels.
+    this.hintText.setWordWrapWidth(id === 'pause' ? 220 : 270).setText(HINT_TEXT[id]);
+    const w = this.hintText.width + 36;
+    const h = this.hintText.height + 18;
+    const a = this.hintAnchors[id];
+    const x = a.dir === 'left' ? a.x + 12 : a.dir === 'up' ? SCREEN.w / 2 - w / 2 : Phaser.Math.Clamp(a.x - 40, 8, SCREEN.w - w - 8);
+    const y = a.dir === 'down' ? a.y - 10 - h : a.dir === 'up' ? a.y + 10 : a.y - 18;
+    const g = this.hintG.clear();
+    g.fillStyle(0x0b1622, 0.96).fillRoundedRect(0, 0, w, h, 6);
+    g.lineStyle(2, 0xf2c45a, 0.95).strokeRoundedRect(0, 0, w, h, 6);
+    // The pointer, in box coordinates.
+    const tx = a.x - x;
+    const ty = a.y - y;
+    g.fillStyle(0xf2c45a, 1);
+    if (a.dir === 'down') g.fillTriangle(tx - 8, h, tx + 8, h, tx, ty);
+    else if (a.dir === 'up') g.fillTriangle(tx - 8, 0, tx + 8, 0, tx, ty);
+    else g.fillTriangle(0, 10, 0, 26, tx, ty);
+    this.hintClose.setX(w - 6);
+    this.hintBox.setPosition(x, y).setVisible(true);
+  }
+
+  /** The player has done what a hint describes (or closed it): never show it again. */
+  hintDone(id: HintId): void {
+    markHintSeen(id);
+    if (this.hintId !== id) return;
+    this.hintId = null;
+    this.hintBox.setVisible(false);
   }
 
   /** Headline something for a few seconds, above the standing alerts. */
@@ -213,8 +356,11 @@ export class Hud {
   }
 
   addLog(text: string, color: string = COLORS.text): void {
-    this.log.push({ text, color });
+    const last = this.log[this.log.length - 1];
+    if (last && last.text === text) last.count++;
+    else this.log.push({ text, color, count: 1 });
     while (this.log.length > 9) this.log.shift();
+    this.logDirty = true;
   }
 
   private showTooltip(text: string, x: number, y: number): void {
@@ -342,18 +488,27 @@ export class Hud {
       SHOT_TYPES.forEach((s: ShotType, j) => card.shots[j].setOn(gun.shot === s));
     });
 
-    this.logText.setText(this.log.map((l) => l.text).join('\n'));
-    while (this.logText.height > 172 && this.log.length > 1) {
-      this.log.shift();
-      this.logText.setText(this.log.map((l) => l.text).join('\n'));
+    if (this.logDirty) {
+      this.logDirty = false;
+      const lines = () => this.log.map((l) => (l.count > 1 ? `${l.text}  ×${l.count}` : l.text)).join('\n');
+      this.logText.setText(lines());
+      while (this.logText.height > 172 && this.log.length > 1) {
+        this.log.shift();
+        this.logText.setText(lines());
+      }
     }
     this.pauseBanner.setVisible(battle.paused && !battle.outcome);
     this.pauseBanner.setText(battle.time === 0 ? 'Aim your guns and set your crew  ·  Space to engage' : 'PAUSED  ·  Space to resume');
+    this.pauseBtn.setText(!battle.paused ? 'Pause' : battle.time === 0 ? 'Engage' : 'Resume').setOn(battle.paused).setEnabled(!battle.outcome);
+    this.speedBtn.setOn(state.speed > 1).setEnabled(!battle.outcome);
 
     // The single most urgent problem aboard, and what to do about it.
     const now = performance.now();
     const alert = now < this.flashUntil ? this.flashText : battle.outcome ? '' : urgentAlert(battle);
     this.alert.setVisible(!!alert);
+    // An alert outranks a hint; informational hints also lapse on their own.
+    if (this.hintId && now > this.hintUntil) this.hintDone(this.hintId);
+    this.hintBox.setVisible(!!this.hintId && !alert && !battle.outcome);
     if (alert) {
       if (this.alert.text !== alert) this.alert.setText(alert);
       this.alert.setAlpha(0.8 + 0.2 * Math.sin(now / 160));
