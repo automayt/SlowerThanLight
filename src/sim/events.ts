@@ -11,5 +11,7 @@ export type BattleEvent =
   | { t: 'breach'; side: Side; room: string }
   | { t: 'death'; side: Side; name: string }
   | { t: 'log'; side: Side; text: string }
+  /** The boss rallies for her second phase. */
+  | { t: 'rally'; side: Side; text: string }
   /** `side` is the side sending boarders. */
   | { t: 'board'; side: Side; count: number; room: string };

@@ -456,6 +456,7 @@ export class Run {
       enemyAI: foe.ai,
       playerCondition: this.condition,
       allowEscape: !this.encounter.boss,
+      boss: this.encounter.boss,
       enemyReload: DIFFICULTY[this.difficulty].enemyReload,
       playerReload: this.has('drill') ? 1.1 : 1,
       playerNets: this.has('nets'),

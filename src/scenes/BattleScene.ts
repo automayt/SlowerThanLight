@@ -499,6 +499,12 @@ export class BattleScene extends Phaser.Scene {
       case 'log':
         this.hud.addLog(ev.text);
         break;
+      case 'rally':
+        playSfx(this, 'bell', 0.6);
+        this.cameras.main.shake(400, 0.005);
+        this.hud.flash('THE COMMODORE RALLIES HIS CREW', 4500);
+        this.hud.addLog(ev.text, COLORS.textWarn);
+        break;
     }
   }
 

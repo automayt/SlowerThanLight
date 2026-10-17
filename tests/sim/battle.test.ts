@@ -67,3 +67,21 @@ describe('battle', () => {
     });
   }
 });
+
+describe('the blockade', () => {
+  it('the boss rallies once when low: repairs and loads faster', () => {
+    const frigate = ENEMY_LIST.find((e) => e.id === 'frigate')!;
+    const battle = new Battle(playerShip('maw'), frigate.ship, { seed: 2, boss: true, allowEscape: false });
+    battle.enemy.damageSystem('guns', 3);
+    battle.enemy.hull = Math.floor(frigate.ship.hull * 0.4);
+    const reload = battle.enemy.reloadRate;
+    battle.step(0.05);
+    expect(battle.rallied).toBe(true);
+    expect(battle.enemy.system('guns')!.damage).toBe(0);
+    expect(battle.enemy.reloadRate).toBeGreaterThan(reload);
+    expect(battle.drainEvents().some((e) => e.t === 'rally')).toBe(true);
+    const again = battle.enemy.reloadRate;
+    battle.step(0.05);
+    expect(battle.enemy.reloadRate).toBe(again);
+  });
+});

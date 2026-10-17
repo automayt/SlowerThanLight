@@ -91,7 +91,7 @@ export const NAVY_FRIGATE: ShipDef = {
   name: 'HMS Relentless',
   className: 'Navy Frigate',
   description: 'Thirty-two guns and a commodore who has sworn to see you hang.',
-  hull: 34,
+  hull: 30,
   hands: 13,
   speedBonus: -5,
   melee: 1.2,

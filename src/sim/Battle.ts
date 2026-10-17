@@ -39,7 +39,13 @@ export interface BattleOptions {
   playerReload?: number;
   /** The player has boarding nets rigged. */
   playerNets?: boolean;
+  /** The final battle: low on hull, the enemy rallies once (repairs, fires out, loads faster). */
+  boss?: boolean;
 }
+
+/** Hull fraction at which a boss rallies, and how much faster she then loads. */
+export const BOSS_RALLY_AT = 0.4;
+export const BOSS_RALLY_RELOAD = 1.1;
 
 /** Fixed simulation step in seconds. */
 export const STEP = 0.05;
@@ -50,6 +56,9 @@ export class Battle {
   readonly rng: Rng;
   readonly seed: number;
   readonly allowEscape: boolean;
+  readonly boss: boolean;
+  /** Whether the boss has rallied yet. */
+  rallied = false;
   /** Crew aboard each ship when the battle began. */
   readonly crewAtStart: Record<Side, number>;
   time = 0;
@@ -71,6 +80,7 @@ export class Battle {
     this.seed = opts.seed ?? Math.floor(Math.random() * 2 ** 31);
     this.rng = new Rng(this.seed);
     this.allowEscape = opts.allowEscape ?? true;
+    this.boss = opts.boss ?? false;
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
     // Crew take up their stations before the first tick, so a paused opening already shows a manned helm.
@@ -172,12 +182,31 @@ export class Battle {
       for (const c of dead) this.events.push({ t: 'death', side: c.side, name: c.name });
     }
 
+    if (this.boss && !this.rallied && this.enemy.hull > 0 && this.enemy.hull <= this.enemy.def.hull * BOSS_RALLY_AT) this.rally();
     if (this.player.hull <= 0) return this.finish('defeat');
     if (isSinking(this.player)) return this.finish('sunk');
     if (!this.crewOf('player').length) return this.finish('crewLost');
     if (this.enemy.hull <= 0) return this.finish('victory');
     if (isSinking(this.enemy)) return this.finish('enemySunk');
     if (!this.crewOf('enemy').length) return this.finish('captured');
+  }
+
+  /** The boss's second wind: every system repaired, fires out, bulwarks up, her guns served a little faster. */
+  private rally(): void {
+    this.rallied = true;
+    const e = this.enemy;
+    for (const s of e.systems.values()) {
+      s.damage = 0;
+      s.repair = 0;
+    }
+    for (const r of e.rooms.values()) {
+      r.fire = 0;
+      r.breach = false;
+    }
+    e.restoreWanted();
+    e.layers = e.level('bulwarks');
+    e.reloadRate *= BOSS_RALLY_RELOAD;
+    this.events.push({ t: 'rally', side: 'enemy', text: 'The Commodore rallies his crew! Fires out, damage made good, and his guns run out faster.' });
   }
 
   /** Run headless until the battle ends or the time limit passes. */
