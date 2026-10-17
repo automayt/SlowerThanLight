@@ -136,7 +136,7 @@ export class ResultScene extends Phaser.Scene {
           this.time.delayedCall(0, () => buttons.forEach((b) => b.destroy()));
           label.setText(said).setColor(COLORS.textGood);
           saveRun(run);
-        }, { size: 13 }),
+        }, { size: 14 }),
       );
     });
   }
