@@ -115,7 +115,7 @@ export class LogbookScene extends Phaser.Scene {
     const y = (SCREEN.h - h) / 2;
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.6).setOrigin(0).setDepth(30).setInteractive();
     shade.on('pointerdown', () => this.closeOverlay());
-    const box = panel(this, x, y, w, h).setDepth(31);
+    const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
     const title = this.add.text(SCREEN.w / 2, y + 16, e.title, { fontFamily: TITLE_FONT, fontSize: '28px', color: RARITY_COLOR[e.rarity ?? 'common'] }).setOrigin(0.5, 0).setDepth(32);
     this.overlay = [shade, box, title];
     const artH = (w - 80) * 0.5625;

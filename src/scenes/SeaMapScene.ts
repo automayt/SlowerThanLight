@@ -178,7 +178,7 @@ export class SeaMapScene extends Phaser.Scene {
     const x = (SCREEN.w - w) / 2;
     const y = (SCREEN.h - h) / 2;
     const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.45).setOrigin(0).setDepth(30).setInteractive();
-    const box = panel(this, x, y, w, h).setDepth(31);
+    const box = panel(this, x, y, w, h, { modal: true }).setDepth(31);
     const t = this.add.text(SCREEN.w / 2, y + 18, title, { fontFamily: TITLE_FONT, fontSize: '30px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(32);
     this.dialog = [shade, box, t];
     if (pic && art) {

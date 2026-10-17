@@ -98,11 +98,40 @@ export function drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w:
   g.fillStyle(0x000000, 0.18).fillRect(x, y + h - Math.max(1, Math.floor(h * 0.25)), fw, Math.max(1, Math.floor(h * 0.25)));
 }
 
-export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: number): Phaser.GameObjects.Rectangle {
-  const rect = scene.add.rectangle(x, y, w, h, COLORS.panel, 0.9).setOrigin(0).setStrokeStyle(1.5, COLORS.panelEdge);
-  // Inner keyline, like a framed chart.
-  scene.add.rectangle(x + 3, y + 3, w - 6, h - 6).setOrigin(0).setStrokeStyle(1, COLORS.panelInner, 0.9);
-  return rect;
+export interface PanelOptions {
+  /** A dialog over the rest of the screen: near-opaque, so nothing behind ghosts through. */
+  modal?: boolean;
+}
+
+/** A framed panel: the outer rectangle carries an inner keyline that follows its depth, visibility and destruction. */
+export class Panel extends Phaser.GameObjects.Rectangle {
+  readonly keyline: Phaser.GameObjects.Rectangle;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, opts: PanelOptions = {}) {
+    super(scene, x, y, w, h, COLORS.panel, opts.modal ? 0.97 : 0.9);
+    this.setOrigin(0).setStrokeStyle(1.5, COLORS.panelEdge);
+    scene.add.existing(this);
+    // Inner keyline, like a framed chart.
+    this.keyline = scene.add.rectangle(x + 3, y + 3, w - 6, h - 6).setOrigin(0).setStrokeStyle(1, COLORS.panelInner, 0.9);
+    this.once(Phaser.GameObjects.Events.DESTROY, () => this.keyline.destroy());
+  }
+
+  override setDepth(value: number): this {
+    super.setDepth(value);
+    // The keyline is still unset while the base constructor runs.
+    this.keyline?.setDepth(value);
+    return this;
+  }
+
+  override setVisible(value: boolean): this {
+    super.setVisible(value);
+    this.keyline?.setVisible(value);
+    return this;
+  }
+}
+
+export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: number, opts: PanelOptions = {}): Panel {
+  return new Panel(scene, x, y, w, h, opts);
 }
 
 /** Animated sea backdrop. Call `draw(time)` each frame. */
