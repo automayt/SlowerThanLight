@@ -1,0 +1,38 @@
+[
+  {
+    "name": "enemy-smuggler",
+    "model": "flux",
+    "seed": 8101,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A small low single-masted Caribbean smuggler sloop with a large gaff mainsail and a jib, no flag flying, deck stacked with barrels and bales under tarpaulins, running fast before the wind at dusk past a dark reef with breaking surf, lanterns unlit, a lone ship on a deep blue sea, three-quarter stern view"
+  },
+  {
+    "name": "enemy-corsair",
+    "model": "flux",
+    "seed": 8102,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A long narrow French corsair lugger with three masts carrying tall four-sided lug sails, a plain white flag at the stern, a crowd of men with cutlasses along her rail, heeled over and closing fast through grey-green waves under a windy sky, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "enemy-rival",
+    "model": "flux",
+    "seed": 8103,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "A weathered pirate brigantine with two masts, square sails on the foremast and a gaff mainsail, patched and stained sails, a black flag at the masthead, a ragged crew brandishing cutlasses and pistols at the rail, gun ports open, bearing down through rough sea under a stormy amber sky, a lone ship, three-quarter bow view"
+  },
+  {
+    "name": "enemy-sloop",
+    "model": "flux",
+    "seed": 8104,
+    "w": 1344,
+    "h": 768,
+    "kw": { "lora_s": 0.45 },
+    "prompt": "An early 18th century Royal Navy ship-rigged sloop of war with three masts and square sails, a single row of open gun ports with cannons run out, red-coated marines in the fighting tops, a long red ensign streaming from the stern, smartly handled in a fresh breeze on a bright blue sea, a lone warship, broadside view"
+  }
+]
