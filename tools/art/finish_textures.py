@@ -24,6 +24,7 @@ def canvas(im):
     return im.resize((672, 384), Image.LANCZOS)
 
 JOBS = {"tex-deck": deck, "tex-hull": hull, "tex-sea": sea, "tex-canvas": canvas}
+# tex-chart (gen_chart.py, seed 9101) was finished by hand: contrast 0.92, resized to 1280x731, JPEG q82.
 
 man = json.load(open(MAN))
 for name, fn in JOBS.items():
