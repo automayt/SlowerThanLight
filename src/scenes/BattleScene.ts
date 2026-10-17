@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
+import { BattleFx, WIND } from '../render/fx';
 import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
 import { currentRun } from '../render/RunBar';
+import { shipGeometry } from '../render/ShipArt';
 import { ShipView, type AimMark } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
@@ -33,8 +35,11 @@ export class BattleScene extends Phaser.Scene {
   private playerView!: ShipView;
   private enemyView!: ShipView;
   private fx!: Phaser.GameObjects.Graphics;
+  private fxs!: BattleFx;
   private readonly swingers = new Map<number, Phaser.GameObjects.Image>();
   private ambient!: Phaser.GameObjects.Graphics;
+  /** Banks of haze drifting downwind across the water. */
+  private mist: Phaser.GameObjects.Image[] = [];
   private clouds: { x: number; y: number; s: number; v: number }[] = [];
   private gulls: { x: number; y: number; v: number; phase: number; drift: number }[] = [];
   private hud!: Hud;
@@ -85,10 +90,14 @@ export class BattleScene extends Phaser.Scene {
     const e = battle.enemy;
     const spanish = SPANISH_SHIPS.has(e.def.id) || (!!foe && SPANISH_SHIPS.has(foe.id));
     this.playerView = new ShipView(this, p, 250, SHIP_CENTER_Y - (p.height * TILE) / 2, TILE, false, { flag: 'pirate' });
-    this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + 1.7) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
+    // Room at her stern for a long overhang and the ensign flying astern of it.
+    const sternRoom = Math.max(1.7, 1.05 - shipGeometry(e).stern);
+    this.enemyView = new ShipView(this, e, SCREEN.w - 12 - (e.width + sternRoom) * TILE, SHIP_CENTER_Y - (e.height * TILE) / 2, TILE, true, {
       flag: faction === 'navy' ? 'navy' : faction === 'pirate' ? 'pirate' : spanish ? 'spanish' : 'trade',
     });
     this.fx = this.add.graphics().setDepth(10);
+    this.fxs = new BattleFx(this);
+    this.atmosphere();
     this.events.once('shutdown', () => {
       this.playerView.destroy();
       this.enemyView.destroy();
@@ -298,6 +307,11 @@ export class BattleScene extends Phaser.Scene {
     this.enemyView.draw(time, { selected: this.selected, hoverRoom: hoverEnemy, targets, aiming: this.aimingGun !== null, alive });
     this.drawAmbient(time, delta / 1000);
     this.drawProjectiles();
+    for (const view of [this.playerView, this.enemyView]) {
+      for (const room of view.ship.rooms.values()) {
+        if (room.fire > 0) this.fxs.burning(`${view.ship.side}:${room.def.id}`, view.roomRect(room.def.id), room.fire / 100, delta / 1000);
+      }
+    }
 
     this.hud.refresh({
       selectedCrew: this.selected,
@@ -337,11 +351,39 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: [banner, sub], alpha: 0, delay: 1900, duration: 450, onComplete: () => (banner.destroy(), sub.destroy()) });
   }
 
-  /** Cloud shadows sliding over the water and ships, and a few gulls wheeling overhead. */
+  /** Sun glinting on the swell, banks of haze, warm light from the west and a darkened rim; all under the HUD. */
+  private atmosphere(): void {
+    this.add
+      .particles(0, 0, 'fx:glint', {
+        emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(0, 70, SCREEN.w, 440) } as Phaser.Types.GameObjects.Particles.EmitZoneData,
+        lifespan: { min: 700, max: 1500 },
+        frequency: 60,
+        scale: { min: 0.35, max: 0.95 },
+        alpha: { onUpdate: (_p: Phaser.GameObjects.Particles.Particle, _k: string, t: number) => Math.sin(t * Math.PI) * 0.6 },
+        blendMode: Phaser.BlendModes.ADD,
+        maxAliveParticles: 30,
+      })
+      .setDepth(-9);
+    this.mist = Array.from({ length: 3 }, (_, i) =>
+      this.add
+        .image(i * 520 + Math.random() * 200, 140 + i * 130 + Math.random() * 60, 'fx:smoke')
+        .setScale(9 + Math.random() * 4, 3 + Math.random())
+        .setAlpha(0.07)
+        .setDepth(8.5),
+    );
+    this.add.image(0, 0, 'fx:sun').setOrigin(0).setDisplaySize(SCREEN.w, SCREEN.h).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5).setDepth(39);
+    this.add.image(0, 0, 'fx:vignette').setOrigin(0).setDisplaySize(SCREEN.w, SCREEN.h).setDepth(40);
+  }
+
+  /** Cloud shadows sliding over the water and ships, haze drifting downwind, and a few gulls wheeling overhead. */
   private drawAmbient(time: number, dt: number): void {
     const g = this.ambient;
     const t = time / 1000;
     g.clear();
+    for (const m of this.mist) {
+      m.x += WIND.x * 0.5 * dt;
+      if (m.x - m.displayWidth / 2 > SCREEN.w) m.setPosition(-m.displayWidth / 2, 120 + Math.random() * 360);
+    }
     for (const c of this.clouds) {
       c.x += c.v * dt;
       if (c.x - 260 * c.s > SCREEN.w) {
@@ -476,27 +518,36 @@ export class BattleScene extends Phaser.Scene {
       const b = target.roomCenter(p.room);
       const at = (kk: number) => ({ x: a.x + (b.x - a.x) * kk, y: a.y + (b.y - a.y) * kk - Math.sin(kk * Math.PI) * 70 });
       const { x, y } = at(k);
-      // Shadow on the water below, so the arc reads.
-      g.fillStyle(0x061420, 0.28).fillEllipse(a.x + (b.x - a.x) * k + 6, a.y + (b.y - a.y) * k + 10, 10, 4);
+      // Nearer the eye at the top of its arc, so the ball swells; its shadow on the water shrinks and fades.
+      const lift = Math.sin(k * Math.PI);
+      const s = 1 + 0.45 * lift;
+      g.fillStyle(0x061420, 0.3 - 0.12 * lift).fillEllipse(a.x + (b.x - a.x) * k + 6 + lift * 10, a.y + (b.y - a.y) * k + 10, 10 - 3 * lift, 4 - lift);
       for (let i = 1; i <= 4; i++) {
         const tp = at(Math.max(0, k - i * 0.035));
-        if (p.shot === 'hot') g.fillStyle(i < 2 ? 0xffc040 : 0xff5a1f, 0.55 - i * 0.12).fillCircle(tp.x, tp.y, 5 - i * 0.8);
-        else g.fillStyle(0xd8d4cc, 0.28 - i * 0.06).fillCircle(tp.x, tp.y, 3 + i * 0.8);
+        if (p.shot === 'hot') g.fillStyle(i < 2 ? 0xffc040 : 0xff5a1f, 0.55 - i * 0.12).fillCircle(tp.x, tp.y, (5 - i * 0.8) * s);
+        else g.fillStyle(0xd8d4cc, 0.28 - i * 0.06).fillCircle(tp.x, tp.y, (3 + i * 0.8) * s);
       }
       switch (p.shot) {
-        case 'chain':
-          g.fillStyle(0x111111, 1).fillCircle(x - 5, y, 4).fillCircle(x + 5, y, 4);
-          g.lineStyle(2, 0x555555, 1).lineBetween(x - 5, y, x + 5, y);
+        case 'chain': {
+          // Two balls on a chain, whirling end over end.
+          const sp = this.time.now / 60;
+          const cx = Math.cos(sp) * 6 * s;
+          const cy = Math.sin(sp) * 3 * s;
+          g.lineStyle(2, 0x555555, 1).lineBetween(x - cx, y - cy, x + cx, y + cy);
+          g.fillStyle(0x111111, 1).fillCircle(x - cx, y - cy, 4 * s).fillCircle(x + cx, y + cy, 4 * s);
           break;
+        }
         case 'grape':
-          for (let i = 0; i < 5; i++) g.fillStyle(0x222222, 1).fillCircle(x + Math.cos(i * 1.3) * 5, y + Math.sin(i * 1.3) * 5, 2.5);
+          for (let i = 0; i < 5; i++) g.fillStyle(0x222222, 1).fillCircle(x + Math.cos(i * 1.3) * 5 * s, y + Math.sin(i * 1.3) * 5 * s, 2.5 * s);
           break;
         case 'hot':
-          g.fillStyle(COLORS.fire, 0.5).fillCircle(x, y, 9);
-          g.fillStyle(COLORS.fireCore, 1).fillCircle(x, y, 5);
+          g.fillStyle(COLORS.fire, 0.5).fillCircle(x, y, 9 * s);
+          g.fillStyle(COLORS.fireCore, 1).fillCircle(x, y, 5 * s);
+          this.fxs.trail(x, y);
           break;
         default:
-          g.fillStyle(0x111111, 1).fillCircle(x, y, 5.5);
+          g.fillStyle(0x111111, 1).fillCircle(x, y, 5.5 * s);
+          g.fillStyle(0x8a8a88, 0.8).fillCircle(x - 1.6 * s, y - 1.6 * s, 1.6 * s);
       }
     }
   }
@@ -512,15 +563,15 @@ export class BattleScene extends Phaser.Scene {
       case 'shot': {
         playSfx(this, 'cannon', ours ? 0.55 : 0.4);
         const m = view.muzzle(ev.gun);
-        this.burst(m.x, m.y, 0xfff0a0, 9, 180);
-        this.smoke(m.x, m.y, m.dx, m.dy);
+        this.fxs.muzzle(m.x, m.y, m.dx, m.dy);
+        view.recoil(m.dy);
         break;
       }
       case 'hit': {
         if (ev.deflected) {
           playSfx(this, 'hit-wood', 0.25);
           const g = view.roomCenter(ev.room);
-          this.burst(g.x, g.y, 0xd8d4cc, 10, 260);
+          this.fxs.glance(g.x, g.y);
           this.floatText(g.x, g.y - 6, 'GLANCED OFF', '#d8d4cc');
           if (!ours) this.hud.addLog(`A ball glances off her stout sides. Try heavier guns, chain or grape.`);
           break;
@@ -529,15 +580,17 @@ export class BattleScene extends Phaser.Scene {
         const c = view.roomCenter(ev.room);
         const jx = (Math.random() - 0.5) * TILE * 0.6;
         const jy = (Math.random() - 0.5) * TILE * 0.6;
-        this.burst(c.x + jx, c.y + jy, ev.shot === 'hot' ? COLORS.fire : 0xffb050, 22, 380);
-        this.splinters(c.x + jx, c.y + jy);
+        this.fxs.impact(c.x + jx, c.y + jy, ev.shot === 'hot', ev.hull >= 2);
         if (ev.hull > 0 || ev.shot === 'hot') view.addScorch(ev.room);
         if (ev.hull > 0) view.addHullScar(ev.room);
         // What the ball struck, so a hit on a station reads even when it does no hull damage.
         const sys = view.ship.room(ev.room).def.system;
+        if (sys === 'sails' || ev.shot === 'chain') view.tearSail();
         const struck = `${ev.hull > 0 ? `-${ev.hull}` : 'HIT'}${sys ? ` ${SYSTEM_NAMES[sys].toUpperCase()}` : ''}`;
         this.floatText(c.x + jx, c.y - 22, struck, ours ? '#ff6a5a' : '#ffd27a');
-        if (ours) this.cameras.main.shake(140, 0.004);
+        // A jolt that grows with the damage: a glancing blow barely, a heavy ball through the side hard.
+        if (ours) this.cameras.main.shake(110 + 40 * ev.hull, Math.min(0.008, 0.0018 + 0.0014 * ev.hull));
+        else if (ev.hull >= 3) this.cameras.main.shake(90, 0.0015);
         const name = view.ship.room(ev.room).def.name;
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
         if (ours) this.hud.addLog(`We're hit in the ${name}${kind}${ev.hull ? `, ${ev.hull} hull` : ''}!`);
@@ -549,6 +602,7 @@ export class BattleScene extends Phaser.Scene {
         view.flashBlock();
         const c = view.roomCenter(ev.room);
         this.burst(c.x, c.y, 0xf0dca0, 12, 260);
+        this.fxs.glance(c.x, c.y);
         this.floatText(c.x, c.y - 6, 'BLOCKED', '#f0dca0');
         break;
       }
@@ -601,48 +655,49 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: c, scale: 1.8, alpha: 0, duration, onComplete: () => c.destroy() });
   }
 
-  private smoke(x: number, y: number, dx: number, dy: number): void {
-    for (let i = 0; i < 4; i++) {
-      const c = this.add.circle(x, y, 6 + i * 2, 0xd8d4cc, 0.55).setDepth(11);
-      this.tweens.add({
-        targets: c,
-        x: x + dx * (14 + i * 10) + (Math.random() - 0.5) * 10,
-        y: y + dy * (14 + i * 10) - 6,
-        scale: 2.4,
-        alpha: 0,
-        duration: 900 + i * 200,
-        ease: 'Cubic.easeOut',
-        onComplete: () => c.destroy(),
-      });
-    }
-  }
-
-  private splinters(x: number, y: number): void {
-    for (let i = 0; i < 7; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const d = 14 + Math.random() * 22;
-      const r = this.add.rectangle(x, y, 6, 2, 0xc9a36a).setDepth(11).setRotation(a);
-      this.tweens.add({ targets: r, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, angle: r.angle + 180, alpha: 0, duration: 500, onComplete: () => r.destroy() });
-    }
-    const puff = this.add.circle(x, y, 10, 0x3a3530, 0.5).setDepth(11);
-    this.tweens.add({ targets: puff, y: y - 18, scale: 2.6, alpha: 0, duration: 1100, onComplete: () => puff.destroy() });
-  }
-
+  /** A ball into the sea: rings spreading on the water and a spout of spray. */
   private splash(x: number, y: number): void {
     for (let i = 0; i < 3; i++) {
       const ring = this.add.ellipse(x, y, 10, 5).setStrokeStyle(2, 0xe8f4f8, 0.8).setDepth(1.5);
       this.tweens.add({ targets: ring, scaleX: 4 + i, scaleY: 4 + i, alpha: 0, delay: i * 120, duration: 800, onComplete: () => ring.destroy() });
     }
-    for (let i = 0; i < 6; i++) {
-      const drop = this.add.circle(x, y, 2.5, 0xe8f4f8, 0.9).setDepth(11);
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
-      this.tweens.add({ targets: drop, x: x + Math.cos(a) * 18, y: y + Math.sin(a) * 22, alpha: 0, duration: 500, ease: 'Quad.easeOut', onComplete: () => drop.destroy() });
-    }
+    this.fxs.splash(x, y);
   }
 
   private floatText(x: number, y: number, text: string, color: string): void {
     const t = this.add.text(x, y, text, textStyle(15, color, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(12);
     this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 1100, onComplete: () => t.destroy() });
+  }
+
+  /** The payoff: her magazine going up in a chain of blasts, or spray and smoke boiling up as she goes down. */
+  private finaleFx(view: ShipView | null, blowUp: boolean): void {
+    if (!view) return;
+    const rooms = [...view.ship.rooms.keys()];
+    const somewhere = () => {
+      const c = view.roomCenter(rooms[Math.floor(Math.random() * rooms.length)]);
+      return { x: c.x + (Math.random() - 0.5) * TILE, y: c.y + (Math.random() - 0.5) * TILE };
+    };
+    if (blowUp) {
+      this.cameras.main.flash(180, 255, 236, 200);
+      const magazine = view.ship.rooms.has('magazine') ? view.roomCenter('magazine') : somewhere();
+      this.fxs.explosion(magazine.x, magazine.y);
+      [220, 420, 650, 900, 1200].forEach((ms, i) =>
+        this.time.delayedCall(ms, () => {
+          const p = somewhere();
+          this.fxs.explosion(p.x, p.y);
+          if (i % 2) this.cameras.main.shake(160, 0.004);
+        }),
+      );
+    }
+    this.time.addEvent({
+      delay: 140,
+      repeat: 22,
+      callback: () => {
+        const p = somewhere();
+        this.fxs.churn(p.x, p.y);
+        if (Math.random() < 0.5) this.fxs.burning('finale', new Phaser.Geom.Rectangle(p.x - 10, p.y - 10, 20, 20), 1, 0.4);
+      },
+    });
   }
 
   private endBattle(): void {
@@ -677,6 +732,7 @@ export class BattleScene extends Phaser.Scene {
         break;
     }
     if (o.kind === 'victory' || o.kind === 'defeat') this.cameras.main.shake(500, 0.006);
+    this.finaleFx(o.kind === 'victory' ? this.enemyView : o.kind === 'enemySunk' ? this.enemyView : o.kind === 'defeat' || o.kind === 'sunk' ? this.playerView : null, o.kind === 'victory');
     // Let the finale play, then dim the scene and name the outcome.
     this.time.delayedCall(1400, () => {
       const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0).setOrigin(0).setDepth(OVERLAY_DEPTH);

@@ -6,6 +6,61 @@ import type { RoomDef, Vec } from '../sim/types';
 /** Ship art is painted at this multiple of screen resolution, then shown at 1/ART_SCALE so it stays crisp when scaled up. */
 export const ART_SCALE = 2;
 
+/** How a mast is rigged: square yards across the deck, a gaff and boom fore-and-aft, or a long slanting lateen or lug yard. */
+export type RigKind = 'square' | 'gaff' | 'lateen' | 'lug';
+
+/** The lines of a ship's class, so a galleon, a xebec and a cutter each read as themselves at a glance. */
+export interface HullStyle {
+  /** Stern half-width as a share of the beam: 1 is a broad transom, low a pointed, double-ended stern. */
+  transom: number;
+  /** How far the stern and bow run past the room grid, in tiles. */
+  sternOut: number;
+  bowOut: number;
+  /** Bow fullness: high is a bluff, apple-cheeked bow, low a fine entry. */
+  bluff: number;
+  bowsprit: number;
+  /** Rig of each mast: main, fore, then mizzen. Small hulls carry fewer. */
+  rig: RigKind[];
+  /** A towering stern castle and a beakhead. */
+  castle?: boolean;
+  /** A raised forecastle, its break shadowing the waist. */
+  forecastle?: boolean;
+  /** Glazed quarter galleries bulging from the stern quarters. */
+  galleries?: boolean;
+}
+
+const STYLES: [RegExp, HullStyle][] = [
+  [/galleon/, { transom: 1, sternOut: 0.95, bowOut: 1.45, bluff: 2.8, bowsprit: 1.25, rig: ['square', 'square', 'lateen'], castle: true, forecastle: true, galleries: true }],
+  [/frigate/, { transom: 0.95, sternOut: 0.8, bowOut: 1.7, bluff: 2.5, bowsprit: 1.35, rig: ['square', 'square', 'square'], forecastle: true, galleries: true }],
+  [/xebec/, { transom: 0.1, sternOut: 1.35, bowOut: 2, bluff: 1.5, bowsprit: 0.9, rig: ['lateen', 'lateen', 'lateen'] }],
+  [/lugger/, { transom: 0.4, sternOut: 1.3, bowOut: 1.6, bluff: 1.9, bowsprit: 1.4, rig: ['lug', 'lug', 'lug'] }],
+  [/schooner|guarda/, { transom: 0.72, sternOut: 0.8, bowOut: 1.95, bluff: 1.55, bowsprit: 1.75, rig: ['gaff', 'gaff'] }],
+  [/brigantine/, { transom: 0.85, sternOut: 0.75, bowOut: 1.7, bluff: 2, bowsprit: 1.3, rig: ['gaff', 'square'] }],
+  [/brig/, { transom: 0.97, sternOut: 0.7, bowOut: 1.35, bluff: 3.2, bowsprit: 1, rig: ['square', 'square'], forecastle: true }],
+  [/sloop-of-war/, { transom: 0.9, sternOut: 0.8, bowOut: 1.7, bluff: 2.2, bowsprit: 1.3, rig: ['square', 'square', 'square'], galleries: true }],
+  [/cutter/, { transom: 0.68, sternOut: 0.7, bowOut: 1.45, bluff: 2.4, bowsprit: 2.2, rig: ['gaff'] }],
+  [/sloop/, { transom: 0.75, sternOut: 0.75, bowOut: 1.75, bluff: 1.75, bowsprit: 1.9, rig: ['gaff'] }],
+];
+const DEFAULT_STYLE: HullStyle = { transom: 0.9, sternOut: 0.75, bowOut: 1.6, bluff: 2.1, bowsprit: 1.1, rig: ['square', 'square', 'square'] };
+
+export function hullStyle(def: { className: string }): HullStyle {
+  const name = def.className.toLowerCase();
+  return STYLES.find(([re]) => re.test(name))?.[1] ?? DEFAULT_STYLE;
+}
+
+/** A spar and the sail it carries, in tile coordinates (bow toward +x). */
+export interface Spar {
+  kind: RigKind;
+  mast: Vec;
+  /** The yard or boom, end to end. */
+  a: Vec;
+  b: Vec;
+  /** Which way the sail bellies when it draws, as a unit vector. */
+  belly: Vec;
+  /** Mainmast: the biggest spread of canvas. */
+  main: boolean;
+}
+
 export interface ShipGeometry {
   /** Padding around the room grid, in tiles. */
   padL: number;
@@ -18,10 +73,17 @@ export interface ShipGeometry {
   deck: Vec[];
   /** Mast positions in tile coordinates. */
   masts: Vec[];
+  /** One per mast, in the same order. */
+  spars: Spar[];
+  /** Headsail from the foremast out to the bowsprit, if she sets one. */
+  jib: { a: Vec; b: Vec } | null;
+  style: HullStyle;
   /** Half the hull's width at its widest, in tiles. */
   beam: number;
   stern: number;
   tip: number;
+  /** End of the bowsprit. */
+  sprit: number;
   /** Half-width of the hull at x, less an optional inset. */
   half: (x: number, inset?: number) => number;
 }
@@ -32,22 +94,25 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Fit a smooth sailing-ship hull around the ship's rooms. */
+/** Fit a smooth sailing-ship hull, in the lines of her class, around the ship's rooms. */
 export function shipGeometry(ship: Ship): ShipGeometry {
+  const style = hullStyle(ship.def);
   const W = ship.width;
   const H = ship.height;
   const mid = H / 2;
   const rooms = [...ship.rooms.values()].map((r) => r.def);
-  const stern = -0.75;
-  const tip = W + 1.6;
+  const stern = -style.sternOut;
+  const tip = W + style.bowOut;
   const fullRows = rooms.filter((r) => r.y === 0 || r.y + r.h === H);
   const lastFull = fullRows.length ? Math.max(...fullRows.map((r) => r.x + r.w)) : W * 0.6;
   const bowStart = Math.min(Math.max(lastFull - 0.7, W * 0.45), W - 0.4);
+  // A pointed stern takes longer to swell out to full breadth.
+  const sternRun = 1.2 + (1 - style.transom) * 0.6;
 
   const shape = (x: number) =>
     x <= bowStart
-      ? 0.9 + 0.1 * smoothstep(stern, stern + 2.2, x)
-      : Math.pow(Math.max(0, 1 - Math.pow((x - bowStart) / (tip - bowStart), 2.1)), 0.6);
+      ? style.transom + (1 - style.transom) * smoothstep(stern, stern + sternRun, x)
+      : Math.pow(Math.max(0, 1 - Math.pow((x - bowStart) / (tip - bowStart), style.bluff)), 0.6);
 
   // Wide enough that every room corner sits inside the bulwarks with a margin.
   let beam = mid + 0.5;
@@ -60,20 +125,48 @@ export function shipGeometry(ship: Ship): ShipGeometry {
   }
   const half = (x: number, inset = 0) => Math.max(0, beam * shape(x) - inset);
 
-  const outline = profile(stern, tip, mid, (x) => half(x));
-  const deck = profile(stern + 0.3, tip - 0.65, mid, (x) => half(x, 0.28));
+  const round = 0.12 + (1 - style.transom) * 0.45;
+  const outline = profile(stern, tip, mid, (x) => half(x), round);
+  const deck = profile(stern + 0.3, tip - 0.65, mid, (x) => half(x, 0.28), round);
 
   const masts: Vec[] = [];
   const sails = rooms.find((r) => r.system === 'sails');
-  if (sails) masts.push({ x: sails.x + sails.w / 2, y: mid });
-  if (W >= 8) masts.push({ x: Math.min(W - 0.9, (masts[0]?.x ?? 3) + W * 0.5), y: mid });
-  if (W >= 9) masts.push({ x: 0.9, y: mid });
+  const count = Math.min(style.rig.length, W >= 8 ? 3 : W >= 7 ? 2 : 1);
+  masts.push({ x: sails ? sails.x + sails.w / 2 : W * 0.4, y: mid });
+  if (count >= 2) masts.push({ x: Math.min(W - 0.9, masts[0].x + W * 0.5), y: mid });
+  if (count >= 3) masts.push({ x: 0.9, y: mid });
+
+  const spars = masts.map((m, i): Spar => {
+    const kind = style.rig[i];
+    const main = i === 0;
+    const up = { x: 0, y: -1 };
+    if (kind === 'square') {
+      const yardHalf = half(m.x) * (main ? 1.14 : 1.02) + 0.12;
+      const brace = 0.07;
+      const at = (s: number) => ({ x: m.x - Math.sin(brace) * yardHalf * s, y: mid + Math.cos(brace) * yardHalf * s });
+      return { kind, mast: m, a: at(-1), b: at(1), belly: { x: 1, y: 0 }, main };
+    }
+    if (kind === 'gaff') {
+      // The boom runs aft over the deck to the next mast or the taffrail.
+      const aft = Math.max(stern + 0.35, ...masts.filter((o) => o.x < m.x - 0.1).map((o) => o.x + 0.35));
+      return { kind, mast: m, a: { x: m.x, y: mid }, b: { x: Math.max(aft, m.x - 2.6), y: mid }, belly: up, main };
+    }
+    // Lateen and lug yards slant across the deck, peaked up aft.
+    const len = kind === 'lateen' ? (main ? 3.4 : i === 1 ? 3 : 2.4) : half(m.x) * 2 * 0.95;
+    const ang = kind === 'lateen' ? 0.42 : 1.05;
+    const c = { x: m.x + (kind === 'lateen' ? 0.35 : 0.1), y: mid };
+    const d = { x: Math.cos(ang) * (len / 2), y: Math.sin(ang) * (len / 2) };
+    return { kind, mast: m, a: { x: c.x + d.x, y: c.y + d.y }, b: { x: c.x - d.x, y: c.y - d.y }, belly: { x: Math.sin(ang), y: -Math.cos(ang) }, main };
+  });
+  const sprit = tip + style.bowsprit;
+  const foremost = spars.reduce<Spar | null>((f, s) => (!f || s.mast.x > f.mast.x ? s : f), null);
+  const jib = foremost && foremost.kind !== 'lateen' ? { a: { x: foremost.mast.x + 0.25, y: mid }, b: { x: tip + (sprit - tip) * 0.6, y: mid } } : null;
 
   const padT = Math.max(beam - mid + 0.9, beam * 1.25 - mid + 0.35);
-  return { padL: -stern + 1.1, padR: tip - W + 2.2, padT, padB: padT, outline, deck, masts, beam, stern, tip, half };
+  return { padL: -stern + 1.1, padR: sprit - W + 1.1, padT, padB: padT, outline, deck, masts, spars, jib, style, beam, stern, tip, sprit, half };
 }
 
-function profile(x0: number, x1: number, mid: number, half: (x: number) => number): Vec[] {
+function profile(x0: number, x1: number, mid: number, half: (x: number) => number, round = 0.12): Vec[] {
   const n = 56;
   const top: Vec[] = [];
   for (let i = 0; i <= n; i++) {
@@ -85,8 +178,8 @@ function profile(x0: number, x1: number, mid: number, half: (x: number) => numbe
     .slice(0, -1)
     .reverse()
     .map((p) => ({ x: p.x, y: 2 * mid - p.y }));
-  // A gently rounded transom.
-  return [...top, ...bottom, { x: x0 - 0.12, y: mid }];
+  // A gently rounded transom, or a pointed stern on a double-ender.
+  return [...top, ...bottom, { x: x0 - round, y: mid }];
 }
 
 function hashSeed(s: string): number {
@@ -131,17 +224,35 @@ function pattern(ctx: Ctx, img: CanvasImageSource | null, scale: number): Canvas
 /** The colours a ship flies at her stern. */
 export type Ensign = 'pirate' | 'navy' | 'spanish' | 'trade';
 
+export interface EnsignArt {
+  key: string;
+  /** Where the hoist meets the staff, in texture pixels. */
+  hoistX: number;
+  hoistY: number;
+}
+
 export interface ShipTextures {
   base: string;
   rig: string;
+  ensign: EnsignArt;
   geom: ShipGeometry;
 }
 
+/** Hull paint by the colours she flies: a band along the gunports and a wash over the planking. */
+const LIVERY: Record<Ensign, { band: string; trim: string | null; wash: string | null }> = {
+  pirate: { band: '#5e1a12', trim: null, wash: 'rgba(8,6,6,0.3)' },
+  navy: { band: '#c8963a', trim: '#1a1208', wash: 'rgba(10,10,14,0.22)' },
+  spanish: { band: '#8e2a1c', trim: '#d9aa48', wash: 'rgba(120,30,18,0.2)' },
+  trade: { band: '#8a6a3e', trim: null, wash: 'rgba(160,120,70,0.12)' },
+};
+
 /**
- * Paint a ship's hull, deck, compartments and fittings (base) and its masts, yards and sails (rig) into two canvas
- * textures. Both are painted bow-right; the view flips them for the enemy.
+ * Paint a ship's hull, deck, compartments and fittings (base), her masts, spars and standing rigging (rig) and her
+ * ensign into canvas textures. Hull and rig are painted bow-right and the view flips them for the enemy; the ensign
+ * is painted already facing the right way (`mirror` for the enemy) because the view waves it in strips.
+ * The sails themselves are drawn live by the view, so they can fill, furl and tear.
  */
-export function paintShip(scene: Phaser.Scene, ship: Ship, tile: number, keyPrefix: string, flag: Ensign): ShipTextures {
+export function paintShip(scene: Phaser.Scene, ship: Ship, tile: number, keyPrefix: string, flag: Ensign, mirror = false): ShipTextures {
   const geom = shipGeometry(ship);
   const u = tile * ART_SCALE;
   const w = (geom.padL + ship.width + geom.padR) * u;
@@ -151,28 +262,56 @@ export function paintShip(scene: Phaser.Scene, ship: Ship, tile: number, keyPref
 
   const baseTex = makeCanvas(scene, `${keyPrefix}-base`, w, h);
   const base: Painter = { ctx: baseTex.getContext(), u, X, Y, rnd: new Rng(hashSeed(ship.def.id)) };
-  paintHull(scene, base, ship, geom);
+  paintHull(scene, base, ship, geom, flag);
   paintCompartments(scene, base, ship, geom);
   baseTex.refresh();
 
   const rigTex = makeCanvas(scene, `${keyPrefix}-rig`, w, h);
   const rig: Painter = { ctx: rigTex.getContext(), u, X, Y, rnd: new Rng(hashSeed(ship.def.id) + 7) };
-  paintRig(rig, ship, geom, flag);
+  paintRig(rig, ship, geom);
   rigTex.refresh();
 
-  return { base: `${keyPrefix}-base`, rig: `${keyPrefix}-rig`, geom };
+  // The ensign: hoist at the right edge, flying left (or mirrored).
+  const L = 1.05 * u;
+  const fw = L + 0.2 * u;
+  const fh = 1.2 * u;
+  const flagTex = makeCanvas(scene, `${keyPrefix}-flag`, fw, fh);
+  const fctx = flagTex.getContext();
+  const hoistX = mirror ? 0.1 * u : fw - 0.1 * u;
+  if (mirror) {
+    fctx.translate(fw, 0);
+    fctx.scale(-1, 1);
+  }
+  paintEnsign(fctx, fw - 0.1 * u, fh * 0.42, u, flag);
+  flagTex.refresh();
+
+  return { base: `${keyPrefix}-base`, rig: `${keyPrefix}-rig`, ensign: { key: `${keyPrefix}-flag`, hoistX, hoistY: fh * 0.42 }, geom };
 }
 
 // --- Hull ------------------------------------------------------------------
 
-function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry): void {
+function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
   const { ctx, u, X, Y } = p;
   const mid = ship.height / 2;
+  const st = g.style;
+  const livery = LIVERY[flag];
+  const aft = g.outline[g.outline.length - 1].x;
 
   // Rudder and bowsprit sit under the hull edge.
   ctx.fillStyle = '#2b1a0d';
-  ctx.fillRect(X(g.stern - 0.42), Y(mid - 0.07), 0.4 * u, 0.14 * u);
-  spar(ctx, X(ship.width - 0.6), Y(mid), X(g.tip + 1.1), Y(mid), 0.2 * u, 0.1 * u);
+  ctx.fillRect(X(aft - 0.3), Y(mid - 0.07), 0.4 * u, 0.14 * u);
+  if (st.castle || st.rig[0] === 'lateen') beakhead(p, g, mid, livery.trim ?? '#c9a24a');
+  spar(ctx, X(ship.width - 0.6), Y(mid), X(g.sprit), Y(mid), 0.2 * u, 0.1 * u);
+  // Jib-boom lashings.
+  ctx.strokeStyle = '#c9b07a';
+  ctx.lineWidth = 0.03 * u;
+  for (const k of [0.35, 0.6]) {
+    const x = X(g.tip + (g.sprit - g.tip) * k);
+    ctx.beginPath();
+    ctx.moveTo(x, Y(mid) - 0.07 * u);
+    ctx.lineTo(x, Y(mid) + 0.07 * u);
+    ctx.stroke();
+  }
 
   // Drop shadow on the water.
   ctx.save();
@@ -185,12 +324,18 @@ function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry)
   ctx.fill();
   ctx.restore();
 
+  if (st.galleries) for (const s of [-1, 1]) quarterGallery(p, g, mid, s, livery.trim ?? '#c9a24a');
+
   // Tarred planking.
   ctx.save();
   path(p, g.outline);
   ctx.clip();
   ctx.fillStyle = pattern(ctx, sourceImage(scene, 'art:tex-hull'), (0.9 * u) / 120) ?? '#3a2616';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (livery.wash) {
+    ctx.fillStyle = livery.wash;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
   // Strakes following the curve of the hull.
   for (let i = 1; i <= 3; i++) {
     const inset = i * 0.06;
@@ -211,6 +356,24 @@ function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry)
   ctx.lineWidth = 0.05 * u;
   path(p, g.outline);
   ctx.stroke();
+
+  // A painted strake along the gunports: the navy's ochre, Spain's red and gold.
+  ctx.save();
+  path(p, g.outline);
+  ctx.clip();
+  ctx.strokeStyle = livery.band;
+  ctx.lineWidth = 0.09 * u;
+  path(p, insetOutline(g, mid, 0.1));
+  ctx.stroke();
+  if (livery.trim) {
+    ctx.strokeStyle = livery.trim;
+    ctx.lineWidth = 0.018 * u;
+    for (const inset of [0.055, 0.145]) {
+      path(p, insetOutline(g, mid, inset));
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 
   // Gunports along the guns' stretch of the hull.
   const guns = [...ship.rooms.values()].find((r) => r.def.system === 'guns')?.def;
@@ -249,9 +412,21 @@ function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry)
   path(p, g.deck);
   ctx.stroke();
 
+  // Raised decks: the poop of a stern castle and the forecastle, each breaking down to the waist with a shadow.
+  const rooms = [...ship.rooms.values()].map((r) => r.def);
+  if (st.castle) {
+    const helm = rooms.find((r) => r.system === 'helm');
+    raisedDeck(p, g, mid, g.stern, helm ? helm.x + helm.w : 2, 1, livery.trim ?? '#c9a24a');
+  }
+  if (st.forecastle) {
+    const fore = Math.min(...rooms.filter((r) => r.x + r.w === ship.width).map((r) => r.x));
+    raisedDeck(p, g, mid, fore, g.tip, -1, livery.trim);
+  }
+
   // Stern gallery windows and lanterns.
   const sx = g.stern + 0.32;
   for (let i = -1; i <= 1; i++) {
+    if (st.transom < 0.6) break;
     const wy = mid + i * 0.42;
     ctx.fillStyle = '#ffd27a';
     ctx.fillRect(X(sx) - 0.07 * u, Y(wy) - 0.12 * u, 0.14 * u, 0.24 * u);
@@ -264,7 +439,104 @@ function paintHull(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry)
 }
 
 function insetOutline(g: ShipGeometry, mid: number, inset: number): Vec[] {
-  return profile(g.stern + inset, g.tip - inset * 2.2, mid, (x) => g.half(x, inset));
+  return profile(g.stern + inset, g.tip - inset * 2.2, mid, (x) => g.half(x, inset), 0.12 + (1 - g.style.transom) * 0.45);
+}
+
+/** A deck raised over the waist between x0 and x1; `dir` 1 breaks forward (a stern castle), -1 aft (a forecastle). */
+function raisedDeck(p: Painter, g: ShipGeometry, mid: number, x0: number, x1: number, dir: 1 | -1, trim: string | null): void {
+  const { ctx, u, X, Y } = p;
+  const bx = dir === 1 ? x1 : x0;
+  ctx.save();
+  path(p, g.deck);
+  ctx.clip();
+  // A stern castle towers well above the waist: warmer, sunlit planking, a deep shadow and a gilded taffrail.
+  const castle = dir === 1;
+  const drop = castle ? 0.6 : 0.45;
+  ctx.fillStyle = castle ? 'rgba(255,214,150,0.14)' : 'rgba(255,236,200,0.08)';
+  ctx.fillRect(X(x0), 0, (x1 - x0) * u, ctx.canvas.height);
+  const sh = ctx.createLinearGradient(X(bx), 0, X(bx + dir * drop), 0);
+  sh.addColorStop(0, `rgba(10,5,0,${castle ? 0.62 : 0.5})`);
+  sh.addColorStop(1, 'rgba(10,5,0,0)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(Math.min(X(bx), X(bx + dir * drop)), 0, drop * u, ctx.canvas.height);
+  if (castle && trim) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, X(x1), ctx.canvas.height);
+    ctx.clip();
+    ctx.strokeStyle = trim;
+    ctx.lineWidth = 0.09 * u;
+    path(p, g.deck);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // The breast rail across the break, with turned balusters.
+  const hw = g.half(bx, 0.28);
+  ctx.strokeStyle = '#4a2a12';
+  ctx.lineWidth = 0.13 * u;
+  ctx.beginPath();
+  ctx.moveTo(X(bx), Y(mid - hw));
+  ctx.lineTo(X(bx), Y(mid + hw));
+  ctx.stroke();
+  ctx.strokeStyle = '#a8743f';
+  ctx.lineWidth = 0.05 * u;
+  ctx.stroke();
+  ctx.fillStyle = trim ?? '#d8c08a';
+  for (let y = mid - hw + 0.2; y < mid + hw - 0.1; y += 0.32) {
+    ctx.beginPath();
+    ctx.arc(X(bx), Y(y), 0.035 * u, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A glazed gallery bulging from the stern quarter. */
+function quarterGallery(p: Painter, g: ShipGeometry, mid: number, side: number, trim: string): void {
+  const { ctx, u, X, Y } = p;
+  const cx = g.stern + 0.85;
+  const cy = mid + side * (g.half(cx) - 0.02);
+  ctx.beginPath();
+  ctx.ellipse(X(cx), Y(cy), 0.55 * u, 0.22 * u, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#35200f';
+  ctx.fill();
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = 0.03 * u;
+  ctx.stroke();
+  for (let i = -1; i <= 1; i++) {
+    ctx.fillStyle = '#ffcf78';
+    ctx.fillRect(X(cx + i * 0.26) - 0.06 * u, Y(cy + side * 0.1) - 0.04 * u, 0.12 * u, 0.08 * u);
+  }
+}
+
+/** A carved beakhead under the bowsprit, with a gilded figurehead at its point. */
+function beakhead(p: Painter, g: ShipGeometry, mid: number, trim: string): void {
+  const { ctx, u, X, Y } = p;
+  const t = g.tip;
+  path(p, [
+    { x: t - 0.7, y: mid - 0.3 },
+    { x: t + 0.7, y: mid - 0.08 },
+    { x: t + 0.95, y: mid },
+    { x: t + 0.7, y: mid + 0.08 },
+    { x: t - 0.7, y: mid + 0.3 },
+  ]);
+  ctx.fillStyle = '#4a2c14';
+  ctx.fill();
+  ctx.strokeStyle = '#1d1007';
+  ctx.lineWidth = 0.03 * u;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(20,10,4,0.6)';
+  ctx.lineWidth = 0.015 * u;
+  for (let x = t - 0.4; x < t + 0.6; x += 0.14) {
+    const hw = 0.3 - ((x - t + 0.7) / 1.4) * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(X(x), Y(mid - hw));
+    ctx.lineTo(X(x), Y(mid + hw));
+    ctx.stroke();
+  }
+  ctx.fillStyle = trim;
+  ctx.beginPath();
+  ctx.ellipse(X(t + 0.82), Y(mid), 0.13 * u, 0.06 * u, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function paintPlanks(scene: Phaser.Scene, p: Painter, ship: Ship, g: ShipGeometry): void {
@@ -769,7 +1041,34 @@ function coil(ctx: Ctx, x: number, y: number, r: number): void {
 
 // --- Rig ---------------------------------------------------------------------
 
-function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
+/** A small texture painted in the ship's own coordinates: (x, y) is its top-left corner in the hull texture, in pixels. */
+export interface ShipPiece {
+  key: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Paint each mast's sail furled along its spar into its own small texture, so the view can show it furled or set. */
+export function paintFurls(scene: Phaser.Scene, ship: Ship, g: ShipGeometry, tile: number, keyPrefix: string): ShipPiece[] {
+  const u = tile * ART_SCALE;
+  return g.spars.map((s, i) => {
+    const m = 0.45;
+    const x0 = (Math.min(s.a.x, s.b.x) - m + g.padL) * u;
+    const y0 = (Math.min(s.a.y, s.b.y) - m + g.padT) * u;
+    const w = (Math.abs(s.a.x - s.b.x) + m * 2) * u;
+    const h = (Math.abs(s.a.y - s.b.y) + m * 2) * u;
+    const key = `${keyPrefix}-furl${i}`;
+    const tex = makeCanvas(scene, key, w, h);
+    const p: Painter = { ctx: tex.getContext(), u, X: (x) => (x + g.padL) * u - x0, Y: (y) => (y + g.padT) * u - y0, rnd: new Rng(hashSeed(ship.def.id) + i) };
+    furledSail(p, s);
+    tex.refresh();
+    return { key, x: x0, y: y0, w: Math.ceil(w), h: Math.ceil(h) };
+  });
+}
+
+function paintRig(p: Painter, ship: Ship, g: ShipGeometry): void {
   const { ctx, u, X, Y } = p;
   const mid = ship.height / 2;
   const sorted = [...g.masts].sort((a, b) => a.x - b.x);
@@ -779,7 +1078,7 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
   ctx.strokeStyle = 'rgba(25,15,8,0.55)';
   ctx.lineWidth = 0.022 * u;
   ctx.beginPath();
-  ctx.moveTo(X(g.tip + 1.05), Y(mid));
+  ctx.moveTo(X(g.sprit - 0.05), Y(mid));
   ctx.lineTo(X(fore.x), Y(mid));
   for (let i = 1; i < sorted.length; i++) {
     ctx.moveTo(X(sorted[i - 1].x), Y(mid));
@@ -787,11 +1086,9 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
   }
   ctx.stroke();
 
-  g.masts.forEach((m, mi) => {
-    const big = mi === 0;
-    const yardHalf = g.half(m.x) * (big ? 1.14 : 1.02) + 0.12;
-    const brace = 0.07;
-    const at = (s: number) => ({ x: m.x - Math.sin(brace) * yardHalf * s, y: mid + Math.cos(brace) * yardHalf * s });
+  g.spars.forEach((sp) => {
+    const m = sp.mast;
+    const big = sp.main;
 
     // Shrouds down to the rails.
     ctx.strokeStyle = 'rgba(25,15,8,0.5)';
@@ -806,66 +1103,20 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
       }
     }
 
-    // Yard, with its sail furled along it for fighting.
-    const a = at(-1);
-    const b = at(1);
+    // The yard or boom, casting its shadow on the deck.
+    const { a, b } = sp;
+    const [w0, w1] = sp.kind === 'square' ? [0.13, 0.09] : sp.kind === 'gaff' ? [0.12, 0.08] : [0.1, 0.05];
     ctx.save();
     ctx.shadowColor = 'rgba(0,10,20,0.45)';
     ctx.shadowBlur = 0.25 * u;
     ctx.shadowOffsetX = 0.06 * u;
     ctx.shadowOffsetY = 0.18 * u;
-    spar(ctx, X(a.x), Y(a.y), X(b.x), Y(b.y), 0.13 * u, 0.09 * u);
-    ctx.restore();
-
-    const len = Math.hypot(X(b.x) - X(a.x), Y(b.y) - Y(a.y));
-    ctx.save();
-    ctx.translate(X(a.x), Y(a.y));
-    ctx.rotate(Math.atan2(Y(b.y) - Y(a.y), X(b.x) - X(a.x)));
-    const inset = 0.22 * u;
-    const thick = (big ? 0.2 : 0.17) * u;
-    const off = -0.07 * u;
-    // A lumpy bundle of canvas.
-    const steps = Math.max(6, Math.round((len - inset * 2) / (0.26 * u)));
-    ctx.beginPath();
-    for (let i = 0; i <= steps; i++) {
-      const x = inset + ((len - inset * 2) * i) / steps;
-      const taper = Math.sin((Math.PI * i) / steps) * 0.55 + 0.45;
-      const y = off - thick * taper * (0.92 + 0.08 * Math.sin(i * 2.3));
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    for (let i = steps; i >= 0; i--) {
-      const x = inset + ((len - inset * 2) * i) / steps;
-      const taper = Math.sin((Math.PI * i) / steps) * 0.55 + 0.45;
-      ctx.lineTo(x, off + thick * 0.35 * taper);
-    }
-    ctx.closePath();
-    const cloth = ctx.createLinearGradient(0, off - thick, 0, off + thick * 0.35);
-    cloth.addColorStop(0, '#f4ecd6');
-    cloth.addColorStop(0.6, '#d9cdae');
-    cloth.addColorStop(1, '#a69676');
-    ctx.fillStyle = cloth;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(60,45,25,0.85)';
-    ctx.lineWidth = 0.022 * u;
-    ctx.stroke();
-    // Folds and gaskets.
-    ctx.strokeStyle = 'rgba(120,100,70,0.45)';
-    ctx.lineWidth = 0.015 * u;
-    for (let x = inset + 0.13 * u; x < len - inset; x += 0.13 * u) {
-      ctx.beginPath();
-      ctx.moveTo(x, off - thick * 0.75);
-      ctx.lineTo(x + 0.04 * u, off + thick * 0.2);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = '#4a3218';
-    ctx.lineWidth = 0.03 * u;
-    for (let x = inset + 0.3 * u; x < len - inset - 0.1 * u; x += 0.5 * u) {
-      ctx.beginPath();
-      ctx.moveTo(x, off - thick * 0.95);
-      ctx.lineTo(x, off + thick * 0.4);
-      ctx.stroke();
-    }
+    if (sp.kind === 'square') {
+      // Tapering to both yardarms.
+      const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      spar(ctx, X(c.x), Y(c.y), X(a.x), Y(a.y), w0 * u, w1 * u);
+      spar(ctx, X(c.x), Y(c.y), X(b.x), Y(b.y), w0 * u, w1 * u);
+    } else spar(ctx, X(a.x), Y(a.y), X(b.x), Y(b.y), w0 * u, w1 * u);
     ctx.restore();
 
     // Masthead and fighting top.
@@ -893,8 +1144,68 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry, flag: Ensign): void {
     ctx.stroke();
   });
 
-  // Ensign on a staff at the stern, streaming astern over the water.
-  paintEnsign(ctx, X(g.stern + 0.1), Y(mid), u, flag);
+  // The ensign staff at the taffrail (the flag itself is waved by the view).
+  ctx.fillStyle = '#3d2410';
+  ctx.beginPath();
+  ctx.arc(X(g.stern + 0.1), Y(mid), 0.05 * u, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** A lumpy bundle of canvas lashed along a spar. */
+function furledSail(p: Painter, sp: Spar): void {
+  const { ctx, u, X, Y } = p;
+  const { a, b } = sp;
+  const big = sp.main;
+  const len = Math.hypot(X(b.x) - X(a.x), Y(b.y) - Y(a.y));
+  ctx.save();
+  ctx.translate(X(a.x), Y(a.y));
+  ctx.rotate(Math.atan2(Y(b.y) - Y(a.y), X(b.x) - X(a.x)));
+  const inset = (sp.kind === 'gaff' ? 0.1 : 0.22) * u;
+  const thick = (big ? 0.2 : 0.17) * u;
+  const off = -0.07 * u;
+  // A lumpy bundle of canvas.
+  const steps = Math.max(6, Math.round((len - inset * 2) / (0.26 * u)));
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = inset + ((len - inset * 2) * i) / steps;
+    const taper = Math.sin((Math.PI * i) / steps) * 0.55 + 0.45;
+    const y = off - thick * taper * (0.92 + 0.08 * Math.sin(i * 2.3));
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  for (let i = steps; i >= 0; i--) {
+    const x = inset + ((len - inset * 2) * i) / steps;
+    const taper = Math.sin((Math.PI * i) / steps) * 0.55 + 0.45;
+    ctx.lineTo(x, off + thick * 0.35 * taper);
+  }
+  ctx.closePath();
+  const cloth = ctx.createLinearGradient(0, off - thick, 0, off + thick * 0.35);
+  cloth.addColorStop(0, '#f4ecd6');
+  cloth.addColorStop(0.6, '#d9cdae');
+  cloth.addColorStop(1, '#a69676');
+  ctx.fillStyle = cloth;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(60,45,25,0.85)';
+  ctx.lineWidth = 0.022 * u;
+  ctx.stroke();
+  // Folds and gaskets.
+  ctx.strokeStyle = 'rgba(120,100,70,0.45)';
+  ctx.lineWidth = 0.015 * u;
+  for (let x = inset + 0.13 * u; x < len - inset; x += 0.13 * u) {
+    ctx.beginPath();
+    ctx.moveTo(x, off - thick * 0.75);
+    ctx.lineTo(x + 0.04 * u, off + thick * 0.2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#4a3218';
+  ctx.lineWidth = 0.03 * u;
+  for (let x = inset + 0.3 * u; x < len - inset - 0.1 * u; x += 0.5 * u) {
+    ctx.beginPath();
+    ctx.moveTo(x, off - thick * 0.95);
+    ctx.lineTo(x, off + thick * 0.4);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /**
