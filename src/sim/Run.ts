@@ -36,7 +36,7 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 /** What each difficulty changes: how fast the fleet closes, starting gold, and how tough enemy hulls are. */
 export const DIFFICULTY: Record<Difficulty, { label: string; navySpeed: number; startGold: number; provisions: number; enemyHull: number; enemyReload: number; blurb: string }> = {
   easy: { label: 'Easy', navySpeed: 1.0, startGold: 80, provisions: 14, enemyHull: 0.75, enemyReload: 0.8, blurb: 'A slower fleet, a fuller purse, weaker enemies.' },
-  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, provisions: 10, enemyHull: 1, enemyReload: 1, blurb: 'The voyage as intended.' },
+  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, provisions: 10, enemyHull: 1.1, enemyReload: 1, blurb: 'The voyage as intended.' },
   hard: { label: 'Hard', navySpeed: 1.5, startGold: 10, provisions: 8, enemyHull: 1.3, enemyReload: 1.15, blurb: 'A faster fleet, an empty purse, deadlier enemies.' },
 };
 
