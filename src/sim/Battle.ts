@@ -39,6 +39,10 @@ export interface BattleOptions {
   playerReload?: number;
   /** The player has boarding nets rigged. */
   playerNets?: boolean;
+  /** Loading speed by shot for the player's guns (shot lockers). */
+  playerShotRate?: Partial<Record<ShotType, number>>;
+  /** Pumping speed of the player's ship (chain pumps). */
+  playerPumps?: number;
   /** The final battle: low on hull, the enemy rallies once (repairs, fires out, loads faster). */
   boss?: boolean;
   /** The enemy comes into the fight already this battered (allies have been at her). */
@@ -155,6 +159,8 @@ export class Battle {
     this.enemy.reloadRate = opts.enemyReload ?? 1;
     this.player.reloadRate = opts.playerReload ?? 1;
     this.player.boardingNets = opts.playerNets ?? false;
+    this.player.shotRate = opts.playerShotRate ?? {};
+    this.player.pumpRate = opts.playerPumps ?? 1;
     if (opts.enemyHull !== undefined) this.enemy.hull = Math.max(1, Math.min(this.enemy.hull, opts.enemyHull));
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
     const actions = (side: Side) => ({

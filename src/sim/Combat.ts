@@ -152,7 +152,7 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
       g.charge = Math.max(0, g.charge - dt * 3);
       return;
     }
-    g.charge = Math.min(g.def.loadTime, g.charge + dt * rate);
+    g.charge = Math.min(g.def.loadTime, g.charge + dt * rate * (ship.shotRate[g.shot] ?? 1));
     if (g.charge < g.def.loadTime || !g.target || !target.rooms.has(g.target) || hold) return;
     for (let s = 0; s < g.def.shots; s++) {
       out.push({

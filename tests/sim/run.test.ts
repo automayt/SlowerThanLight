@@ -4,7 +4,7 @@ import { ENEMIES } from '../../src/data/enemies';
 import { autoRun } from '../../src/sim/autoRun';
 import { Rng } from '../../src/sim/rng';
 import { BOSS_TIER, CREW_PRICE, HULL_PRICE, NAVY_START, PROVISION_PRICE, SECTOR_CARRY, MAX_GUNS, START_GOLD, NAVY_SPEED, PLATING, PORT_REST_DELAY, Run, scaleEnemy, SYSTEM_CAP } from '../../src/sim/Run';
-import { WEAPONS } from '../../src/data/weapons';
+import { WEAPONS, weapon } from '../../src/data/weapons';
 import { FITTINGS } from '../../src/data/fittings';
 import { grappleSpeed } from '../../src/sim/Boarding';
 import { Ship } from '../../src/sim/Ship';
@@ -632,7 +632,7 @@ describe('sectors, provisions and the chandler', () => {
     expect(run.buyProvisions(3)).toBe(true);
     expect(run.provisions).toBe(food + 3);
     const offers = run.fittingOffers();
-    expect(offers).toHaveLength(2);
+    expect(offers.length).toBeGreaterThanOrEqual(3);
     const id = offers[0].fitting.id;
     expect(run.buyFitting(id)).toBe(true);
     expect(run.has(id)).toBe(true);
@@ -741,4 +741,57 @@ function reaches(run: Run, from: number, to: number): boolean {
   if (from === to) return true;
   const node = run.chart.nodes.find((n) => n.id === from)!;
   return node.next.some((id) => reaches(run, id, to));
+}
+
+describe('fittings that change the fight, and ports known for something', () => {
+  it('each new fitting does what its blurb says', () => {
+    const run = new Run('gull', 2);
+    const base = run.ship;
+    run.fittings.push('copper', 'marines', 'lockers', 'pumps', 'flags');
+    expect(run.ship.speedBonus).toBe(base.speedBonus + 5);
+    expect(run.ship.melee).toBeCloseTo((base.melee ?? 1) * 1.25);
+    run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS X', boss: false, ambush: false, text: '' };
+    run.status = 'battle';
+    const b = run.startBattle();
+    expect(b.player.shotRate.chain).toBe(1.2);
+    expect(b.player.pumpRate).toBe(1.5);
+    expect(run.coloursChance()).toBe(0.7);
+  });
+
+  it('a figurehead makes ships strike and pay sooner', () => {
+    const plain = new Run('gull', 2);
+    plain.encounter = { kind: 'battle', enemy: 'merchant', name: 'X', boss: false, ambush: false, text: '', intent: 'wary' };
+    plain.status = 'hail';
+    const fierce = new Run('gull', 2);
+    fierce.encounter = { ...plain.encounter };
+    fierce.status = 'hail';
+    fierce.fittings.push('figurehead');
+    expect(fierce.tributeChance()).toBeGreaterThan(plain.tributeChance());
+    fierce.status = 'battle';
+    expect(fierce.battleSetup().options.enemyAI!.surrenderChance).toBeGreaterThan(enemyAI('merchant').surrenderChance);
+  });
+
+  it('ports have specialities', () => {
+    const at = (name: string) => {
+      const run = new Run('gull', 2);
+      run.gold = 999;
+      // Even standing everywhere, so only the speciality moves the price.
+      for (const p of Object.keys(run.standing) as (keyof Run['standing'])[]) run.standing[p] = 0;
+      (run as unknown as { enterPort(n: string, s: string[]): void }).enterPort(name, ['pdr6']);
+      return run;
+    };
+    expect(at('Nassau').crewPrice).toBeLessThan(CREW_PRICE);
+    expect(at('Bridgetown').provisionPrice).toBeLessThan(PROVISION_PRICE);
+    expect(at('Bridgetown').fittingOffers().length).toBe(4);
+    const willem = at('Willemstad');
+    expect(willem.sellPrice(0)).toBe(Math.floor(weapon(willem.fit.guns[0].weapon).price * 0.75));
+    const dockyard = at('Port Royal').upgradeOffers().find((o) => o.id === 'sails')!.price;
+    expect(dockyard).toBeLessThan(at('Nassau').upgradeOffers().find((o) => o.id === 'sails')!.price);
+    const havana = at('Havana');
+    expect(havana.encounter.kind === 'port' && havana.encounter.stock.some((id) => id === 'pdr18' || id === 'carronade')).toBe(true);
+  });
+});
+
+function enemyAI(id: string) {
+  return ENEMIES[id].ai;
 }

@@ -143,7 +143,7 @@ function updateWater(ship: Ship, dt: number): void {
   // Pumps drain the whole ship, wettest rooms first in proportion to their water.
   let pumpLevel = ship.level('pumps');
   if (ship.isSwamped('pumps')) pumpLevel /= 2;
-  let drain = (BILGE_DRAIN + pumpLevel * PUMP_RATE) * dt;
+  let drain = (BILGE_DRAIN + pumpLevel * PUMP_RATE * ship.pumpRate) * dt;
   let total = 0;
   for (const r of ship.rooms.values()) total += r.water * area(r.def.id);
   if (total <= 0) return;

@@ -1,7 +1,7 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
 import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
-import { PORT_NAMES, RECRUIT_NAMES, SEA_EVENTS, SECTORS, seaEvent } from '../data/voyage';
+import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTORS, seaEvent, type PortSpeciality } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { POWER_IDS, portPower, power, relation } from '../data/powers';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
@@ -452,8 +452,9 @@ export class Run {
   /** The ship as currently fitted out. */
   get ship(): ShipDef {
     const f = this.fit;
-    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0);
-    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
+    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0) + (this.has('copper') ? 5 : 0);
+    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1);
+    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, melee, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
   get node(): SeaNode {
@@ -589,6 +590,21 @@ export class Run {
     return Math.round(base * (1 + SECTOR_PRICE * this.sector) * this.portRate);
   }
 
+  /** What the port you are in is known for (null at sea). */
+  get speciality(): PortSpeciality | null {
+    return this.encounter.kind === 'port' ? (PORT_SPECIALITY[this.encounter.name] ?? null) : null;
+  }
+
+  /** What a hand costs to sign on here. */
+  get crewPrice(): number {
+    return this.speciality === 'crew' ? Math.round(CREW_PRICE * 2 / 3) : CREW_PRICE;
+  }
+
+  /** What a day's provisions cost here. */
+  get provisionPrice(): number {
+    return this.speciality === 'chandler' ? PROVISION_PRICE - 1 : PROVISION_PRICE;
+  }
+
   /** Who holds the port you are in (null at sea). */
   get portPower(): PowerId | null {
     return this.encounter.kind === 'port' ? portPower(this.encounter.name) : null;
@@ -650,6 +666,11 @@ export class Run {
     }
   }
 
+  /** Odds a false flag fools her (better with a locker of every nation's flags). */
+  coloursChance(): number {
+    return this.has('flags') ? 0.7 : FALSE_COLOURS_CHANCE;
+  }
+
   /** What a bribe to let you pass costs. */
   bribePrice(): number {
     const { foe } = this.hailing;
@@ -666,7 +687,7 @@ export class Run {
     const { foe } = this.hailing;
     const mine = this.fit.guns.length;
     const hers = foe.ship.guns.length;
-    return Math.max(0.15, Math.min(0.85, 0.35 + 0.1 * (mine - hers) + this.standing[foe.power] / 200));
+    return Math.max(0.15, Math.min(0.85, 0.35 + 0.1 * (mine - hers) + this.standing[foe.power] / 200 + (this.has('figurehead') ? 0.15 : 0)));
   }
 
   /** Gold a ship pays as toll: half what her hold would give up after a fight. */
@@ -692,7 +713,7 @@ export class Run {
       add({ id: 'parley', label: 'Hail her and parley', detail: 'Talk her out of it. If she will not listen, she fights.', chance: this.parleyChance(), fight: 'maybe', blocker: tier === 'feud' ? `${flag.name} will not parley` : undefined });
       const cost = this.bribePrice();
       add({ id: 'bribe', label: 'Buy her off', detail: 'Gold for her captain to look the other way.', cost, fight: 'no', blocker: tier === 'feud' ? 'blood cannot be bought off' : this.gold < cost ? `needs ${cost} gold` : undefined });
-      add({ id: 'colours', label: 'Run up false colours', detail: `Pass as a friend. If she sees through it she fights, and ${flag.short} remembers.`, chance: FALSE_COLOURS_CHANCE, fight: 'maybe' });
+      add({ id: 'colours', label: 'Run up false colours', detail: `Pass as a friend. If she sees through it she fights, and ${flag.short} remembers.`, chance: this.coloursChance(), fight: 'maybe' });
     } else if (intent === 'wary') {
       add({ id: 'attack', label: 'Attack her', detail: foe.ai.fleeAt >= 1 ? 'Run her down before she gets away.' : `She would have let you be: ${flag.short} will not forget it.`, fight: 'yes' });
       add({ id: 'tribute', label: 'Demand toll', detail: 'Fire a gun across her bow and ask for gold. If she refuses, you fight.', chance: this.tributeChance(), fight: 'maybe' });
@@ -741,7 +762,7 @@ export class Run {
         return pass(`Her captain pockets ${cost} gold and finds something interesting on the far horizon.`, [`−${cost} gold`, ...this.shift(p, 2, false)]);
       }
       case 'colours':
-        if (this.rng.chance(FALSE_COLOURS_CHANCE)) return pass('You run up a friendly ensign and exchange the right signals. She takes you for one of her own and sails on.');
+        if (this.rng.chance(this.coloursChance())) return pass('You run up a friendly ensign and exchange the right signals. She takes you for one of her own and sails on.');
         return fight('Her captain is not fooled. She runs out her guns, and her flag will remember the trick.', this.shift(p, -FALSE_COLOURS_PENALTY, false));
       case 'tribute': {
         if (this.rng.chance(this.tributeChance())) {
@@ -811,13 +832,16 @@ export class Run {
         enemyHull: aided ? Math.round(hull * (1 - BRETHREN_AID)) : undefined,
         consort: this.escort ? { name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE } : undefined,
         seed: this.rng.int(2 ** 31),
-        enemyAI: foe.ai,
+        // A fearsome figurehead makes a wavering captain strike sooner.
+        enemyAI: this.has('figurehead') && foe.ai.surrenderChance > 0 ? { ...foe.ai, surrenderChance: Math.min(1, foe.ai.surrenderChance + 0.1) } : foe.ai,
         playerCondition: this.condition,
         allowEscape: !this.encounter.boss,
         boss: this.encounter.boss,
         enemyReload: DIFFICULTY[this.difficulty].enemyReload,
         playerReload: this.has('drill') ? 1.1 : 1,
         playerNets: this.has('nets'),
+        playerShotRate: this.has('lockers') ? { chain: 1.2, grape: 1.2 } : undefined,
+        playerPumps: this.has('pumps') ? 1.5 : undefined,
         ...opts,
       },
     };
@@ -1210,7 +1234,7 @@ export class Run {
   }
 
   canHire(): boolean {
-    return this.status === 'port' && this.gold >= CREW_PRICE && this.condition.crew.length < this.maxCrew && !this.portFeud;
+    return this.status === 'port' && this.gold >= this.crewPrice && this.condition.crew.length < this.maxCrew && !this.portFeud;
   }
 
   /** A harbour whose masters want you dead: nobody will sign on, and nobody offers work. */
@@ -1224,8 +1248,14 @@ export class Run {
     const welcome: string[] = [];
     const job = this.commission;
     if (job?.kind === 'dispatch' && job.port !== name) welcome.push(...this.fulfil(job));
-    const enc: Extract<Encounter, { kind: 'port' }> = { kind: 'port', name, rested: false, stock, fittings: this.stockFittings(), welcome };
+    const enc: Extract<Encounter, { kind: 'port' }> = { kind: 'port', name, rested: false, stock, welcome };
     this.begin(enc);
+    enc.fittings = this.stockFittings();
+    // Foundries and arsenals stock more guns than the chart's armoury list: one more, or the heaviest.
+    const special = this.speciality;
+    const extra = special === 'heavy' ? ['pdr18', 'carronade'] : special === 'armoury' ? ARMOURY.filter((id) => !stock.includes(id)) : [];
+    const more = extra.filter((id) => !stock.includes(id));
+    if (more.length) stock.push(this.rng.pick(more));
     enc.commission = this.offerCommission(name);
     return enc;
   }
@@ -1284,7 +1314,7 @@ export class Run {
 
   hireCrew(): string | null {
     if (!this.canHire()) return null;
-    this.gold -= CREW_PRICE;
+    this.gold -= this.crewPrice;
     return this.recruit();
   }
 
@@ -1295,12 +1325,12 @@ export class Run {
   // --- Chandler: provisions and fittings ------------------------------------------
 
   canBuyProvisions(n = 1): boolean {
-    return this.inPort && n > 0 && this.provisions + n <= this.maxProvisions && this.gold >= n * PROVISION_PRICE;
+    return this.inPort && n > 0 && this.provisions + n <= this.maxProvisions && this.gold >= n * this.provisionPrice;
   }
 
   buyProvisions(n = 1): boolean {
     if (!this.canBuyProvisions(n)) return false;
-    this.gold -= n * PROVISION_PRICE;
+    this.gold -= n * this.provisionPrice;
     this.provisions += n;
     return true;
   }
@@ -1309,7 +1339,8 @@ export class Run {
   private stockFittings(): string[] {
     const pool = FITTING_IDS.filter((id) => !this.has(id));
     const out: string[] = [];
-    while (out.length < 2 && pool.length) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    const n = this.speciality === 'chandler' ? 4 : 3;
+    while (out.length < n && pool.length) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
     return out;
   }
 
@@ -1371,6 +1402,8 @@ export class Run {
         available: now < SYSTEM_CAP[id],
       });
     }
+    // A Navy dockyard does shipwright's work cheaper.
+    if (this.speciality === 'shipwright') for (const o of offers) o.price = Math.round(o.price * 0.8);
     for (const o of offers) o.available = o.available && this.inPort && this.gold >= o.price;
     return offers;
   }
@@ -1417,7 +1450,7 @@ export class Run {
   /** What the armoury pays for one of your guns. */
   sellPrice(index: number): number {
     const g = this.fit.guns[index];
-    return g ? Math.floor(weapon(g.weapon).price / 2) : 0;
+    return g ? Math.floor(weapon(g.weapon).price * (this.speciality === 'market' ? 0.75 : 0.5)) : 0;
   }
 
   canSellGun(index: number): boolean {

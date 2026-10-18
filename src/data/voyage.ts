@@ -13,6 +13,29 @@ export const PORT_TAGLINES: Record<string, string> = {
   Havana: 'Spain’s great harbour under the guns of El Morro. Welcome to a friend of Castile; the garrote for anyone else.',
 };
 
+/** What a port is known for: cheap hands, a dockyard, a foundry, an arsenal, chandlers, or a market. */
+export type PortSpeciality = 'crew' | 'shipwright' | 'armoury' | 'heavy' | 'chandler' | 'market';
+
+export const PORT_SPECIALITY: Record<string, PortSpeciality> = {
+  Nassau: 'crew',
+  'Port Royal': 'shipwright',
+  'Saint-Pierre': 'armoury',
+  Havana: 'heavy',
+  Bridgetown: 'chandler',
+  'Charles Town': 'chandler',
+  Willemstad: 'market',
+};
+
+/** A line for each speciality, under the port's name. */
+export const SPECIALITY_TEXT: Record<PortSpeciality, string> = {
+  crew: 'Known for: idle hands on every wharf. Crew sign on for less.',
+  shipwright: 'Known for: the Navy dockyard. Shipwright’s work 20% cheaper.',
+  armoury: 'Known for: French foundries. An extra gun in the armoury.',
+  heavy: 'Known for: the Spanish arsenal. Heavy guns for sale.',
+  chandler: 'Known for: chandlers’ row. Cheaper provisions and more fittings.',
+  market: 'Known for: Dutch traders. Guns sell for three-quarters of their price.',
+};
+
 /** Names for crew who sign on during the voyage. */
 export const RECRUIT_NAMES = [
   'Jack Tarrant',

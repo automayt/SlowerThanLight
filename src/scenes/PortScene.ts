@@ -8,8 +8,8 @@ import { Button, divider, goldText, panel, Sea } from '../render/ui';
 import { playLoop, playSfx } from '../render/sound';
 import { weapon } from '../data/weapons';
 import { FITTINGS } from '../data/fittings';
-import { CREW_PRICE, HULL_PRICE, MAX_GUNS, PROVISION_PRICE, type Run } from '../sim/Run';
-import { PORT_TAGLINES } from '../data/voyage';
+import { HULL_PRICE, MAX_GUNS, type Run } from '../sim/Run';
+import { PORT_TAGLINES, SPECIALITY_TEXT } from '../data/voyage';
 import { badges } from '../sim/Skills';
 import type { WeaponDef } from '../sim/types';
 import { saveRun } from './save';
@@ -82,6 +82,8 @@ export class PortScene extends Phaser.Scene {
     this.add
       .text(SCREEN.w / 2, TOP + 54, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
+    const special = run.speciality;
+    if (special) this.add.text(SCREEN.w / 2, TOP + 74, SPECIALITY_TEXT[special], textStyle(13, COLORS.gold, { fontStyle: 'italic' })).setOrigin(0.5, 0);
     // Hunger on the way in, tucked in the corner beside the port's name.
     const hunger = freshHunger(this, run);
     if (hunger) this.add.text(COLS[0].x, TOP + 10, `⚠ ${hunger}`, textStyle(13, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 }));
@@ -215,7 +217,7 @@ export class PortScene extends Phaser.Scene {
     });
     y += ROW + 6;
     const full = run.condition.crew.length >= run.maxCrew;
-    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${CREW_PRICE}g)`, {
+    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${run.crewPrice}g)`, {
       enabled: run.canHire(),
       cmd: { t: 'hire' },
       fn: () => {
@@ -223,7 +225,7 @@ export class PortScene extends Phaser.Scene {
         if (who) this.say(`${who} signs the articles.`);
       },
       detail: `Crew ${run.condition.crew.length}/${run.maxCrew}`,
-      price: full ? undefined : CREW_PRICE,
+      price: full ? undefined : run.crewPrice,
       why: 'Every bunk aboard is taken.',
     });
     y += ROW + 10;
@@ -233,12 +235,12 @@ export class PortScene extends Phaser.Scene {
     y += 12;
     const room = run.maxProvisions - run.provisions;
     const lot = Math.min(5, room);
-    this.button(x, y, w, room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * PROVISION_PRICE}g)`, {
+    this.button(x, y, w, room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * run.provisionPrice}g)`, {
       enabled: lot > 0 && run.canBuyProvisions(lot),
       cmd: { t: 'provisions', n: lot },
       fn: () => run.buyProvisions(lot) && this.say('Salt pork, biscuit and fresh water are swayed aboard.'),
       detail: `${run.provisions}/${run.maxProvisions} aboard`,
-      price: lot > 0 ? lot * PROVISION_PRICE : undefined,
+      price: lot > 0 ? lot * run.provisionPrice : undefined,
       tip: 'A day’s provisions go with every jump. Without them the crew go hungry and lose health.',
       why: 'The hold can take no more.',
     });

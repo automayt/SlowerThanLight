@@ -145,6 +145,10 @@ export class Ship {
   boardingNets = false;
   /** "Make sail" escape charge, 0..100. */
   escape = 0;
+  /** Extra loading speed for guns loaded with a given shot (shot lockers). */
+  shotRate: Partial<Record<ShotType, number>> = {};
+  /** Pumping speed multiplier (chain pumps). */
+  pumpRate = 1;
   /** Bounding size in tiles. */
   readonly width: number;
   readonly height: number;
