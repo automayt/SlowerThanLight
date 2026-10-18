@@ -41,6 +41,7 @@ export interface CrewState {
 
 export type ClientMessage =
   | { t: 'hello'; version: number; name: string; token?: string }
+  | { t: 'name'; name: string }
   | { t: 'create' }
   | { t: 'join'; code: string }
   | { t: 'leave' }

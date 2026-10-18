@@ -142,7 +142,7 @@ export class CoopLobbyScene extends Phaser.Scene {
     ROLES.forEach((r: Role, i) => {
       const mine = link.has(r);
       const holder = crew.members.find((m) => m.roles.includes(r) && m.id !== link.id);
-      const b = new Button(this, x + i * 200, y, 190, 36, ROLE_NAMES[r], () => {
+      const b = new Button(this, x + i * 162, y, 152, 36, ROLE_NAMES[r], () => {
         const roles = mine ? link.roles.filter((x) => x !== r) : [...link.roles, r];
         link.send({ t: 'roles', roles });
       }, { size: 15, tip: `${ROLE_BLURBS[r]}${holder ? ` Now: ${holder.name}.` : ''}` });
@@ -154,7 +154,8 @@ export class CoopLobbyScene extends Phaser.Scene {
     if (crew.phase === 'lobby') {
       const rx = BOX.x + BOX.w / 2 + 40;
       let ry = BOX.y + 180;
-      this.dyn.push(this.add.text(rx, ry, captain ? 'Choose her' : 'The captain chooses the ship', textStyle(13, COLORS.textDim)));
+      const chosen = PLAYER_SHIPS.find((s) => s.id === crew.ship);
+      this.dyn.push(this.add.text(rx, ry, captain ? 'Choose her' : `The captain has chosen ${chosen?.name ?? crew.ship}, ${DIFFICULTY[crew.difficulty].label}`, textStyle(13, captain ? COLORS.textDim : COLORS.gold)));
       ry += 22;
       for (const s of PLAYER_SHIPS) {
         const b = new Button(this, rx, ry, 300, 32, `${s.name} · ${s.className}`, () => link.send({ t: 'setup', ship: s.id, difficulty: crew.difficulty }), { size: 14 });

@@ -89,7 +89,7 @@ export class CoopClient {
   setName(name: string): void {
     this.name = name.trim().slice(0, 20) || 'Sailor';
     store(NAME_KEY, this.name);
-    this.send({ t: 'hello', version: PROTOCOL_VERSION, name: this.name, token: stored(TOKEN_KEY) || undefined });
+    this.send({ t: 'name', name: this.name });
   }
 
   /** Roles this player holds in their crew. */

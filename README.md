@@ -19,8 +19,19 @@ Then open http://localhost:5173.
 | `npm run coverage` | Run the tests with V8 coverage of `src/sim`, `src/data` and the save code |
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run balance [runs] [battles\|voyages]` | Simulate AI-vs-AI battles against every enemy and whole voyages, and print win rates |
+| `npm run server` | Start the co-op server on port 8140 (see below) |
+| `npm run coop` | Build the game, then start the co-op server, which also serves it |
 
 If the game seems frozen in an embedded browser that throttles `requestAnimationFrame`, open it with `?timer` (e.g. http://localhost:5173/?timer).
+
+## Sail together (co-op)
+
+Two or three friends crew one ship. One machine runs the server; everyone opens the game and chooses **Sail Together** on the title screen.
+
+- **Playing on your network:** run `npm run coop` on the host and have everyone open `http://<host's address>:8140` (the server prints the address). While developing, `npm run dev` plus `npm run server` also works: friends open the dev server (port 5173) and it passes the connection on to the co-op server.
+- **Posts:** the **Captain** sets the course, answers hails and events, spends the gold, and calls the speed and the escape. The **Master Gunner** aims the guns, picks the shot and calls broadsides. The **Bosun** sets the deckhands and gun crews, moves the crew and leads boarders. Anyone may pause. Any post nobody holds is worked by the AI first mate, including the posts of a player who drops out.
+- **Deciding together:** the captain's choices play out on everyone's screen. Anyone else's clicks on the chart, events, hails and in port reach the captain as suggestions.
+- **Saves:** the server keeps each crew's voyage in `saves/coop/`, so a voyage survives a restart, and a player who reconnects goes straight back aboard. Co-op never touches your single-player voyage.
 
 ## How to play
 
@@ -69,3 +80,4 @@ If the game seems frozen in an embedded browser that throttles `requestAnimation
 - `src/scenes/` — Preload, Title, Ship Select, Sea Map, Event, Port, Battle, Result, Run End
 - `public/art/` — painted illustrations made with ComfyUI, listed in `manifest.json`; the game runs without them
 - `scripts/balance.ts` — headless balance report
+- `server/` — the co-op server (Node + WebSocket): crews, posts, the shared voyage, battles run at 20 ticks a second; `src/net/` is the game's side of it, and `src/sim/commands.ts` and `snapshot.ts` are the orders and battle state they exchange

@@ -112,6 +112,11 @@ export class CoopServer {
     const roles = crew?.members.get(player.id) ?? new Set<Role>();
     const fail = (text: string) => player.conn?.send({ t: 'error', text });
     switch (msg.t) {
+      case 'name':
+        player.name = cleanName(msg.name) || player.name;
+        player.conn?.send({ t: 'welcome', id: player.id, token: player.token, name: player.name });
+        if (crew) this.membersChanged(crew);
+        return;
       case 'create': {
         this.leave(player);
         const created = this.newCrew();

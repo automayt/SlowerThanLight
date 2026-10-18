@@ -28,6 +28,8 @@ export class CoopDirector extends Phaser.Scene {
   private checkTimer: Phaser.Time.TimerEvent | null = null;
   /** Arrived mid-voyage: go to the battle as soon as it is sent. */
   private joinBattle = false;
+  /** Who decides, in the corner of the voyage screens, for anyone who is not the captain. */
+  private badge!: Phaser.GameObjects.Text;
 
   constructor() {
     super(COOP_DIRECTOR);
@@ -37,6 +39,7 @@ export class CoopDirector extends Phaser.Scene {
     const link = coop();
     if (!link) return;
     this.off = link.on((m) => this.onMessage(m));
+    this.badge = this.add.text(16, 74, '', textStyle(13, COLORS.gold, { fontStyle: 'italic', backgroundColor: '#07111add', padding: { x: 8, y: 3 } })).setDepth(90);
     this.events.once('shutdown', () => this.off?.());
   }
 
@@ -149,6 +152,13 @@ export class CoopDirector extends Phaser.Scene {
   }
 
   update(): void {
+    // Anyone but the captain is told their clicks on the voyage are suggestions.
+    const link = coop();
+    const key = this.current()?.scene.key ?? '';
+    const voyage = ['SeaMap', 'Event', 'Hail', 'Port', 'Result'].includes(key);
+    const captain = link?.holder('captain');
+    this.badge.setVisible(!!link && voyage && !link.has('captain'));
+    if (this.badge.visible) this.badge.setText(`Captain ${captain ?? '—'} decides; your choices are suggestions.`);
     // Stay drawn over whichever scene is showing.
     if (this.game.scene.getIndex(this) !== this.game.scene.getScenes(false).length - 1) this.scene.bringToTop();
   }
