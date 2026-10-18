@@ -3,12 +3,14 @@ import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/C
 import { BattleFx, WIND } from '../render/fx';
 import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
-import { currentRun } from '../render/RunBar';
+import { currentRun, setRun } from '../render/RunBar';
 import { shipGeometry } from '../render/ShipArt';
 import { ShipView, type AimMark } from '../render/ShipView';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
+import { coop, type CoopClient } from '../net/CoopClient';
 import type { Battle } from '../sim/Battle';
+import { applyBattle, battleRole, ROLE_NAMES, ROLES, type BattleCommand } from '../sim/commands';
 import type { BattleReport, Run } from '../sim/Run';
 import { BOARD_TIME, grappleSpeed, partyStrength } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
@@ -80,7 +82,10 @@ export class BattleScene extends Phaser.Scene {
   create(): void {
     const run = (this.run = currentRun(this));
     saveRun(run);
-    const battle = (this.battle = run.startBattle());
+    // In co-op the battle runs on the server: this is a copy that its snapshots keep up to date.
+    const link = coop();
+    const battle = (this.battle = link?.battle ?? run.startBattle());
+    if (!link) battle.speed = this.speed;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h, 0);
 
     const foe = run.encounter.kind === 'battle' ? run.currentEnemy() : null;
@@ -115,11 +120,13 @@ export class BattleScene extends Phaser.Scene {
       },
       selectGun: (i) => (this.aimingGun = this.aimingGun === i ? null : i),
       clearGunTarget: (i) => {
-        battle.aimGun(i, null);
+        this.order({ t: 'aim', gun: i, room: null });
         if (this.aimingGun === i) this.aimingGun = null;
       },
       toggleSpeed: () => this.toggleSpeed(),
+      order: (cmd) => this.order(cmd),
     });
+    if (link) this.hud.addLog(`You stand as ${link.roles.map((r) => ROLE_NAMES[r]).join(' and ') || 'a hand with no station'}. ${crewRoles(link)}`, COLORS.gold);
     this.crewIds = p.crew.map((c) => c.id);
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
     this.hud.addLog(`${e.def.name} bears down on you. Run out the guns!`, COLORS.gold);
@@ -137,10 +144,10 @@ export class BattleScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown-SPACE', () => {
-      battle.togglePause();
+      this.order({ t: 'pause', on: !battle.paused });
       this.hud.hintDone('pause');
     });
-    kb.on('keydown-B', () => battle.setBroadside(!battle.player.broadside));
+    kb.on('keydown-B', () => this.order({ t: 'broadside', on: !battle.player.broadside }));
     kb.on('keydown-F', () => this.toggleSpeed());
     kb.on('keydown-M', () => toggleMute(this.game));
     playLoop(this, 'waves', 0.25);
@@ -155,7 +162,7 @@ export class BattleScene extends Phaser.Scene {
         const gun = battle.player.guns[i];
         if (!gun || battle.outcome) return;
         if (e.shiftKey) {
-          battle.setShot(i, SHOT_TYPES[(SHOT_TYPES.indexOf(gun.shot) + 1) % SHOT_TYPES.length]);
+          this.order({ t: 'shot', gun: i, shot: SHOT_TYPES[(SHOT_TYPES.indexOf(gun.shot) + 1) % SHOT_TYPES.length] });
           this.hud.hintDone('shot');
         } else this.aimingGun = this.aimingGun === i ? null : i;
       }),
@@ -172,8 +179,29 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private toggleSpeed(): void {
-    this.speed = this.speed > 1 ? 1 : 2;
-    this.registry.set('battle-speed', this.speed);
+    const speed = this.battle.speed > 1 ? 1 : 2;
+    if (!this.order({ t: 'speed', speed })) return;
+    this.speed = speed;
+    this.registry.set('battle-speed', speed);
+  }
+
+  /**
+   * Give a battle order. Alone, it is carried out at once. In co-op it goes to the server if it is one of this
+   * player's roles (and is shown at once, until the next snapshot confirms it); another's order is refused here.
+   */
+  private order(cmd: BattleCommand): boolean {
+    const link = coop();
+    if (!link) return applyBattle(this.battle, cmd);
+    const need = battleRole(cmd);
+    if (need && !link.has(need)) {
+      const who = link.holder(need);
+      this.hud.flash(`${ROLE_NAMES[need].toUpperCase()}'S ORDER: ${who ? `ASK ${who.toUpperCase()}` : 'THE MATE HAS IT'}`, 2200);
+      return false;
+    }
+    link.send({ t: 'battle', cmd });
+    // Show it straight away; escaping and pausing wait for the server, which decides them.
+    if (cmd.t !== 'escape' && cmd.t !== 'pause' && cmd.t !== 'speed') applyBattle(this.battle, cmd);
+    return true;
   }
 
   /** First-battle hints, offered in order as the moment for each comes; the HUD shows one at a time, once ever. */
@@ -231,7 +259,7 @@ export class BattleScene extends Phaser.Scene {
 
     const enemyRoom = this.enemyView.roomAt(ptr.x, ptr.y);
     if (this.aimingGun !== null && enemyRoom) {
-      b.aimGun(this.aimingGun, enemyRoom);
+      this.order({ t: 'aim', gun: this.aimingGun, room: enemyRoom });
       this.aimingGun = null;
       return;
     }
@@ -247,13 +275,13 @@ export class BattleScene extends Phaser.Scene {
     // An order is given once: the selection is spent, so a later click on her deck (to aim) can't send a boarding party.
     const room = this.playerView.roomAt(ptr.x, ptr.y);
     if (room && this.selected.size) {
-      if (b.orderCrew(this.selected, room, 'player')) this.hud.hintDone('crew');
+      if (this.order({ t: 'crew', ids: [...this.selected], room, ship: 'player' })) this.hud.hintDone('crew');
       for (const c of b.player.crew) if (this.selected.has(c.id) && c.waypoints.length) this.playerView.markMove(c.slot);
       this.selected.clear();
       return;
     }
     if (enemyRoom && this.selected.size) {
-      const sent = b.orderCrew(this.selected, enemyRoom, 'enemy');
+      const sent = b.canBoard() && this.order({ t: 'crew', ids: [...this.selected], room: enemyRoom, ship: 'enemy' });
       if (sent) {
         this.selected.clear();
         this.hud.hintDone('crew');
@@ -275,9 +303,10 @@ export class BattleScene extends Phaser.Scene {
       // Once alongside, hold fire until the captain has given orders.
       if (!this.armed) {
         this.armed = true;
-        b.paused = true;
+        // (A co-op battle opens paused on the server.)
+        if (!coop()) b.paused = true;
       }
-      b.update((delta / 1000) * this.speed);
+      b.update((delta / 1000) * b.speed);
     }
     for (const ev of b.drainEvents()) this.onEvent(ev);
     this.offerHints();
@@ -318,10 +347,11 @@ export class BattleScene extends Phaser.Scene {
       selectedCrew: this.selected,
       aimingGun: this.aimingGun,
       hoverText: this.hoverText(hoverPlayer, hoverEnemy),
-      speed: this.speed,
+      speed: b.speed,
     });
 
-    if (b.outcome && !this.ending) this.endBattle();
+    // A co-op battle ends once the server's account of it has arrived.
+    if (b.outcome && !this.ending && (!coop() || coop()!.report)) this.endBattle();
   }
 
   /** Both ships sail into range under a banner before the shooting starts. */
@@ -723,7 +753,13 @@ export class BattleScene extends Phaser.Scene {
     if (o.kind === 'enemySunk' || o.kind === 'sunk' || o.kind === 'defeat') this.time.delayedCall(400, () => playSfx(this, 'sink', 0.6));
     if (o.kind === 'escaped' || o.kind === 'enemyEscaped') playSfx(this, 'sail', 0.5);
     if (o.kind === 'captured') bumpProfile('captures');
-    const report = this.run.finishBattle(this.battle);
+    // In co-op the server has already recorded the battle and sent the voyage on.
+    const link = coop();
+    const report = link?.report ?? this.run.finishBattle(this.battle);
+    if (link?.run) {
+      link.report = null;
+      setRun(this, (this.run = link.run));
+    }
     // When she gets away, say what it costs (the alarm brings the fleet on) while the log is still up.
     if (o.kind === 'enemyEscaped') {
       this.hud.addLog(`${this.battle.enemy.def.name} gets clean away.`, COLORS.textWarn);
@@ -764,4 +800,10 @@ export class BattleScene extends Phaser.Scene {
     });
     this.time.delayedCall(3800, () => this.scene.start('Result', { battle: this.battle, report } satisfies ResultData));
   }
+}
+
+/** Who stands where aboard, for the opening line of a co-op battle. */
+function crewRoles(link: CoopClient): string {
+  const others = ROLES.filter((r) => !link.has(r)).map((r) => `${ROLE_NAMES[r]}: ${link.holder(r) ?? 'the mate'}`);
+  return others.length ? `${others.join(', ')}.` : '';
 }

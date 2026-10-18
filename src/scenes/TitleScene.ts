@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { coop, endCoop } from '../net/CoopClient';
+import { stopCoopDirector } from './CoopDirector';
 import { CAPS_FONT, COLORS, SCREEN, TITLE_FONT, textStyle, titleStyle } from '../render/theme';
 import { placeArt } from '../render/art';
 import { playLoop, stopLoop } from '../render/sound';
@@ -44,6 +46,11 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: motto, alpha: 1, duration: 900, delay: 800 });
     this.tweens.add({ targets: rule, alpha: 1, scaleX: 1, duration: 900, delay: 1000, ease: 'Cubic.easeOut' });
 
+    // Back at the title, co-op is over: this browser's own voyage is the one to continue.
+    if (coop()) {
+      endCoop();
+      stopCoopDirector(this.game);
+    }
     const saved = loadRun();
     const resume = () => {
       if (!saved) return;
@@ -72,6 +79,7 @@ export class TitleScene extends Phaser.Scene {
     entrance.push(
       new SoundButton(this, 20, SCREEN.h - 58, 38),
       new Button(this, cx - 85, SCREEN.h - 58, 170, 38, 'How to Play', () => this.showHelp(), { size: 16, hint: 'H' }),
+      new Button(this, cx - 285, SCREEN.h - 58, 190, 38, 'Sail Together', () => this.scene.start('CoopLobby'), { size: 16, hint: 'T', tip: 'Co-op: crew one ship with friends on your network.' }),
       new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 }),
     );
     entrance.forEach((o, i) => {
@@ -85,6 +93,7 @@ export class TitleScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => this.closeHelp());
     kb.on('keydown-H', () => (this.help.length ? this.closeHelp() : this.showHelp()));
+    kb.on('keydown-T', () => !this.help.length && this.scene.start('CoopLobby'));
     kb.on('keydown-ENTER', () => {
       if (this.help.length) this.closeHelp();
       else primary.press();

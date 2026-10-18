@@ -8,6 +8,8 @@ import { weapon } from '../data/weapons';
 import { MAX_GUNS } from '../sim/Run';
 import type { ResultData } from './BattleScene';
 import { saveRun } from './save';
+import { onVoyage, voyage } from '../net/voyage';
+import type { VoyageCommand } from '../sim/commands';
 
 const BOX = { x: 120, y: 64, w: SCREEN.w - 240, h: 600 };
 const ART = { w: 460, h: 259 };
@@ -122,12 +124,12 @@ export class ResultScene extends Phaser.Scene {
     const run = currentRun(this);
     const prize = run.prize;
     if (!prize || prize.taken) return;
-    const picks: [string, () => string | null][] = [
-      ...prize.guns.map((id): [string, () => string | null] => {
+    const picks: [string, () => string | null, VoyageCommand][] = [
+      ...prize.guns.map((id): [string, () => string | null, VoyageCommand] => {
         // Will the gun deck have the bars to crew it alongside the guns already aboard?
         const hands = run.fit.guns.reduce((n, g) => n + weapon(g.weapon).hands, 0) + weapon(id).hands;
         const short = run.fit.guns.length < MAX_GUNS && hands > (run.fit.systems.guns ?? 0) ? `  (needs Gun Deck ${hands})` : '';
-        return [`Take her ${weapon(id).name}${short}`, () => run.takePrizeGun(id)];
+        return [`Take her ${weapon(id).name}${short}`, () => run.takePrizeGun(id), { t: 'prizeGun', weapon: id }];
       }),
       ...(prize.recruits
         ? [
@@ -137,7 +139,8 @@ export class ResultScene extends Phaser.Scene {
                 const who = run.pressPrizeCrew();
                 return who ? `${who} signs the articles.` : null;
               },
-            ] as [string, () => string | null],
+              { t: 'pressCrew' },
+            ] as [string, () => string | null, VoyageCommand],
           ]
         : []),
     ];
@@ -145,10 +148,12 @@ export class ResultScene extends Phaser.Scene {
     const label = this.add.text(x, y - 4, 'Spoils: pick one (or press its number)', { fontFamily: CAPS_FONT, fontSize: '18px', color: COLORS.gold, wordWrap: { width: w } });
     const buttons: Button[] = [];
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
-    picks.forEach(([text, take], i) => {
+    // Taking spoils is the captain's call: the pick plays out here when it is made.
+    const takes = new Map<string, () => void>();
+    onVoyage(this, { prizeGun: (cmd) => takes.get(JSON.stringify(cmd))?.(), pressCrew: (cmd) => takes.get(JSON.stringify(cmd))?.() });
+    picks.forEach(([text, take, cmd], i) => {
       if (keys[i]) this.input.keyboard!.on(`keydown-${keys[i]}`, () => buttons[i]?.active && buttons[i].press());
-      buttons.push(
-        new Button(this, x, y + 26 + i * 38, w, 32, `${i + 1}. ${text}`, () => {
+      takes.set(JSON.stringify(cmd), () => {
           const said = take();
           if (!said) {
             label.setText(i === picks.length - 1 && prize.recruits ? 'No bunk to spare for a prisoner.' : 'No room aboard for her guns.').setColor(COLORS.textWarn);
@@ -158,8 +163,8 @@ export class ResultScene extends Phaser.Scene {
           this.time.delayedCall(0, () => buttons.forEach((b) => b.destroy()));
           label.setText(said).setColor(COLORS.textGood);
           saveRun(run);
-        }, { size: 14 }),
-      );
+      });
+      buttons.push(new Button(this, x, y + 26 + i * 38, w, 32, `${i + 1}. ${text}`, () => voyage(this, cmd, text), { size: 14 }));
     });
   }
 

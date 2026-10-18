@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { coop } from '../net/CoopClient';
 import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
@@ -67,7 +68,14 @@ export class RunEndScene extends Phaser.Scene {
     });
     y += 20;
 
-    const again = new Button(this, cx - 250, y, 230, 44, 'New Voyage', () => this.scene.start('ShipSelect', { shipId: run.def.id }), { size: 18, hint: 'Enter' });
+    // A co-op crew goes back to the lobby together to raise the next voyage.
+    const link = coop();
+    const again = link
+      ? new Button(this, cx - 250, y, 230, 44, 'Back to the lobby', () => {
+          link.send({ t: 'leave' });
+          this.scene.start('CoopLobby');
+        }, { size: 18, hint: 'Enter' })
+      : new Button(this, cx - 250, y, 230, 44, 'New Voyage', () => this.scene.start('ShipSelect', { shipId: run.def.id }), { size: 18, hint: 'Enter' });
     const home = new Button(this, cx + 20, y, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18, hint: 'Esc' });
     this.input.keyboard!.once('keydown-ENTER', () => again.press());
     this.input.keyboard!.once('keydown-ESC', () => home.press());

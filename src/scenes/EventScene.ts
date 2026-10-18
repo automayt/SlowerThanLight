@@ -7,6 +7,7 @@ import { Button, divider, frame, gild, goldText, panel, Sea } from '../render/ui
 import type { Run } from '../sim/Run';
 import { loadArtOnDemand } from './PreloadScene';
 import { recordDiscovery, saveRun } from './save';
+import { onVoyage, voyage } from '../net/voyage';
 
 const X = 40;
 const Y = 88;
@@ -98,7 +99,7 @@ export class EventScene extends Phaser.Scene {
 
     let cy = this.choicesY;
     choices.forEach(({ blocked, text, hint, h }, i) => {
-      const b = new Button(this, this.tx, cy, this.tw, h, '', () => this.choose(i));
+      const b = new Button(this, this.tx, cy, this.tw, h, '', () => voyage(this, { t: 'choose', index: i }, run.fill(ev.choices[i].label)));
       // The button's own one-line label is unused; the wrapped lines ride in the button instead.
       b.label.setVisible(false);
       text.setPosition(16, 10);
@@ -111,7 +112,8 @@ export class EventScene extends Phaser.Scene {
       cy += h + gap;
     });
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR'];
-    ev.choices.forEach((_, i) => this.input.keyboard!.once(`keydown-${keys[i]}`, () => this.choiceButtons.length && run.canChoose(i) && this.choose(i)));
+    ev.choices.forEach((_, i) => this.input.keyboard!.on(`keydown-${keys[i]}`, () => this.choiceButtons.length && run.canChoose(i) && this.choiceButtons[i].press()));
+    onVoyage(this, { choose: (cmd) => this.choose(cmd.index) });
   }
 
   /**

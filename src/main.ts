@@ -13,6 +13,7 @@ import { FONT_FACES, SCREEN } from './render/theme';
 import { BattleScene } from './scenes/BattleScene';
 import { EventScene } from './scenes/EventScene';
 import { HailScene } from './scenes/HailScene';
+import { CoopLobbyScene } from './scenes/CoopLobbyScene';
 import { LogbookScene } from './scenes/LogbookScene';
 import { PortScene } from './scenes/PortScene';
 import { PreloadScene } from './scenes/PreloadScene';
@@ -53,7 +54,7 @@ function start(): void {
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     // `?timer` drives the loop with setTimeout, for embedded/headless browsers that throttle requestAnimationFrame.
     fps: { forceSetTimeOut: params.has('timer'), target: 60 },
-    scene: [PreloadScene, TitleScene, ShipSelectScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene],
+    scene: [PreloadScene, TitleScene, ShipSelectScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene, CoopLobbyScene],
   });
 
   // Every scene fades in from the deep and sinks back into it on the way out, so screens follow one another instead of cutting.

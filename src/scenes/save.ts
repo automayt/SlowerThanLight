@@ -2,6 +2,7 @@ import { enemy } from '../data/enemies';
 import { fitting } from '../data/fittings';
 import { weapon } from '../data/weapons';
 import { Run } from '../sim/Run';
+import { coop } from '../net/CoopClient';
 import { Ship } from '../sim/Ship';
 
 const KEY = 'slower-than-light.voyage.v1';
@@ -15,7 +16,8 @@ export function disableSaving(): void {
 
 /** Remember the voyage in this browser so it can be continued later. Finished voyages are forgotten. */
 export function saveRun(run: Run): void {
-  if (!writable) return;
+  // A co-op voyage lives on the server; this browser's own voyage is left as it was.
+  if (!writable || coop()) return;
   try {
     if (run.over) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, JSON.stringify(run.toSave()));
@@ -67,7 +69,7 @@ function checkRun(run: Run): void {
 }
 
 export function clearSave(): void {
-  if (!writable) return;
+  if (!writable || coop()) return;
   try {
     localStorage.removeItem(KEY);
   } catch {

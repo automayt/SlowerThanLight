@@ -8,12 +8,15 @@ import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/t
 import { crewTextures } from './CrewArt';
 import { COLORS, SCREEN, textStyle, TITLE_FONT } from './theme';
 import { Button, drawBar, drawPips, panel } from './ui';
+import type { BattleCommand } from '../sim/commands';
 
 export interface HudCallbacks {
   selectCrew(id: number, additive: boolean): void;
   selectGun(index: number): void;
   clearGunTarget(index: number): void;
   toggleSpeed(): void;
+  /** Give a battle order (in co-op it goes to the server, if it is this player's to give). */
+  order(cmd: BattleCommand): boolean;
 }
 
 export interface HudState {
@@ -166,11 +169,11 @@ export class Hud {
     panel(scene, 8, 8, 470, 66);
     heading(scene, 18, 14, 'HULL', 15);
     this.playerStats = scene.add.text(18, 50, '', textStyle(13));
-    this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => battle.escape(), { size: 13 });
+    this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => cb.order({ t: 'escape' }), { size: 13 });
 
     // --- Top centre: the clock ---
     this.pauseBtn = new Button(scene, SCREEN.w / 2 - 122, 10, 118, 26, '', () => {
-      battle.togglePause();
+      cb.order({ t: 'pause', on: !battle.paused });
       this.hintDone('pause');
     }, { size: 13 });
     this.pauseBtn.add(keycap(scene, 116, 13, 'Space').setOrigin(1, 0.5));
@@ -220,7 +223,7 @@ export class Hud {
       this.sysStatus.set(id, scene.add.text(264, y, '', textStyle(12, COLORS.textDim)));
       if (id === 'bulwarks' || id === 'sails' || id === 'pumps' || id === 'surgeon') {
         const hands = (d: number) => {
-          battle.addHands(id, d);
+          cb.order({ t: 'hands', system: id, delta: d });
           this.hintDone('hands');
         };
         new Button(scene, 112, y - 2, 22, 22, '−', () => hands(-1), { size: 15 });
@@ -228,7 +231,7 @@ export class Hud {
       }
     });
 
-    this.broadsideBtn = new Button(scene, 222, BOTTOM_Y + 6, 108, 22, '', () => battle.setBroadside(!battle.player.broadside), { size: 12 });
+    this.broadsideBtn = new Button(scene, 222, BOTTOM_Y + 6, 108, 22, '', () => cb.order({ t: 'broadside', on: !battle.player.broadside }), { size: 12 });
     this.broadsideBtn.add(keycap(scene, 104, 11, 'B').setOrigin(1, 0.5));
     this.broadsideBtn.label.setX(48);
     this.broadsideBtn.bg.on('pointerover', () =>
@@ -245,13 +248,13 @@ export class Hud {
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => (p.rightButtonDown() ? cb.clearGunTarget(i) : cb.selectGun(i)));
       if (scene.textures.exists('sysicon:guns')) scene.add.image(x + 18, BOTTOM_Y + 19, 'sysicon:guns').setScale(0.55);
       const name = scene.add.text(x + 34, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, { fontFamily: TITLE_FONT, fontSize: '14px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: CARD_W - 42 } });
-      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 24, '', () => battle.toggleGun(i), { size: 12 });
+      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 24, '', () => cb.order({ t: 'gunPower', gun: i }), { size: 12 });
       scene.add.text(x + 88, BOTTOM_Y + 47, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''}\n${gun.def.shots}×${gun.def.damage} dmg`, textStyle(12, COLORS.textDim, { lineSpacing: -1 }));
       const status = scene.add.text(x + 8, BOTTOM_Y + 97, '', textStyle(12, COLORS.textDim, { wordWrap: { width: CARD_W - 16 }, lineSpacing: -2 }));
       const target = scene.add.text(x + 8, BOTTOM_Y + 113, '', textStyle(12));
       const shots = SHOT_TYPES.map((s, j) => {
         const b = new Button(scene, x + 9 + j * 35.5, BOTTOM_Y + 143, 33, 24, '', () => {
-          battle.setShot(i, s);
+          cb.order({ t: 'shot', gun: i, shot: s });
           this.hintDone('shot');
         }, { size: 13 });
         b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));

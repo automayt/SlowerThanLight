@@ -11,6 +11,7 @@ import { tierName } from '../sim/Diplomacy';
 import type { HailOption, Run } from '../sim/Run';
 import { loadArtOnDemand } from './PreloadScene';
 import { saveRun } from './save';
+import { onVoyage, voyage } from '../net/voyage';
 
 const X = 40;
 const Y = 88;
@@ -90,7 +91,7 @@ export class HailScene extends Phaser.Scene {
       const head = this.add.text(16, 8, `${i + 1}. ${o.label}${o.blocker ? `  (${o.blocker})` : ''}`, textStyle(16, COLORS.text, { wordWrap: { width: this.tw - 32 } }));
       const sub = this.add.text(16, 10 + head.height, [o.detail, terms(o)].filter(Boolean).join('  ·  '), textStyle(13, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: this.tw - 32 } }));
       const h = 8 + head.height + 2 + sub.height + 8;
-      const b = new Button(this, this.tx, cy, this.tw, h, '', () => this.choose(o), { tip: o.blocker ?? undefined });
+      const b = new Button(this, this.tx, cy, this.tw, h, '', () => voyage(this, { t: 'hail', id: o.id }, o.label), { tip: o.blocker ?? undefined });
       b.label.setVisible(false);
       b.add([head, sub]);
       b.setEnabled(o.available);
@@ -100,6 +101,7 @@ export class HailScene extends Phaser.Scene {
     });
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'];
     options.forEach((_, i) => this.input.keyboard!.on(`keydown-${keys[i]}`, () => !ledgerOpen(this) && this.buttons[i]?.press()));
+    onVoyage(this, { hail: (cmd) => this.choose(options.find((o) => o.id === cmd.id)!) });
   }
 
   private choose(o: HailOption): void {

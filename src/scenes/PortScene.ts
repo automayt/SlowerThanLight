@@ -13,6 +13,8 @@ import { PORT_TAGLINES } from '../data/voyage';
 import { badges } from '../sim/Skills';
 import type { WeaponDef } from '../sim/types';
 import { saveRun } from './save';
+import { onVoyage, voyage } from '../net/voyage';
+import { applyVoyage, type VoyageCommand } from '../sim/commands';
 
 const TOP = 84;
 const COL_Y = TOP + 104;
@@ -33,6 +35,8 @@ function gunStats(w: WeaponDef): string {
 
 interface BuyOptions {
   enabled: boolean;
+  /** The voyage command the button gives, and what to do (and say) when it is carried out. */
+  cmd: VoyageCommand;
   fn: () => void;
   /** Beside the button: what it does, or what you have now. */
   detail?: string;
@@ -52,6 +56,8 @@ export class PortScene extends Phaser.Scene {
   private bar!: RunBar;
   private dyn: Phaser.GameObjects.GameObject[] = [];
   private note!: Phaser.GameObjects.Text;
+  /** What each of this screen's commands does here, by the command (rebuilt with the buttons). */
+  private readonly fns = new Map<string, () => void>();
   private envoy: PortEnvoy | null = null;
 
   constructor() {
@@ -103,7 +109,29 @@ export class PortScene extends Phaser.Scene {
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
       this.scene.start('SeaMap');
     };
-    const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', leave, { size: 18, hint: 'Enter' });
+    // Every purchase is a voyage command: in co-op the captain's go through the server, and play out here when they return.
+    const perform = (cmd: VoyageCommand) => {
+      const fn = this.fns.get(JSON.stringify(cmd));
+      if (fn) return fn();
+      if (cmd.t === 'gift' && this.envoy) return this.envoy.gift();
+      if (cmd.t === 'commission' && this.envoy) return this.envoy.take();
+      applyVoyage(this.run, cmd);
+      this.later();
+    };
+    onVoyage(this, {
+      rest: perform,
+      repairHull: perform,
+      hire: perform,
+      provisions: perform,
+      fitting: perform,
+      upgrade: perform,
+      buyGun: perform,
+      sellGun: perform,
+      gift: perform,
+      commission: perform,
+      leavePort: leave,
+    });
+    const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', () => voyage(this, { t: 'leavePort' }, `Weigh anchor and leave ${name}`), { size: 18, hint: 'Enter' });
     this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !ledgerOpen(this) && weigh.press());
     this.rebuild();
   }
@@ -121,6 +149,7 @@ export class PortScene extends Phaser.Scene {
   private rebuild(): void {
     for (const o of this.dyn) o.destroy();
     this.dyn = [];
+    this.fns.clear();
     this.harbour();
     this.shipwright();
     this.armoury();
@@ -136,12 +165,13 @@ export class PortScene extends Phaser.Scene {
   private button(x: number, y: number, w: number, label: string, o: BuyOptions): void {
     const short = o.price !== undefined && this.run.gold < o.price ? `You need ${o.price - this.run.gold} more gold.` : '';
     const tip = o.enabled ? o.tip : short || o.why;
-    const b = new Button(this, x, y, w, 40, label, () => {
+    this.fns.set(JSON.stringify(o.cmd), () => {
       const gold = this.run.gold;
       o.fn();
       if (this.run.gold !== gold) playSfx(this, 'coins', 0.5);
       this.later();
-    }, { size: 14, tip }).setEnabled(o.enabled);
+    });
+    const b = new Button(this, x, y, w, 40, label, () => voyage(this, o.cmd, label), { size: 14, tip }).setEnabled(o.enabled);
     b.label.setOrigin(0, 0.5).setX(12);
     this.dyn.push(b);
     if (o.detail) {
@@ -158,6 +188,7 @@ export class PortScene extends Phaser.Scene {
     let y = COL_Y;
     this.button(x, y, w, run.canRest() ? 'Rest & refit' : 'Rested and refitted', {
       enabled: run.canRest(),
+      cmd: { t: 'rest' },
       fn: () => run.rest() && this.say('The crew sleep ashore while the shipwrights mend every system.'),
       detail: 'Heal crew, mend systems.\nFleet gains ½ jump.',
       why: 'You have rested here already.',
@@ -168,6 +199,7 @@ export class PortScene extends Phaser.Scene {
     const sound = 'The hull is sound.';
     this.button(x, y, w, missing ? `Patch 1 hull (${HULL_PRICE}g)` : 'Hull is sound', {
       enabled: run.canRepairHull(1),
+      cmd: { t: 'repairHull', points: 1 },
       fn: () => run.repairHull(1) && this.say('Carpenters plank over the worst of it.'),
       detail: `Hull ${run.condition.hull}/${run.fit.hull} · ${HULL_PRICE}g a point`,
       price: missing ? HULL_PRICE : undefined,
@@ -176,6 +208,7 @@ export class PortScene extends Phaser.Scene {
     y += ROW;
     this.button(x, y, w, n > 1 ? `Patch ${n} hull (${n * HULL_PRICE}g)` : 'Patch all you can', {
       enabled: n > 1,
+      cmd: { t: 'repairHull', points: n },
       fn: () => run.repairHull(n) && this.say('The hull is made good.'),
       price: missing && !n ? HULL_PRICE : undefined,
       why: missing ? 'Only one point to patch: use the button above.' : sound,
@@ -184,6 +217,7 @@ export class PortScene extends Phaser.Scene {
     const full = run.condition.crew.length >= run.maxCrew;
     this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${CREW_PRICE}g)`, {
       enabled: run.canHire(),
+      cmd: { t: 'hire' },
       fn: () => {
         const who = run.hireCrew();
         if (who) this.say(`${who} signs the articles.`);
@@ -201,6 +235,7 @@ export class PortScene extends Phaser.Scene {
     const lot = Math.min(5, room);
     this.button(x, y, w, room <= 0 ? 'Hold is full' : `Buy ${lot} provisions (${lot * PROVISION_PRICE}g)`, {
       enabled: lot > 0 && run.canBuyProvisions(lot),
+      cmd: { t: 'provisions', n: lot },
       fn: () => run.buyProvisions(lot) && this.say('Salt pork, biscuit and fresh water are swayed aboard.'),
       detail: `${run.provisions}/${run.maxProvisions} aboard`,
       price: lot > 0 ? lot * PROVISION_PRICE : undefined,
@@ -216,6 +251,7 @@ export class PortScene extends Phaser.Scene {
     for (const o of offers) {
       this.button(x, y, w, `${o.fitting.name} (${o.price}g)`, {
         enabled: o.available,
+        cmd: { t: 'fitting', id: o.fitting.id },
         fn: () => run.buyFitting(o.fitting.id) && this.say(`${o.fitting.name} fitted. ${o.fitting.blurb}`),
         detail: o.fitting.short,
         price: o.price,
@@ -240,6 +276,7 @@ export class PortScene extends Phaser.Scene {
     run.upgradeOffers().forEach((o, i) => {
       this.button(x, COL_Y + i * ROW, 230, o.maxed ? o.label : `${o.label} (${o.price}g)`, {
         enabled: o.available,
+        cmd: { t: 'upgrade', id: o.id },
         fn: () => run.buyUpgrade(o.id) && this.say(`${o.label}: done.`),
         detail: o.detail,
         price: o.maxed ? undefined : o.price,
@@ -268,6 +305,7 @@ export class PortScene extends Phaser.Scene {
       const shortHanded = need > deck;
       this.button(x, y, 230, `${o.weapon.name} (${o.price}g)`, {
         enabled: o.available,
+        cmd: { t: 'buyGun', weapon: o.weapon.id },
         fn: () => run.buyGun(o.weapon.id) && this.say(`A ${o.weapon.name} is hoisted aboard.`),
         detail: `${gunStats(o.weapon)}${shortHanded ? `\nneeds Gun Deck ${need}` : ''}`,
         detailColor: shortHanded ? COLORS.gold : undefined,
@@ -284,13 +322,14 @@ export class PortScene extends Phaser.Scene {
       const wdef = weapon(g.weapon);
       this.dyn.push(this.add.text(x, y + 4, wdef.name, textStyle(13)));
       this.dyn.push(this.add.text(x, y + 22, gunStats(wdef), textStyle(12, COLORS.textDim)));
-      const b = new Button(this, x + w - 110, y + 2, 110, 34, `Sell ${run.sellPrice(i)}g`, () => {
+      this.fns.set(JSON.stringify({ t: 'sellGun', index: i }), () => {
         if (run.sellGun(i)) {
           playSfx(this, 'coins', 0.5);
           this.say(`The ${wdef.name} is sold.`);
         }
         this.later();
-      }, { size: 14, tip: run.canSellGun(i) ? undefined : 'Your last gun: she will not put to sea unarmed.' }).setEnabled(run.canSellGun(i));
+      });
+      const b = new Button(this, x + w - 110, y + 2, 110, 34, `Sell ${run.sellPrice(i)}g`, () => voyage(this, { t: 'sellGun', index: i }, `Sell the ${wdef.name}`), { size: 14, tip: run.canSellGun(i) ? undefined : 'Your last gun: she will not put to sea unarmed.' }).setEnabled(run.canSellGun(i));
       this.dyn.push(b);
       y += 44;
     });

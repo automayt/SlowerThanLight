@@ -6,7 +6,9 @@ import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import { type Run } from '../sim/Run';
 import { chartIcon, chartRose, chartSerpent, chartShip, SEAL } from '../render/chartIcons';
-import type { NodeKind, SeaNode } from '../sim/SeaChart';
+import { nodeById, type NodeKind, type SeaNode } from '../sim/SeaChart';
+import { onVoyage, voyage } from '../net/voyage';
+import { applyVoyage } from '../sim/commands';
 import { saveRun } from './save';
 
 const LEFT = 90;
@@ -25,6 +27,9 @@ const PAPER = 0xefe2bf;
 const RING = 0xb8860b;
 const RING_AMBUSH = 0xc0201a;
 const NUMBER_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
+/** What a mark on the chart is, for a suggestion to the captain. */
+const KIND_NAMES: Partial<Record<NodeKind, string>> = { battle: 'the sail on the horizon', event: 'the unknown waters', port: 'port', empty: 'open sea', exit: 'the passage', boss: 'the blockade' };
+
 /** The chart's key, in the footer's right-hand corner. */
 const LEGEND_W = 430;
 const LEGEND_H = 60;
@@ -162,10 +167,21 @@ export class SeaMapScene extends Phaser.Scene {
         this.hover = null;
         this.updateTip();
       });
-      hit.on('pointerdown', () => this.sailTo(node));
+      hit.on('pointerdown', () => this.chooseNode(node));
     }
     this.refreshChart();
-    NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.sailTo(this.reach[i])));
+    NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.chooseNode(this.reach[i])));
+    // The captain's course, when it is set (by this player alone, or by the server in co-op).
+    onVoyage(this, {
+      jump: (cmd) => {
+        const node = nodeById(this.run.chart, cmd.node);
+        this.closeDialog();
+        if (!this.sailing) return this.sailTo(node);
+        // Still sailing the last leg: take the new one without the animation.
+        applyVoyage(this.run, cmd);
+        this.scene.restart();
+      },
+    });
 
     // Footer: the last thing that happened, then a hint, stacked by their measured heights; the chart's key on the right.
     const hint =
@@ -463,6 +479,13 @@ export class SeaMapScene extends Phaser.Scene {
   }
 
   /** Ink the passage in red as the ship sails it, then make the jump. */
+  /** Choose a course: sail there (alone or as captain), or suggest it to the captain. */
+  private chooseNode(node: SeaNode): void {
+    if (this.dialog.length || this.sailing) return;
+    if (!this.run.reachable().some((n) => n.id === node.id)) return;
+    voyage(this, { t: 'jump', node: node.id }, `Set a course for ${node.name ?? KIND_NAMES[node.kind] ?? 'that mark'}`);
+  }
+
   private sailTo(node: SeaNode): void {
     if (this.dialog.length || this.sailing) return;
     if (!this.run.reachable().some((n) => n.id === node.id)) return;

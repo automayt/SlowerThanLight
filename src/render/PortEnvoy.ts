@@ -6,6 +6,7 @@ import { openLedger, standingBar } from './Ledger';
 import { playSfx } from './sound';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
 import { Button, panel } from './ui';
+import { voyage } from '../net/voyage';
 
 /** How the harbour's masters regard you and what it does to prices, in a line. */
 export function harbourTerms(run: Run): string {
@@ -77,7 +78,7 @@ export class PortEnvoy {
     const half = (w - 10) / 2;
     const short = run.giftPrice() - run.gold;
     const gift = add(
-      new Button(scene, x, y, half, 34, `Pay your respects: ${run.giftPrice()} gold`, () => this.gift(), {
+      new Button(scene, x, y, half, 34, `Pay your respects: ${run.giftPrice()} gold`, () => voyage(scene, { t: 'gift' }, `Pay our respects to ${p.short}`), {
         size: 13,
         tip: enc.gifted ? 'You have paid your respects this visit.' : short > 0 ? `You are ${short} gold short.` : `A gift buys goodwill with ${p.short}.`,
       }),
@@ -92,21 +93,22 @@ export class PortEnvoy {
     const offer = enc.commission;
     if (offer) {
       y += add(scene.add.text(x, y, `Work on offer: ${describeCommission(offer)}`, textStyle(13, COLORS.text, { wordWrap: { width: w } }))).height + 6;
-      const take = add(new Button(scene, x, y, w, 32, 'Take the commission', () => this.take(), { size: 14, tip: run.commission ? 'Finish the work in hand first.' : `${p.name} will think better of you when it is done.` }));
+      const take = add(new Button(scene, x, y, w, 32, 'Take the commission', () => voyage(scene, { t: 'commission' }, `Take ${p.short}'s commission`), { size: 14, tip: run.commission ? 'Finish the work in hand first.' : `${p.name} will think better of you when it is done.` }));
       take.setEnabled(run.canTakeCommission());
     } else if (!run.commission) {
       add(scene.add.text(x, y, run.portFeud ? 'Nobody here will give you work.' : 'No work on offer.', textStyle(13, COLORS.textDim, { fontStyle: 'italic' })));
     }
   }
 
-  private gift(): void {
+  /** Carry out a gift (the port screen calls this when the command comes back). */
+  gift(): void {
     if (!this.run.gift().length) return;
     playSfx(this.scene, 'coins', 0.5);
     this.onChange();
     this.scene.time.delayedCall(0, () => !this.closed && this.draw());
   }
 
-  private take(): void {
+  take(): void {
     if (!this.run.takeCommission()) return;
     this.onChange();
     this.scene.time.delayedCall(0, () => !this.closed && this.draw());
