@@ -95,6 +95,16 @@ export const CONSEQUENCE_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Pay him to go away', cost: 40, outcomes: [{ weight: 1, effect: { text: 'He counts it twice and leaves, grinning.' } }] },
       { label: 'Let him try', outcomes: [{ weight: 1, effect: { text: 'Run out the guns!', battle: 'privateer' } }] },
+      {
+        label: 'Run out the Iron Maw’s guns',
+        needs: { ship: ['maw'] },
+        outcomes: [{ weight: 1, effect: { text: 'He takes one look at the gun deck and decides the rumour was false after all.' } }],
+      },
+      {
+        label: 'Remind him of the articles: brethren do not rob brethren',
+        needs: { standing: { brethren: 20 } },
+        outcomes: [{ weight: 1, effect: { text: 'His own crew will not stand for it. He sheers off, cursing, and the story does you no harm on the coast.', standing: { brethren: 3 } } }],
+      },
     ],
   },
 
@@ -114,6 +124,11 @@ export const CONSEQUENCE_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'Against all reason, the fever breaks and the wound begins to heal.', actorHp: 20 } },
           { weight: 1, effect: { text: '{crew} dies in the night, raving.', loseActor: true } },
         ],
+      },
+      {
+        label: 'Clean saw, laudanum, and the surgeon’s chest',
+        needs: { fitting: 'chest' },
+        outcomes: [{ weight: 1, effect: { text: 'Quick and clean, with the chest’s laudanum to dull it. {crew} will walk again, on a fine peg.', actorHp: -20 } }],
       },
     ],
   },

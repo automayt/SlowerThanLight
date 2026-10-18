@@ -352,6 +352,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
       { label: 'Dry it on deck in the sun', outcomes: [{ weight: 1, effect: { text: 'A day hove to with powder spread on sailcloth, everybody terrified of a spark.', navy: 0.5 } }] },
       { label: 'Use it as it is', outcomes: [{ weight: 1, effect: { text: 'The guns will hang fire until the gunners can sort good from bad.', damage: { guns: 1 } } }] },
       { label: 'Buy fresh powder off a trader', cost: 15, outcomes: [{ weight: 1, effect: { text: 'Fine-corned powder, dry as a bone.' } }] },
+      {
+        label: 'Let your drilled gun crews sort the good powder from the bad',
+        needs: { fitting: 'drill' },
+        outcomes: [{ weight: 1, effect: { text: 'They know powder by feel. The caked stuff goes over the side, and what is left will fire true.' } }],
+      },
     ],
   },
   {
@@ -363,6 +368,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Fish it with spare spars', outcomes: [{ weight: 1, effect: { text: 'Hours of work aloft, but she carries sail again.', navy: 0.5 } }] },
       { label: 'Carry on under reduced sail', outcomes: [{ weight: 1, effect: { text: 'You limp on with the rig weakened.', damage: { sails: 1 } } }] },
+      {
+        label: 'Step a new topmast from the spare spars',
+        needs: { fitting: 'spars' },
+        outcomes: [{ weight: 1, effect: { text: 'A new topmast is swayed up and fidded before the next watch. She sails as well as ever.', repair: true } }],
+      },
     ],
   },
   {
@@ -379,6 +389,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
         { weight: 1, effect: { text: '{crew} clears it, but cuts a hand to the bone on the chain.', actorHp: -35 } },
       ] },
       { label: 'Bail with buckets until there is time', outcomes: [{ weight: 1, effect: { text: 'You stay afloat, but the pump will need a proper repair.', damage: { pumps: 1 } } }] },
+      {
+        label: 'Your veteran carpenter strips the pump and clears it',
+        needs: { skill: { repair: 1 } },
+        outcomes: [{ weight: 1, effect: { text: 'An hour with the chain off and it runs sweeter than ever.' } }],
+      },
     ],
   },
   {
@@ -397,6 +412,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'The rot was deeper than it looked. A whole strake gives way in the next blow.', hull: -5 } },
         ],
       },
+      {
+        label: 'Your veteran carpenter knows the trick: scarf in sound oak',
+        needs: { skill: { repair: 1 } },
+        outcomes: [{ weight: 1, effect: { text: 'A proper repair, better than new. {crew} admires the work.', hull: 4 } }],
+      },
     ],
   },
   {
@@ -409,6 +429,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Careen her on the next beach', outcomes: [{ weight: 1, effect: { text: 'Two days on her side, scraping and paying the seams. She flies again.', navy: 1, hull: 4 } }] },
       { label: 'Sail on, slower', outcomes: [{ weight: 1, effect: { text: 'The Navy careens its ships every season. Yours drags a beard of weed.', navy: 0.5 } }] },
+      {
+        label: 'Scrape her where she floats: she was careened not long ago',
+        needs: { fitting: 'careened' },
+        outcomes: [{ weight: 1, effect: { text: 'With a clean bottom underneath, a morning with scrapers over the side is all she needs.', navy: -0.25 } }],
+      },
     ],
   },
 ];

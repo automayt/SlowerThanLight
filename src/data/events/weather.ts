@@ -34,6 +34,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'A topmast cracks and green water sweeps the deck.', hull: -4, crewHp: -10 } },
         ],
       },
+      {
+        label: 'Give the helm to your veteran helmsman',
+        needs: { skill: { seamanship: 1 } },
+        outcomes: [{ weight: 1, effect: { text: 'They read every sea before it comes. She rides it out with hardly a sheet parted.' } }],
+      },
     ],
   },
   {
@@ -66,6 +71,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
           { weight: 2, effect: { text: 'You burst out of the fog leagues ahead, with no Navy lookout the wiser.', navy: -0.5 } },
           { weight: 1, effect: { text: 'A grinding shudder: coral. You scrape free, leaking.', hull: -4 } },
         ],
+      },
+      {
+        label: 'Let your veteran helmsman feel the way by the swell',
+        needs: { skill: { seamanship: 1 } },
+        outcomes: [{ weight: 1, effect: { text: 'The fog is no friend, but the swell tells a story to someone who listens. You come out of it miles on.', navy: -0.5 } }],
       },
     ],
   },
@@ -159,6 +169,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'A day’s bloody work yields oil and a lump of ambergris worth its weight in silver.', gold: 30, navy: 0.5 } },
           { weight: 1, effect: { text: 'The whale smashes the boat with its tail. {crew} is hauled out with broken ribs.', actorHp: -40 } },
         ],
+      },
+      {
+        label: 'Your expert gunner takes the harpoon',
+        needs: { skill: { gunnery: 2 } },
+        outcomes: [{ weight: 1, effect: { text: 'One throw, square behind the head. Oil and meat for weeks.', provisions: 8, gold: 15 } }],
       },
     ],
   },

@@ -120,6 +120,11 @@ export const LEGEND_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'The recoil splits two carriages, but the thing lets go and is gone.', actorHp: -30, damage: { guns: 2 } } },
         ],
       },
+      {
+        label: 'Rig the boarding nets to tangle its arms',
+        needs: { fitting: 'nets' },
+        outcomes: [{ weight: 1, effect: { text: 'The arms foul in the netting, and the axes do the rest. It lets go and sinks away, leaving a stink and a severed tip as thick as a man.', crewHp: -5 } }],
+      },
     ],
   },
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ENEMIES } from '../../src/data/enemies';
 import { SEA_EVENTS, seaEvent } from '../../src/data/voyage';
 import { WEAPONS } from '../../src/data/weapons';
-import { RARITY_WEIGHT, Run } from '../../src/sim/Run';
+import { RARITY_WEIGHT, Run, specialNeed } from '../../src/sim/Run';
+import { FITTING_IDS } from '../../src/data/fittings';
+import { PLAYER_SHIPS } from '../../src/data/ships';
 import type { EventEffect, EventNeeds, SeaEventDef } from '../../src/sim/types';
 
 const effects = (e: SeaEventDef): EventEffect[] => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect));
@@ -12,7 +14,9 @@ const flagsSet = new Set(SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.flag)
 
 /** A run in the middle of the voyage, rich, crewed, and with whatever an event or choice needs. */
 function richRun(seed: number, needs: (EventNeeds | undefined)[] = []): Run {
-  const run = new Run('maw', seed);
+  // Special choices need a particular ship, fitting, skilled hand, gun or friendship: give the run whatever they ask.
+  const ship = needs.find((n) => n?.ship)?.ship?.[0] ?? 'maw';
+  const run = new Run(ship, seed);
   run.navy = -99;
   // Sail to column 4 so depth-gated events are allowed.
   while (run.node.col < 4) {
@@ -25,9 +29,50 @@ function richRun(seed: number, needs: (EventNeeds | undefined)[] = []): Run {
   run.condition.damage = { sails: 1 };
   run.condition.hull = 10;
   run.fit.guns = run.fit.guns.slice(0, 3);
-  for (const n of needs) if (n?.flag) run.flags.add(n.flag);
+  for (const n of needs) {
+    if (n?.flag) run.flags.add(n.flag);
+    if (n?.fitting) run.fittings.push(n.fitting);
+    if (n?.gun) run.fit.guns.push({ weapon: n.gun[0] });
+    for (const skill of Object.keys(n?.skill ?? {})) run.condition.crew[1].xp = { ...run.condition.crew[1].xp, [skill]: 999 };
+    for (const [p, v] of Object.entries(n?.standing ?? {})) if (typeof v === 'number') run.standing[p as keyof Run['standing']] = Math.max(v, 0) + 5;
+  }
   return run;
 }
+
+describe('special choices', () => {
+  it('need what they say, and name it on the label', () => {
+    const run = new Run('gull', 1);
+    expect(run.unmet({ fitting: 'chest' })).toMatch(/Surgeon/);
+    run.fittings.push('chest');
+    expect(run.unmet({ fitting: 'chest' })).toBeNull();
+    expect(run.unmet({ ship: ['wren'] })).toBeTruthy();
+    expect(run.unmet({ ship: ['gull'] })).toBeNull();
+    expect(run.unmet({ skill: { gunnery: 2 } })).toMatch(/Expert gunner/);
+    run.condition.crew[0].xp = { gunnery: 500 };
+    expect(run.unmet({ skill: { gunnery: 2 } })).toBeNull();
+    expect(run.unmet({ gun: ['pdr18'] })).toBeTruthy();
+    expect(specialNeed({ fitting: 'chest' })).toBe('Surgeon’s Chest'.replace('’', "'"));
+    expect(specialNeed({ ship: ['wren', 'wolf'] })).toBe('The Wren or The Sea Wolf');
+    expect(specialNeed({ skill: { seamanship: 1 } })).toBe('Veteran helmsman');
+    expect(specialNeed({ standing: { spain: 20 } })).toBe('Friend of Spain');
+    expect(specialNeed({ gold: 10 })).toBeNull();
+  });
+
+  it('every fitting, ship and gun an event asks for exists', () => {
+    for (const ev of SEA_EVENTS) {
+      for (const c of ev.choices) {
+        const n = c.needs;
+        if (n?.fitting) expect(FITTING_IDS, ev.id).toContain(n.fitting);
+        for (const id of n?.ship ?? []) expect(PLAYER_SHIPS.map((s) => s.id), ev.id).toContain(id);
+        for (const id of n?.gun ?? []) expect(Object.keys(WEAPONS), ev.id).toContain(id);
+      }
+    }
+  });
+
+  it('there are a good few of them', () => {
+    expect(SEA_EVENTS.flatMap((e) => e.choices).filter((c) => specialNeed(c.needs)).length).toBeGreaterThanOrEqual(20);
+  });
+});
 
 describe('event data', () => {
   it('has plenty of both kinds of event, spread across rarities', () => {

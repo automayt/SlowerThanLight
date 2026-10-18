@@ -77,6 +77,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Burn her and stand off', outcomes: [{ weight: 1, effect: { text: 'She burns to the waterline. Better safe.' } }] },
+      {
+        label: 'Send the surgeon across with the medicine chest',
+        needs: { fitting: 'chest' },
+        outcomes: [{ weight: 1, effect: { text: 'Two of her people are still breathing. Laudanum, clean water and a week in your sick berth, and one of them asks to stay.', recruit: 1 } }],
+      },
     ],
   },
 
@@ -98,6 +103,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       },
       { label: 'Take the strongest aboard to work for their keep', outcomes: [{ weight: 1, effect: { text: 'Two more mouths at the mess table, and one of them can hand, reef and steer.', provisions: -2, recruit: 1 } }] },
       { label: 'Sail on', outcomes: [{ weight: 1, effect: { text: 'Nobody aboard meets your eye for a day.', crewHp: -5 } }] },
+      {
+        label: 'Broach the spare water casks and feed them properly',
+        needs: { fitting: 'casks', provisions: 3 },
+        outcomes: [{ weight: 1, effect: { text: 'Full bellies, and word of it reaches every merchant house in the islands. Their mate signs on in thanks.', provisions: -3, recruit: 1, standing: { trade: 6 } } }],
+      },
     ],
   },
 
@@ -149,6 +159,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Leave it to the jungle', outcomes: [{ weight: 1, effect: { text: 'The old gun keeps its lonely watch.' } }] },
+      {
+        label: 'Let your expert gunner fire the old gun before you take it',
+        needs: { skill: { gunnery: 2 } },
+        outcomes: [{ weight: 1, effect: { text: 'One shot, to see if she is sound. She is: true as the day she was cast. {crew} grins all the way back to the boats.', gun: 'pdr12' } }],
+      },
     ],
   },
   {
@@ -284,6 +299,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Keep your distance', outcomes: [{ weight: 1, effect: { text: 'Better safe than hanged.' } }] },
+      {
+        label: 'Fly the merchants’ pennant and close: her master will trust you',
+        needs: { standing: { trade: 20 } },
+        outcomes: [{ weight: 1, effect: { text: 'Her master knows the pennant. You help rig a jury rudder, and he pays in Dutch silver and gossip.', gold: 30, navy: -0.5, standing: { trade: 4 } } }],
+      },
     ],
   },
   {
@@ -296,6 +316,16 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Turn and fight her', outcomes: [{ weight: 1, effect: { text: 'You come about and run out the guns.', battle: 'cutter' } }] },
       { label: 'Lose her in the night', outcomes: [{ weight: 1, effect: { text: 'You douse every lantern and slip away, but it costs you time.', navy: 0.5 } }] },
+      {
+        label: 'Outsail her and lose her before nightfall',
+        needs: { ship: ['wren', 'wolf'] },
+        outcomes: [{ weight: 1, effect: { text: 'She is a good cutter, but not that good. By dusk her topsails are gone from the horizon.' } }],
+      },
+      {
+        label: 'Signal her that you sail under the Governor’s protection',
+        needs: { standing: { crown: 20 } },
+        outcomes: [{ weight: 1, effect: { text: 'A long pause, then an acknowledgement. She sheers off to look for someone else.', navy: -0.5 } }],
+      },
     ],
   },
   {
@@ -312,6 +342,14 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Let them pass', outcomes: [{ weight: 1, effect: { text: 'Not today. The merchant houses will hear of your restraint.', standing: { trade: 3 } } }] },
+      {
+        label: 'Slip alongside a straggler in the dark and take her by boarding',
+        needs: { ship: ['wolf'] },
+        outcomes: [
+          { weight: 3, effect: { text: 'The Sea Wolf ghosts in under oars. Her people are over the rail before the watch can shout, and her strongroom is yours.', gold: 45, crewHp: -10, standing: { trade: -6 } } },
+          { weight: 1, effect: { text: 'A sentry fires. The escort comes about.', battle: 'cutter' } },
+        ],
+      },
     ],
   },
   {
@@ -328,6 +366,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Let her go', outcomes: [{ weight: 1, effect: { text: 'She vanishes over the horizon.' } }] },
+      {
+        label: 'Run her down: nothing in these waters is faster than the Wren',
+        needs: { ship: ['wren'] },
+        outcomes: [{ weight: 1, effect: { text: 'The Wren overhauls her in an hour. Her orders show exactly where the squadron means to search.', navy: -1, gold: 10, standing: { crown: -4 } } }],
+      },
     ],
   },
   {
@@ -343,6 +386,16 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         { weight: 1, effect: { text: 'You outrun her by dusk.', navy: 0.5 } },
         { weight: 1, effect: { text: 'She is faster than she looks.', battle: 'guarda' } },
       ] },
+      {
+        label: 'Run out the Iron Maw’s broadside and let her count the guns',
+        needs: { ship: ['maw'] },
+        outcomes: [{ weight: 1, effect: { text: 'The lieutenant counts, and remembers urgent business to leeward.', standing: { spain: -3 } } }],
+      },
+      {
+        label: 'Show the Viceroy’s safe-conduct',
+        needs: { standing: { spain: 20 } },
+        outcomes: [{ weight: 1, effect: { text: 'The lieutenant reads it twice, salutes, and wishes you a good voyage.', standing: { spain: 2 } } }],
+      },
     ],
   },
   {
@@ -382,6 +435,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
       { label: 'Trade rum for their charts', cost: 10, outcomes: [{ weight: 1, effect: { text: 'Their charts mark every Navy patrol for fifty leagues.', navy: -1, standing: { brethren: 3 } } }] },
       { label: 'Buy out a malcontent', cost: 20, outcomes: [{ weight: 1, effect: { text: 'One of their gunners fancies a change of captain.', recruit: 1, standing: { brethren: -5 } } }] },
       { label: 'Exchange courtesies and part', outcomes: [{ weight: 1, effect: { text: 'Fair winds, brothers.', standing: { brethren: 8 } } }] },
+      {
+        label: 'They know the Black Gull: swap word of a fat prize',
+        needs: { ship: ['gull'] },
+        outcomes: [{ weight: 1, effect: { text: 'Her captain sailed with yours once. He trades a tip for a tip, and a dividend from his last cruise.', gold: 20, standing: { brethren: 6 } } }],
+      },
     ],
   },
   {
@@ -468,6 +526,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
           { weight: 2, effect: { text: 'Their cave is stuffed with plunder from a dozen ships.', gold: 35, actorHp: -20 } },
           { weight: 1, effect: { text: 'They know the ground better than you do. {crew} comes back with a cutlass wound.', actorHp: -40 } },
         ],
+      },
+      {
+        label: 'Send your veteran brawlers ashore to clean out the nest',
+        needs: { skill: { combat: 1 } },
+        outcomes: [{ weight: 1, effect: { text: 'The wreckers know the ground, but your brawlers know their trade. The cave yields a dozen ships’ plunder.', gold: 40, actorHp: -10 } }],
       },
     ],
   },

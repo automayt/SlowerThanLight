@@ -4,10 +4,13 @@ import { placeArt } from '../render/art';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, gild, goldText, panel, Sea } from '../render/ui';
-import type { Run } from '../sim/Run';
+import { specialNeed, type Run } from '../sim/Run';
 import { loadArtOnDemand } from './PreloadScene';
 import { recordDiscovery, saveRun } from './save';
 import { onVoyage, voyage } from '../net/voyage';
+
+/** The colour of a choice your ship, fittings, crew or friends make possible. */
+const SPECIAL_COLOR = '#8fc7ff';
 
 const X = 40;
 const Y = 88;
@@ -71,8 +74,11 @@ export class EventScene extends Phaser.Scene {
     let body = this.tale(run.eventText(), this.tx, top, this.tw, 17, 5);
 
     // Each choice wraps to the column, with its warnings on a smaller second line, and the button grows to fit.
-    const choices = ev.choices.map((choice, i) => {
+    // Special choices (a fitting, a ship, a skilled hand...) only show when you have what they need, marked in blue.
+    const open = ev.choices.map((choice, i) => ({ choice, i })).filter(({ choice, i }) => !specialNeed(choice.needs) || !run.choiceBlocker(i));
+    const choices = open.map(({ choice, i }, pos) => {
       const blocked = run.choiceBlocker(i);
+      const special = specialNeed(choice.needs);
       // Warn about hidden costs: time lost to the fleet, or a fight.
       const time = choice.outcomes.filter((o) => (o.effect.navy ?? 0) > 0).length;
       const fight = choice.outcomes.some((o) => o.effect.battle);
@@ -82,11 +88,11 @@ export class EventScene extends Phaser.Scene {
         eats ? (eats === choice.outcomes.length ? 'costs provisions' : 'may cost provisions') : '',
         fight ? 'may mean a fight' : '',
       ].filter(Boolean);
-      const label = `${i + 1}. ${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
-      const text = this.add.text(0, 0, label, textStyle(16, COLORS.text, { wordWrap: { width: this.tw - 32 }, lineSpacing: 2 }));
+      const label = `${pos + 1}. ${special ? `[${special}] ` : ''}${run.fill(choice.label)}${choice.cost ? `  (${choice.cost} gold)` : ''}${blocked && !choice.cost ? `  (${blocked})` : ''}`;
+      const text = this.add.text(0, 0, label, textStyle(16, special ? SPECIAL_COLOR : COLORS.text, { wordWrap: { width: this.tw - 32 }, lineSpacing: 2 }));
       const hint = hints.length ? this.add.text(0, 0, `· ${hints.join(', ')}`, textStyle(13, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: this.tw - 32 } })) : null;
       const h = Math.max(44, 10 + text.height + (hint ? 2 + hint.height : 0) + 10);
-      return { blocked, text, hint, h };
+      return { blocked, text, hint, h, index: i };
     });
     const gap = 10;
     const total = choices.reduce((n, c) => n + c.h + gap, -gap);
@@ -98,8 +104,8 @@ export class EventScene extends Phaser.Scene {
     this.choicesY = body.bottom + Math.max(12, Math.min(28, Y + H - 16 - total - body.bottom));
 
     let cy = this.choicesY;
-    choices.forEach(({ blocked, text, hint, h }, i) => {
-      const b = new Button(this, this.tx, cy, this.tw, h, '', () => voyage(this, { t: 'choose', index: i }, run.fill(ev.choices[i].label)));
+    choices.forEach(({ blocked, text, hint, h, index }) => {
+      const b = new Button(this, this.tx, cy, this.tw, h, '', () => voyage(this, { t: 'choose', index }, run.fill(ev.choices[index].label)));
       // The button's own one-line label is unused; the wrapped lines ride in the button instead.
       b.label.setVisible(false);
       text.setPosition(16, 10);
@@ -111,8 +117,8 @@ export class EventScene extends Phaser.Scene {
       this.choiceButtons.push(b);
       cy += h + gap;
     });
-    const keys = ['ONE', 'TWO', 'THREE', 'FOUR'];
-    ev.choices.forEach((_, i) => this.input.keyboard!.on(`keydown-${keys[i]}`, () => this.choiceButtons.length && run.canChoose(i) && this.choiceButtons[i].press()));
+    const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
+    choices.forEach(({ index }, pos) => keys[pos] && this.input.keyboard!.on(`keydown-${keys[pos]}`, () => this.choiceButtons.length && run.canChoose(index) && this.choiceButtons[pos].press()));
     onVoyage(this, { choose: (cmd) => this.choose(cmd.index) });
   }
 

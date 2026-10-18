@@ -11,6 +11,7 @@ import { generateChart, nodeById, SECTOR_COLUMNS, type SeaChart, type SeaNode } 
 import { Ship, type ShipCondition } from './Ship';
 import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, PowerId, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
+import { RANK_XP, SKILL_LABEL, type Skill, type SkillXp } from './Skills';
 
 /** Where the Navy fleet starts, in chart columns (the player starts in column 0). */
 export const NAVY_START = -2.5;
@@ -976,6 +977,12 @@ export class Run {
     if (n.minSector !== undefined && this.sector < n.minSector) return 'too early';
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
     if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
+    if (n.fitting && !this.has(n.fitting)) return `needs ${fitting(n.fitting).name}`;
+    if (n.ship && !n.ship.includes(this.def.id)) return 'not aboard this ship';
+    for (const [s, r] of Object.entries(n.skill ?? {}) as [Skill, number][]) {
+      if (!c.crew.some((m) => skillRank(m.xp, s) >= r)) return `needs ${r >= 2 ? 'an Expert' : 'a Veteran'} ${SKILL_LABEL[s]}`;
+    }
+    if (n.gun && !this.fit.guns.some((g) => n.gun!.includes(g.weapon))) return `needs a ${weapon(n.gun[0]).name}`;
     for (const [p, v] of Object.entries(n.standing ?? {}) as [PowerId, number | { max: number }][]) {
       if (typeof v === 'number' && this.standing[p] < v) return `${power(p).name} must think better of you`;
       if (typeof v === 'object' && this.standing[p] > v.max) return `${power(p).name} like you too well`;
@@ -1473,4 +1480,26 @@ export function describeCommission(c: Commission): string {
   return c.kind === 'hunt'
     ? `Take or sink a ship of ${power(c.target!).short} for ${power(c.patron).short}: ${c.gold} gold.`
     : `Carry ${power(c.patron).short}’s letters from ${c.port} to any other port: ${c.gold} gold.`;
+}
+
+/** A sailor's rank in a skill from their record (0, 1 Veteran, 2 Expert). */
+function skillRank(xp: SkillXp | undefined, skill: Skill): number {
+  const v = xp?.[skill] ?? 0;
+  return v >= RANK_XP[2] ? 2 : v >= RANK_XP[1] ? 1 : 0;
+}
+
+/**
+ * What makes a choice special, like FTL's blue options: the fitting, ship, skilled hand, gun or friendship it needs,
+ * in a few words for its label. Null for an ordinary choice.
+ */
+export function specialNeed(needs: EventNeeds | undefined): string | null {
+  if (!needs) return null;
+  if (needs.fitting) return fitting(needs.fitting).name;
+  if (needs.ship) return needs.ship.map((id) => playerShip(id).name).join(' or ');
+  const skill = Object.entries(needs.skill ?? {})[0] as [Skill, number] | undefined;
+  if (skill) return `${skill[1] >= 2 ? 'Expert' : 'Veteran'} ${SKILL_LABEL[skill[0]]}`;
+  if (needs.gun) return weapon(needs.gun[0]).name;
+  const friend = (Object.entries(needs.standing ?? {}) as [PowerId, number | { max: number }][]).find(([, v]) => typeof v === 'number' && v > 0);
+  if (friend) return `Friend of ${power(friend[0]).short}`;
+  return null;
 }

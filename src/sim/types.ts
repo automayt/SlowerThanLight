@@ -176,6 +176,14 @@ export interface EventNeeds {
   maxCol?: number;
   /** Standing with a power at least this (a negative number), or at most this when written as `{ max: n }`. */
   standing?: Partial<Record<PowerId, number | { max: number }>>;
+  /** A chandler's fitting aboard (see data/fittings.ts). */
+  fitting?: string;
+  /** Only aboard one of these ships. */
+  ship?: string[];
+  /** Someone aboard at least this rank in a skill (1 Veteran, 2 Expert). */
+  skill?: Partial<Record<'gunnery' | 'seamanship' | 'repair' | 'combat', number>>;
+  /** One of these guns mounted. */
+  gun?: string[];
 }
 
 export type EventRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
