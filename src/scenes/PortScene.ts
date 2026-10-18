@@ -82,11 +82,12 @@ export class PortScene extends Phaser.Scene {
     this.add
       .text(SCREEN.w / 2, TOP + 54, PORT_TAGLINES[name] ?? 'A free port where no one asks where your cargo came from.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' }))
       .setOrigin(0.5, 0);
+    // What the port is known for, in the corner opposite the harbour masters (hunger news goes beneath it).
     const special = run.speciality;
-    if (special) this.add.text(SCREEN.w / 2, TOP + 74, SPECIALITY_TEXT[special], textStyle(13, COLORS.gold, { fontStyle: 'italic' })).setOrigin(0.5, 0);
+    const known = special ? this.add.text(COLS[0].x, TOP + 8, SPECIALITY_TEXT[special], textStyle(13, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 })) : null;
     // Hunger on the way in, tucked in the corner beside the port's name.
     const hunger = freshHunger(this, run);
-    if (hunger) this.add.text(COLS[0].x, TOP + 10, `⚠ ${hunger}`, textStyle(13, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 }));
+    if (hunger) this.add.text(COLS[0].x, known ? known.y + known.height + 4 : TOP + 10, `⚠ ${hunger}`, textStyle(13, COLORS.textWarn, { fontStyle: 'italic', wordWrap: { width: 330 }, lineSpacing: 2 }));
     for (const c of COLS) {
       this.add.text(c.x, COL_Y - 31, c.title, { fontFamily: CAPS_FONT, fontSize: '20px', color: COLORS.gold }).setShadow(0, 1, '#000000', 3, false, true);
       this.add.rectangle(c.x, COL_Y - 6, c.w, 1, COLORS.brass, 0.45).setOrigin(0);
