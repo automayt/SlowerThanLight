@@ -1,7 +1,7 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
 import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
-import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTORS, seaEvent, type PortSpeciality } from '../data/voyage';
+import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTOR_ROUTE, seaEvent, sectorDef, type PortSpeciality } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { POWER_IDS, portPower, power, relation } from '../data/powers';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
@@ -204,6 +204,7 @@ export interface RunSave {
   escort?: Escort | null;
   commission?: Commission | null;
   recent?: string[];
+  sectorId?: string;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -386,30 +387,38 @@ export class Run {
     this.chart = this.makeChart(0);
   }
 
-  /** The chart for one sector: its own enemies, ending at a passage or (last of all) at the blockade. */
-  private makeChart(sector: number): SeaChart {
-    const def = SECTORS[sector];
+  /**
+   * The chart for one stage of the voyage: its sector's own enemies, ending at the passages into the next stage
+   * (one per sector you could sail on to) or, last of all, at the blockade.
+   */
+  private makeChart(sector: number, id = SECTOR_ROUTE[sector][0]): SeaChart {
+    const def = sectorDef(id);
+    const stages = SECTOR_ROUTE.length;
+    const onward = SECTOR_ROUTE[sector + 1] ?? [];
     return generateChart(this.rng, {
-      depth: [sector / SECTORS.length, (sector + 1) / SECTORS.length],
+      depth: [sector / stages, (sector + 1) / stages],
       columns: SECTOR_COLUMNS,
       ports: PORT_NAMES,
       armoury: ARMOURY,
-      final: sector === SECTORS.length - 1,
+      final: sector === stages - 1,
       startName: sector === 0 ? 'Tortuga' : def.name,
-      exitName: SECTORS[sector + 1]?.name,
+      exits: onward.map((to) => ({ name: sectorDef(to).name, to })),
       enemies: def.enemies,
     });
   }
 
+  /** Which sector the voyage is in now (at a fork, the one you chose). */
+  sectorId = SECTOR_ROUTE[0][0];
+
   get sectorDef() {
-    return SECTORS[Math.min(this.sector, SECTORS.length - 1)];
+    return sectorDef(this.sectorId);
   }
 
   /** Legs sailed over the whole voyage, and how many there are in all. */
   get legs(): { sailed: number; total: number } {
     if (this.chart.columns !== SECTOR_COLUMNS) return { sailed: this.node.col, total: this.chart.columns - 1 };
     const per = SECTOR_COLUMNS - 1;
-    return { sailed: this.sector * per + this.node.col, total: SECTORS.length * per };
+    return { sailed: this.sector * per + this.node.col, total: SECTOR_ROUTE.length * per };
   }
 
   /** Progress through the voyage on the old single-chart scale (0..7), which event conditions are written against. */
@@ -506,7 +515,7 @@ export class Run {
     this.runningRepairs(fed);
     this.navy += this.navySpeed;
 
-    if (node.kind === 'exit') return this.enterSector(this.sector + 1);
+    if (node.kind === 'exit') return this.enterSector(this.sector + 1, node.to);
     if (node.kind === 'boss') {
       const foe = enemy(node.enemy ?? 'frigate');
       const aid = this.tier('brethren') === 'allied' ? ' But the Brethren have kept faith: a swarm of pirate sloops comes down on her flanks, and her hull is already holed when you come in range.' : '';
@@ -569,13 +578,14 @@ export class Run {
    * A straight run across a sector gives away (columns - 1) x (fleet speed - 1); whatever else it gained on you,
    * it keeps SECTOR_CARRY of.
    */
-  private enterSector(sector: number): Encounter {
+  private enterSector(sector: number, id = SECTOR_ROUTE[sector][0]): Encounter {
     const fresh = -NAVY_START;
     const gap = this.node.col - this.navy;
     const straight = (this.chart.columns - 1) * Math.max(0, this.navySpeed - 1);
     const lost = Math.max(0, fresh - gap - straight);
     this.sector = sector;
-    this.chart = this.makeChart(sector);
+    this.sectorId = id;
+    this.chart = this.makeChart(sector, id);
     this.nodeId = 0;
     this.visited = [0];
     this.navy = NAVY_START + SECTOR_CARRY * lost;
@@ -990,7 +1000,7 @@ export class Run {
   private progressAt(col: number): number {
     if (this.chart.columns !== SECTOR_COLUMNS) return col;
     const per = SECTOR_COLUMNS - 1;
-    return Math.round(((this.sector * per + col) * 7) / (SECTORS.length * per));
+    return Math.round(((this.sector * per + col) * 7) / (SECTOR_ROUTE.length * per));
   }
 
   /** Begin an event, casting two crew members as {crew} and {crew2}. */
@@ -1283,7 +1293,7 @@ export class Run {
   private offerCommission(port: string): Commission | null {
     if (this.portFeud) return null;
     const patron = portPower(port);
-    const ahead = new Set(SECTORS.slice(this.sector).flatMap((s) => s.enemies.map(([id]) => enemy(id).power)));
+    const ahead = new Set(SECTOR_ROUTE.slice(this.sector).flat().flatMap((id) => sectorDef(id).enemies.map(([e]) => enemy(e).power)));
     const targets = POWER_IDS.filter((p) => p !== patron && relation(patron, p) < 0 && ahead.has(p));
     const scale = 1 + SECTOR_PLUNDER * this.sector;
     if (targets.length && this.rng.chance(0.7)) {
@@ -1498,6 +1508,7 @@ export class Run {
       escort: this.escort,
       commission: this.commission,
       recent: this.recent,
+      sectorId: this.sectorId,
     });
   }
 
@@ -1527,7 +1538,9 @@ export class Run {
     run.seenEvents = s.seenEvents ?? [];
     run.prize = s.prize ?? null;
     // Saves from before sectors hold one long chart that ends at the blockade: treat it as the last sector.
-    run.sector = s.sector ?? (s.chart.columns === SECTOR_COLUMNS ? 0 : SECTORS.length - 1);
+    run.sector = s.sector ?? (s.chart.columns === SECTOR_COLUMNS ? 0 : SECTOR_ROUTE.length - 1);
+    // Saves from before forks in the route sailed the first sector of each stage.
+    run.sectorId = s.sectorId ?? SECTOR_ROUTE[Math.min(run.sector, SECTOR_ROUTE.length - 1)][0];
     run.provisions = s.provisions ?? DIFFICULTY[run.difficulty].provisions;
     run.fittings = s.fittings ?? [];
     run.standing = { ...freshStanding(), ...s.standing };

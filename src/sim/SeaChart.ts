@@ -17,6 +17,8 @@ export interface SeaNode {
   stock?: string[];
   /** Ids of nodes in the next column you can sail to. */
   next: number[];
+  /** For a passage: the id of the sector it leads into. */
+  to?: string;
   /** A lead the voyage's story has put here: the id of the event waiting at this mark. */
   story?: string;
 }
@@ -38,6 +40,8 @@ export interface ChartOptions {
   startName?: string;
   /** Name of the passage at the far end of a non-final chart. */
   exitName?: string;
+  /** The passages at the far end of a non-final chart, when there is a choice: each one's name and where it leads. */
+  exits?: { name: string; to: string }[];
   /** Who battle nodes hold, with relative weights. Defaults to the classic mix by depth. */
   enemies?: [string, number][];
   /**
@@ -70,7 +74,8 @@ export function generateChart(rng: Rng, opts: ChartOptions): SeaChart {
   const last = columns - 1;
 
   for (let col = 0; col < columns; col++) {
-    const count = col === 0 || col === last ? 1 : 2 + rng.int(2);
+    // Three or four marks a column, so most legs offer a real choice; a fork in the voyage ends in more than one passage.
+    const count = col === 0 ? 1 : col === last ? (opts.final === false ? Math.max(1, opts.exits?.length ?? 1) : 1) : 3 + rng.int(2);
     const column: SeaNode[] = [];
     for (let i = 0; i < count; i++) {
       const base = count === 1 ? 0.5 : 0.12 + (0.76 * i) / (count - 1);
@@ -95,11 +100,16 @@ function link(rng: Rng, a: SeaNode[], b: SeaNode[]): void {
     const hi = Math.max(lo, Math.ceil(((i + 1) * b.length) / a.length) - 1);
     return [lo, hi];
   });
-  // Occasionally widen a slice downward when that cannot cross the next node's edges.
+  // Often widen a slice downward when that cannot cross the next node's edges.
   for (let i = 0; i < a.length; i++) {
     const [, hi] = ranges[i];
     const nextLo = i + 1 < a.length ? ranges[i + 1][0] : b.length;
-    if (hi + 1 < b.length && nextLo >= hi + 1 && rng.chance(0.5)) ranges[i][1] = hi + 1;
+    if (hi + 1 < b.length && nextLo >= hi + 1 && rng.chance(0.85)) ranges[i][1] = hi + 1;
+  }
+  // And upward, into the node the one above already reaches (sharing a node never crosses).
+  for (let i = 1; i < a.length; i++) {
+    const [lo] = ranges[i];
+    if (lo > 0 && ranges[i - 1][1] <= lo - 1 && rng.chance(0.7)) ranges[i][0] = lo - 1;
   }
   a.forEach((n, i) => {
     for (let j = ranges[i][0]; j <= ranges[i][1]; j++) n.next.push(b[j].id);
@@ -111,8 +121,12 @@ function assignKinds(rng: Rng, cols: SeaNode[][], opts: ChartOptions): void {
   cols[0][0].kind = 'start';
   cols[0][0].name = opts.startName ?? 'Tortuga';
   if (opts.final === false) {
-    cols[last][0].kind = 'exit';
-    cols[last][0].name = opts.exitName ?? 'The Passage';
+    const exits = opts.exits ?? [{ name: opts.exitName ?? 'The Passage', to: '' }];
+    cols[last].forEach((node, i) => {
+      node.kind = 'exit';
+      node.name = exits[i]?.name ?? exits[0].name;
+      if (exits[i]?.to) node.to = exits[i].to;
+    });
   } else {
     cols[last][0].kind = 'boss';
     cols[last][0].enemy = 'frigate';

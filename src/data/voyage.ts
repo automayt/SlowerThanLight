@@ -70,6 +70,7 @@ export const RECRUIT_NAMES = [
 
 /** One stretch of the voyage: its own chart, its own fleet, its own kind of ship. */
 export interface SectorDef {
+  id: string;
   name: string;
   /** Shown when you sail into it. */
   blurb: string;
@@ -81,6 +82,7 @@ export interface SectorDef {
 
 export const SECTORS: SectorDef[] = [
   {
+    id: 'windward',
     name: 'The Windward Isles',
     blurb: 'Fat merchantmen and nervous smugglers thread the islands a day out of Tortuga. Easy pickings, if you are quick.',
     enemies: [
@@ -92,6 +94,7 @@ export const SECTORS: SectorDef[] = [
     ambush: 'cutter',
   },
   {
+    id: 'main',
     name: 'The Spanish Main',
     blurb: 'Guarda costas, French corsairs and treasure galleons. Richer prizes, and sharper teeth guarding them.',
     enemies: [
@@ -105,6 +108,21 @@ export const SECTORS: SectorDef[] = [
     ambush: 'cutter',
   },
   {
+    id: 'coast',
+    name: "The Brethren's Coast",
+    blurb: 'Logwood camps and pirate havens along the Mosquito Coast. Leaner prizes and more of the brethren, and the Navy seldom sails this far south.',
+    enemies: [
+      ['rival', 22],
+      ['smuggler', 20],
+      ['merchant', 18],
+      ['corsair', 15],
+      ['privateer', 15],
+      ['cutter', 10],
+    ],
+    ambush: 'cutter',
+  },
+  {
+    id: 'kings',
     name: "The King's Waters",
     blurb: 'Navy sloops and rival brethren stand between you and the blockade. Every sail is a threat now.',
     enemies: [
@@ -118,3 +136,15 @@ export const SECTORS: SectorDef[] = [
     ambush: 'sloop',
   },
 ];
+
+/**
+ * The voyage's stages: the sectors you can sail through at each depth. Where there is more than one, the passages at
+ * the end of the stage before let you choose.
+ */
+export const SECTOR_ROUTE: string[][] = [['windward'], ['main', 'coast'], ['kings']];
+
+export function sectorDef(id: string): SectorDef {
+  const s = SECTORS.find((x) => x.id === id);
+  if (!s) throw new Error(`Unknown sector: ${id}`);
+  return s;
+}

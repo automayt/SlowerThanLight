@@ -580,7 +580,7 @@ describe('sectors, provisions and the chandler', () => {
     // Necessities stay at the same price.
     const gold = run.gold;
     run.buyProvisions(1);
-    expect(run.gold).toBe(gold - PROVISION_PRICE);
+    expect(run.gold).toBe(gold - run.provisionPrice);
     // And what you pay is what was offered.
     const offer = run.upgradeOffers().find((o) => o.available)!;
     const g = run.gold;
@@ -795,3 +795,28 @@ describe('fittings that change the fight, and ports known for something', () => 
 function enemyAI(id: string) {
   return ENEMIES[id].ai;
 }
+
+describe('a fork in the route', () => {
+  it('the first stage ends at two passages, and the one you take decides the next sector', () => {
+    const run = new Run('gull', 8);
+    const exits = run.chart.nodes.filter((n) => n.kind === 'exit');
+    expect(exits.map((n) => n.to).sort()).toEqual(['coast', 'main']);
+    // Sail for the Brethren's Coast.
+    run.navy = -99;
+    const coast = exits.find((n) => n.to === 'coast')!;
+    for (let guard = 0; guard < 30 && run.sector === 0; guard++) {
+      if (run.status !== 'chart') run.status = 'chart';
+      const options = run.reachable().filter((n) => !run.isLateral(n));
+      const pick = options.find((n) => n.id === coast.id) ?? options.find((n) => reaches(run, n.id, coast.id)) ?? options[0];
+      run.jump(pick.id);
+    }
+    expect(run.sector).toBe(1);
+    expect(run.sectorId).toBe('coast');
+    expect(run.sectorDef.name).toMatch(/Brethren/);
+    const enemies = new Set(run.chart.nodes.filter((n) => n.enemy).map((n) => n.enemy));
+    for (const e of enemies) expect(['rival', 'smuggler', 'merchant', 'corsair', 'privateer', 'cutter']).toContain(e);
+    expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).sectorId).toBe('coast');
+    // The last stage has no fork: one passage leads on to the blockade's waters.
+    expect(run.chart.nodes.filter((n) => n.kind === 'exit').map((n) => n.to)).toEqual(['kings']);
+  });
+});
