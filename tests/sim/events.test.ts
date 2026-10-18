@@ -4,6 +4,7 @@ import { SEA_EVENTS, seaEvent } from '../../src/data/voyage';
 import { WEAPONS } from '../../src/data/weapons';
 import { RARITY_WEIGHT, Run, specialNeed } from '../../src/sim/Run';
 import { FITTING_IDS } from '../../src/data/fittings';
+import { TRAIT_IDS } from '../../src/data/traits';
 import { PLAYER_SHIPS } from '../../src/data/ships';
 import type { EventEffect, EventNeeds, SeaEventDef } from '../../src/sim/types';
 
@@ -32,6 +33,7 @@ function richRun(seed: number, needs: (EventNeeds | undefined)[] = []): Run {
   for (const n of needs) {
     if (n?.flag) run.flags.add(n.flag);
     if (n?.fitting) run.fittings.push(n.fitting);
+    if (n?.trait) run.condition.crew[2].trait = n.trait;
     if (n?.gun) run.fit.guns.push({ weapon: n.gun[0] });
     for (const skill of Object.keys(n?.skill ?? {})) run.condition.crew[1].xp = { ...run.condition.crew[1].xp, [skill]: 999 };
     for (const [p, v] of Object.entries(n?.standing ?? {})) if (typeof v === 'number') run.standing[p as keyof Run['standing']] = Math.max(v, 0) + 5;
@@ -63,6 +65,7 @@ describe('special choices', () => {
       for (const c of ev.choices) {
         const n = c.needs;
         if (n?.fitting) expect(FITTING_IDS, ev.id).toContain(n.fitting);
+        if (n?.trait) expect(TRAIT_IDS, ev.id).toContain(n.trait);
         for (const id of n?.ship ?? []) expect(PLAYER_SHIPS.map((s) => s.id), ev.id).toContain(id);
         for (const id of n?.gun ?? []) expect(Object.keys(WEAPONS), ev.id).toContain(id);
       }

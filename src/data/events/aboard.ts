@@ -19,6 +19,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'The fever takes {crew} before it passes. You bury them at sea at dawn.', crewHp: -20, loseActor: true } },
         ],
       },
+      {
+        label: 'Your barber-surgeon doses them with bark and keeps them apart',
+        needs: { trait: 'surgeon' },
+        outcomes: [{ weight: 1, effect: { text: 'The fever burns through the sick berth and no further.', actorHp: -10 } }],
+      },
     ],
   },
   {
@@ -51,6 +56,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'Nothing the surgeon can do. {crew} dies before the watch changes.', loseActor: true } },
           { weight: 1, effect: { text: 'A miracle: {crew} landed on a coil of rope and walks away with bruises.', actorHp: -10 } },
         ],
+      },
+      {
+        label: 'Your barber-surgeon sets the bones',
+        needs: { trait: 'surgeon' },
+        outcomes: [{ weight: 1, effect: { text: 'Splints, a stiff tot of rum, and a promise of the mainmast again inside a fortnight.', actorHp: 30 } }],
       },
     ],
   },
@@ -100,6 +110,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
       { label: 'Let them fight it out', outcomes: [{ weight: 1, effect: { text: 'Black eyes and loosened teeth, then they share a bottle. Sailors.', actorHp: -25, actor2Hp: -25 } }] },
       { label: 'Flog them both', outcomes: [{ weight: 1, effect: { text: 'A dozen lashes each. Order is kept, and nobody plays cards for a while.', actorHp: -20, actor2Hp: -20 } }] },
       { label: 'Stop the rum for a week', outcomes: [{ weight: 1, effect: { text: 'The whole crew pays for two fools. They grumble at you, not at them.', crewHp: -10 } }] },
+      {
+        label: 'Your brawler steps into the ring and ends it',
+        needs: { trait: 'brawler' },
+        outcomes: [{ weight: 1, effect: { text: 'Two blows, two sailors on the deck, and a lesson nobody needs twice.', crewHp: 5 } }],
+      },
     ],
   },
   {
@@ -133,6 +148,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Sign them on', outcomes: [{ weight: 1, effect: { text: 'They swear on the articles, wide-eyed. Another pair of hands.', recruit: 1 } }] },
       { label: 'Put them ashore at the next island', outcomes: [{ weight: 1, effect: { text: 'You leave them on a beach with a knife and a cask of water.' } }] },
+      {
+        label: 'Put them with the cook in the galley',
+        needs: { trait: 'cook' },
+        outcomes: [{ weight: 1, effect: { text: 'The cook has an apprentice, the galley is cleaner than it has ever been, and the youngster signs the articles.', recruit: 1 } }],
+      },
     ],
   },
   {
@@ -230,6 +250,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
           { weight: 1, effect: { text: 'Fine words fill no bellies. The crew work sullenly.', crewHp: -20 } },
         ],
       },
+      {
+        label: 'Have your brawler stand at your shoulder while you talk',
+        needs: { trait: 'brawler' },
+        outcomes: [{ weight: 1, effect: { text: 'The deputation looks at the brawler, then at its feet, and decides the voyage is going well after all.' } }],
+      },
     ],
   },
   {
@@ -286,6 +311,11 @@ export const ABOARD_EVENTS: SeaEventDef[] = [
       },
       { label: 'Throw out the spoiled stores', outcomes: [{ weight: 1, effect: { text: 'Over the side it goes, three days’ food with it. Nobody falls sick, at least.', provisions: -3 } }] },
       { label: 'Eat around the weevils', outcomes: [{ weight: 1, effect: { text: 'Short rations and bellyaches.', crewHp: -15 } }] },
+      {
+        label: 'Leave it to the cook',
+        needs: { trait: 'cook' },
+        outcomes: [{ weight: 1, effect: { text: 'Weevils sifted, the peas soaked and boiled with the last of the pork: nobody asks what is in it, and nobody goes hungry.', provisions: 2 } }],
+      },
     ],
   },
   {

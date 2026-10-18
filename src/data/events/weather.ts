@@ -14,6 +14,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Wait for the wind', outcomes: [{ weight: 1, effect: { text: 'The crew rest in what shade they can find while the Navy closes the distance.', crewHp: 20, navy: 1 } }] },
       { label: 'Man the sweeps and row', outcomes: [{ weight: 1, effect: { text: 'Hours at the oars under a brutal sun. Backs ache, but you keep your lead.', crewHp: -20 } }] },
+      {
+        label: 'Your navigator knows a current that runs even in a calm',
+        needs: { trait: 'navigator' },
+        outcomes: [{ weight: 1, effect: { text: 'She drifts, then glides, then runs on the current while the sails hang slack.', navy: -0.5 } }],
+      },
     ],
   },
   {
@@ -227,6 +232,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Go around it', outcomes: [{ weight: 1, effect: { text: 'A long detour.', navy: 0.5 } }] },
       { label: 'Kedge her through with the boats', outcomes: [{ weight: 1, effect: { text: 'A day of rowing anchors ahead and hauling. Exhausting, but quick.', crewHp: -15 } }] },
+      {
+        label: 'Let your navigator find the channel through it',
+        needs: { trait: 'navigator' },
+        outcomes: [{ weight: 1, effect: { text: 'A ribbon of clear water winds through the weed, if you know to look for it. You lose no time at all.' } }],
+      },
     ],
   },
   {
@@ -241,6 +251,11 @@ export const WEATHER_EVENTS: SeaEventDef[] = [
       { label: 'Put in for fresh water', outcomes: [{ weight: 1, effect: { text: 'A spring above a beach, and every cask filled to the bung. It costs a day.', navy: 0.5, provisions: 2 } }] },
       { label: 'Pour it over the side', outcomes: [{ weight: 1, effect: { text: 'Two days’ water goes into the sea. Better thirsty than poisoned.', provisions: -2 } }] },
       { label: 'Ration the rum instead', outcomes: [{ weight: 1, effect: { text: 'The crew drink grog thin as tea and get thinner themselves.', crewHp: -15 } }] },
+      {
+        label: 'Let the cook boil it with ginger and a splash of rum',
+        needs: { trait: 'cook' },
+        outcomes: [{ weight: 1, effect: { text: 'Foul, but safe, and the crew say the rum improves it.' } }],
+      },
     ],
   },
   {

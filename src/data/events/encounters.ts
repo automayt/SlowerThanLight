@@ -143,6 +143,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
         ],
       },
       { label: 'Toss it back', outcomes: [{ weight: 1, effect: { text: 'Treasure maps are for fools and storybooks.' } }] },
+      {
+        label: 'Have your navigator work out where the chart really points',
+        needs: { trait: 'navigator' },
+        outcomes: [{ weight: 1, effect: { text: 'The X is a decoy; the true mark is the compass rose. Under it, a cache: a little gold and a sealed bottle of rum.', gold: 35, crewHp: 5 } }],
+      },
     ],
   },
   {
@@ -257,6 +262,11 @@ export const ENCOUNTER_EVENTS: SeaEventDef[] = [
     choices: [
       { label: 'Stock the hold', outcomes: [{ weight: 1, effect: { text: 'Turtles by the dozen, kept alive on their backs in the hold. Turtle soup for weeks, and nobody will get scurvy on this ship.', crewHp: 25, navy: 0.5, provisions: 5 } }] },
       { label: 'Take a few and sail on', outcomes: [{ weight: 1, effect: { text: 'A feast tonight, and a couple more for the pot.', crewHp: 10, provisions: 1 } }] },
+      {
+        label: 'Have the cook salt and store the meat properly',
+        needs: { trait: 'cook' },
+        outcomes: [{ weight: 1, effect: { text: 'Salted, packed in barrels, and good for weeks.', provisions: 7 } }],
+      },
     ],
   },
   {
