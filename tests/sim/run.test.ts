@@ -694,3 +694,51 @@ describe('weighted picks', () => {
     expect(rng.weighted(['a', 'b'], () => 0)).toBe('b');
   });
 });
+
+describe('leads and fresh tales', () => {
+  it('a story flag puts its follow-up on the chart ahead, and sailing there tells it', () => {
+    const run = new Run('gull', 4);
+    run.applyEffect({ text: '', flag: 'map-half' });
+    const lead = run.chart.nodes.find((n) => n.story === 'cartographer');
+    expect(lead).toBeTruthy();
+    expect(lead!.col).toBeGreaterThan(run.node.col);
+    expect(lead!.kind).toBe('event');
+    // Sail straight for it.
+    run.navy = -99;
+    for (let guard = 0; guard < 20 && run.node.id !== lead!.id; guard++) {
+      run.status = 'chart';
+      const options = run.reachable();
+      const path = options.find((n) => n.id === lead!.id) ?? options.find((n) => !run.isLateral(n) && reaches(run, n.id, lead!.id)) ?? options[0];
+      run.jump(path.id);
+    }
+    expect(run.node.id).toBe(lead!.id);
+    expect(run.encounter.kind === 'event' && run.encounter.event).toBe('cartographer');
+  });
+
+  it('a lead that needs more depth than this chart reaches waits for a later sector', () => {
+    const run = new Run('gull', 4);
+    run.applyEffect({ text: '', flag: 'marque' });
+    // The French frigate needs the voyage half done: not in the first sector's opening columns.
+    for (const n of run.chart.nodes.filter((x) => x.story === 'marque-frigate')) expect(n.col).toBeGreaterThan(0);
+  });
+
+  it('events from recent voyages come round less often', () => {
+    const counts = (recent: string[]) => {
+      let hits = 0;
+      for (let seed = 1; seed <= 300; seed++) {
+        const run = new Run('gull', seed);
+        run.recent = recent;
+        if (run.drawEvent('incident')?.id === 'storm') hits++;
+      }
+      return hits;
+    };
+    expect(counts(['storm'])).toBeLessThan(counts([]));
+  });
+});
+
+/** Whether `to` can be reached from `from` by sailing onward. */
+function reaches(run: Run, from: number, to: number): boolean {
+  if (from === to) return true;
+  const node = run.chart.nodes.find((n) => n.id === from)!;
+  return node.next.some((id) => reaches(run, id, to));
+}

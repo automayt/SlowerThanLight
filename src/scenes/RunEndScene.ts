@@ -4,7 +4,7 @@ import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, gild, goldText, panel, Sea, waxSeal } from '../render/ui';
-import { bumpProfile, clearSave } from './save';
+import { bumpProfile, clearSave, recordVoyage } from './save';
 
 /** The end of a voyage: escape to the open ocean, or a summary of how far you got. */
 export class RunEndScene extends Phaser.Scene {
@@ -17,6 +17,7 @@ export class RunEndScene extends Phaser.Scene {
   create(): void {
     const run = currentRun(this);
     clearSave();
+    recordVoyage(run);
     if (run.status === 'won' && !this.registry.get('counted-win')) bumpProfile('wins');
     this.registry.set('counted-win', true);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);

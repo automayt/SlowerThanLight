@@ -116,7 +116,9 @@ export const ARMOURY = Object.values(WEAPONS)
 export type { UpgradeId };
 
 /** How often each rarity is drawn, relative to the others. */
-export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon: 5, rare: 2, legendary: 0.6 };
+export const RARITY_WEIGHT: Record<EventRarity, number> = { common: 10, uncommon: 5, rare: 2.5, legendary: 1 };
+/** Weight of an event met in one of the last few voyages, so each voyage tells more new tales. */
+export const RECENT_WEIGHT = 0.35;
 /** How a missing story flag is described on a locked choice. */
 const FLAG_LACKING: Record<string, string> = { cat: 'no ship’s cat', 'map-half': 'no map', 'map-whole': 'no map', cursed: 'not cursed' };
 /** Weight multiplier for events that follow on from a story flag. */
@@ -201,6 +203,7 @@ export interface RunSave {
   standing?: Standing;
   escort?: Escort | null;
   commission?: Commission | null;
+  recent?: string[];
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -350,6 +353,8 @@ export class Run {
   flags = new Set<string>();
   /** Events met this voyage, in order. */
   seenEvents: string[] = [];
+  /** Events met in this player's last few voyages: drawn less often, so tales stay fresh. */
+  recent: string[] = [];
   /** Spoils of the last battle, until you sail on. */
   prize: Prize | null = null;
   /** Which stretch of the voyage you are in (0-based). */
@@ -520,6 +525,9 @@ export class Run {
         return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text, intent: this.intentOf(foe) });
       }
       case 'event': {
+        // A lead marked on the chart, if its tale can still be told; otherwise whatever the sea brings.
+        const lead = node.story ? seaEvent(node.story) : null;
+        if (lead && this.unmet(lead.needs) === null && !this.seenEvents.includes(lead.id)) return this.startEvent(lead);
         const ev = this.drawEvent('encounter') ?? this.drawEvent('incident');
         if (ev) return this.startEvent(ev);
         break;
@@ -570,6 +578,7 @@ export class Run {
     this.nodeId = 0;
     this.visited = [0];
     this.navy = NAVY_START + SECTOR_CARRY * lost;
+    this.placeLeads();
     const def = this.sectorDef;
     const fleet = lost >= 1 ? 'The fleet is hard on your heels: its topsails were in sight as you cleared the passage.' : 'The fleet has lost your trail for now. It will find it again.';
     return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} ${fleet}` });
@@ -925,7 +934,39 @@ export class Run {
     const list = fresh.length ? fresh : ok;
     if (!list.length) return null;
     // Follow-ups to the voyage's own story come round more readily.
-    return this.rng.weighted(list, (e) => RARITY_WEIGHT[e.rarity ?? 'common'] * (e.needs?.flag ? STORY_BOOST : 1));
+    return this.rng.weighted(list, (e) => RARITY_WEIGHT[e.rarity ?? 'common'] * (e.needs?.flag ? STORY_BOOST : 1) * (this.recent.includes(e.id) ? RECENT_WEIGHT : 1));
+  }
+
+  /**
+   * Mark the chart with the leads the voyage's story has opened (a half map, a debt owed, a letter of marque): each
+   * follow-up waits at an event or open-sea mark ahead, far enough on for any depth it needs. A lead that does not
+   * fit on this chart waits for the next sector's.
+   */
+  placeLeads(): void {
+    const placed = new Set(this.chart.nodes.map((n) => n.story).filter(Boolean));
+    const leads = SEA_EVENTS.filter(
+      (e) =>
+        (e.pool ?? 'encounter') === 'encounter' &&
+        !!e.needs?.flag &&
+        this.flags.has(e.needs.flag) &&
+        !(e.needs.noFlag && this.flags.has(e.needs.noFlag)) &&
+        !this.seenEvents.includes(e.id) &&
+        !placed.has(e.id),
+    );
+    for (const ev of leads) {
+      const spots = this.chart.nodes.filter((n) => n.col > this.node.col && (n.kind === 'event' || n.kind === 'empty') && !n.story && this.progressAt(n.col) >= (ev.needs?.minCol ?? 0));
+      if (!spots.length) continue;
+      const spot = this.rng.pick(spots);
+      spot.kind = 'event';
+      spot.story = ev.id;
+    }
+  }
+
+  /** Voyage progress on the 0..7 scale (see progressCol) at a column of this chart. */
+  private progressAt(col: number): number {
+    if (this.chart.columns !== SECTOR_COLUMNS) return col;
+    const per = SECTOR_COLUMNS - 1;
+    return Math.round(((this.sector * per + col) * 7) / (SECTORS.length * per));
   }
 
   /** Begin an event, casting two crew members as {crew} and {crew2}. */
@@ -1063,7 +1104,10 @@ export class Run {
         out.push('+20 gold');
       }
     }
-    if (e.flag) this.flags.add(e.flag);
+    if (e.flag) {
+      this.flags.add(e.flag);
+      this.placeLeads();
+    }
     if (e.clearFlag) this.flags.delete(e.clearFlag);
     if (e.gold) {
       const before = this.gold;
@@ -1420,6 +1464,7 @@ export class Run {
       standing: this.standing,
       escort: this.escort,
       commission: this.commission,
+      recent: this.recent,
     });
   }
 
@@ -1455,6 +1500,7 @@ export class Run {
     run.standing = { ...freshStanding(), ...s.standing };
     run.escort = s.escort ?? null;
     run.commission = s.commission ?? null;
+    run.recent = s.recent ?? [];
     return run;
   }
 }

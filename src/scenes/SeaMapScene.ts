@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { placeArt } from '../render/art';
+import { seaEvent } from '../data/voyage';
 import { playLoop, playSfx, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -143,10 +144,13 @@ export class SeaMapScene extends Phaser.Scene {
       const { x, y } = this.pos(node);
       const style = KIND_STYLE[node.kind];
       this.add.image(x, y, chartIcon(this, node.kind)).setScale(node.kind === 'boss' || node.kind === 'exit' ? 0.62 : 0.5).setDepth(2);
-      const label = node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
+      // A lead the story has put on the chart: a gilt ring, and the tale's name instead of "Unknown".
+      const lead = node.story ? seaEvent(node.story) : null;
+      if (lead) this.add.circle(x, y, NODE_R + 5).setStrokeStyle(3, 0xd8a531, 0.95).setDepth(2.1);
+      const label = lead ? lead.title : node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
       const big = node.kind === 'boss' || node.kind === 'exit' ? 6 : 0;
       // The name under the seal, on a scrap of clean parchment, kept inside the chart's frame.
-      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: '#2a170a', fontStyle: 'italic' }).setDepth(2);
+      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: lead ? '#7a4a06' : '#2a170a', fontStyle: lead ? 'bold italic' : 'italic' }).setDepth(2);
       const inset = 16;
       name.setX(Phaser.Math.Clamp(x - name.width / 2, CHART.x + inset, CHART.x + CHART.w - inset - name.width));
       this.add
@@ -647,9 +651,11 @@ export class SeaMapScene extends Phaser.Scene {
     const run = this.run;
     const lines: string[] = [];
     const style = KIND_STYLE[n.kind];
-    lines.push(n.kind === 'port' ? `${n.name}: a friendly port` : n.kind === 'start' ? 'Tortuga' : style.label);
+    const lead = n.story ? seaEvent(n.story) : null;
+    lines.push(lead ? `${lead.title}: a lead to follow` : n.kind === 'port' ? `${n.name}: a friendly port` : n.kind === 'start' ? 'Tortuga' : style.label);
+    if (lead) lines.push('Something from earlier in the voyage waits here.');
     if (n.kind === 'battle') lines.push('A ship. Prize or predator?');
-    if (n.kind === 'event') lines.push('Something unusual on the horizon.');
+    if (n.kind === 'event' && !lead) lines.push('Something unusual on the horizon.');
     if (n.kind === 'port') lines.push('Repair the hull, hire crew, rest and refit.');
     if (n.kind === 'empty') lines.push('Open sea. Time for repairs, if nothing happens aboard.');
     if (n.kind === 'boss') lines.push('HMS Relentless guards the channel to the open ocean. No running from this one.');

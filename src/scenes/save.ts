@@ -1,6 +1,7 @@
 import { enemy } from '../data/enemies';
 import { fitting } from '../data/fittings';
 import { weapon } from '../data/weapons';
+import { seaEvent } from '../data/voyage';
 import { Run } from '../sim/Run';
 import { coop } from '../net/CoopClient';
 import { Ship } from '../sim/Ship';
@@ -59,6 +60,7 @@ function checkRun(run: Run): void {
   for (const node of run.chart.nodes) {
     if (node.enemy) enemy(node.enemy);
     for (const id of node.stock ?? []) weapon(id);
+    if (node.story) seaEvent(node.story);
   }
   if (run.encounter.kind === 'port') {
     for (const id of run.encounter.stock) weapon(id);
@@ -74,6 +76,34 @@ export function clearSave(): void {
     localStorage.removeItem(KEY);
   } catch {
     // Nothing to clear.
+  }
+}
+
+const RECENT_KEY = 'slower-than-light.recent.v1';
+/** How many past voyages count as recent: their events turn up less often in the next. */
+const RECENT_VOYAGES = 3;
+
+/** Events met in this browser's last few voyages. */
+export function recentEvents(): string[] {
+  try {
+    const voyages = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[][];
+    return [...new Set(voyages.flat())];
+  } catch {
+    return [];
+  }
+}
+
+/** Remember a finished voyage's events (once per voyage, by its seed). */
+export function recordVoyage(run: Run): void {
+  if (!writable) return;
+  try {
+    const voyages = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[][];
+    const key = `seed:${run.seed}`;
+    if (voyages.some((v) => v[0] === key)) return;
+    voyages.push([key, ...run.seenEvents]);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(voyages.slice(-RECENT_VOYAGES)));
+  } catch {
+    // Without storage every voyage simply starts fresh.
   }
 }
 

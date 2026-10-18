@@ -17,6 +17,8 @@ export interface SeaNode {
   stock?: string[];
   /** Ids of nodes in the next column you can sail to. */
   next: number[];
+  /** A lead the voyage's story has put here: the id of the event waiting at this mark. */
+  story?: string;
 }
 
 export interface SeaChart {

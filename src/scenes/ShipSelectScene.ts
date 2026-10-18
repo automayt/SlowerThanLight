@@ -10,7 +10,7 @@ import { addTip, Button, divider, drawBar, drawPips, frame, goldText, panel, Sea
 import { DIFFICULTY, Run, type Difficulty } from '../sim/Run';
 import { Ship } from '../sim/Ship';
 import { SYSTEM_NAMES, type ShipDef, type SystemId } from '../sim/types';
-import { bumpProfile, profile } from './save';
+import { bumpProfile, profile, recentEvents } from './save';
 
 const MARGIN = 22;
 /** The featured ship: her portrait, the shipwright's draught of her below it, and her particulars to the right. */
@@ -256,7 +256,10 @@ export class ShipSelectScene extends Phaser.Scene {
     if (this.locks[this.selected]) return;
     bumpProfile('voyages');
     this.registry.set('counted-win', false);
-    setRun(this, new Run(def.id, undefined, this.difficulty));
+    const run = new Run(def.id, undefined, this.difficulty);
+    // Tales from the last few voyages come round less often.
+    run.recent = recentEvents();
+    setRun(this, run);
     this.registry.set('chart-note', '');
     this.scene.start('SeaMap');
   }
