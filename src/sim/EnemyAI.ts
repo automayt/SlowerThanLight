@@ -17,7 +17,12 @@ export interface AIOptions {
   focus?: SystemId;
   /** Send boarding parties of this many crew when the ships can grapple. 0 or unset: never board. */
   boardWith?: number;
+  /** Which of the ship's work this captain does (all of it when unset): an AI mate covers only the roles no player holds. */
+  duties?: Partial<Record<Duty, boolean>>;
 }
+
+/** The parts of running a ship: deckhands and gun power, gunnery, crew orders, boarding parties. */
+export type Duty = 'hands' | 'guns' | 'crew' | 'boarding';
 
 /** What the battle lets a captain do with boarders. */
 export interface BoardingActions {
@@ -70,10 +75,11 @@ export class ShipAI {
     this.boardCooldown -= dt;
     if (this.think > 0) return 'none';
     this.think = 0.5;
-    this.manageHands();
-    this.manageGuns();
-    this.manageCrew();
-    this.manageBoarding();
+    const d = this.opts.duties;
+    if (d?.hands ?? true) this.manageHands();
+    if (d?.guns ?? true) this.manageGuns();
+    if (d?.crew ?? true) this.manageCrew();
+    if (d?.boarding ?? true) this.manageBoarding();
     return 'none';
   }
 

@@ -1,7 +1,7 @@
 import { BOARD_TIME, canGrapple, land, updateBoarding, type Transit } from './Boarding';
 import { applyHit, changeShot, NO_HELM_RELOAD, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from './Combat';
 import { orderMove, updateCrew } from './Crew';
-import { ShipAI, type AIOptions } from './EnemyAI';
+import { ShipAI, type AIOptions, type Duty } from './EnemyAI';
 import type { BattleEvent } from './events';
 import { isSinking, updateHazards } from './Hazards';
 import { Rng } from './rng';
@@ -45,6 +45,8 @@ export interface BattleOptions {
   enemyHull?: number;
   /** A friendly ship in company: every `every` seconds her broadside puts a ball of `damage` into the enemy. */
   consort?: Consort;
+  /** An AI first mate for the player's ship, doing only these duties (co-op: the roles no player holds). */
+  mate?: Partial<Record<Duty, boolean>>;
 }
 
 export interface Consort {
@@ -129,7 +131,12 @@ export class Battle {
   };
   private events: BattleEvent[] = [];
   private readonly enemyAI: ShipAI;
-  private readonly playerAI: ShipAI | null;
+  private playerAI: ShipAI | null;
+  /** Game speed the players chose (the sim ignores it; whoever drives update() applies it). */
+  speed = 1;
+  /** A copy of a battle run elsewhere (co-op client): it never steps itself, snapshots move it. */
+  remote = false;
+  private readonly boardingActions: ReturnType<Battle['actionsFor']>;
   private acc = 0;
 
   constructor(playerDef: ShipDef, enemyDef: ShipDef, opts: BattleOptions = {}) {
@@ -162,6 +169,7 @@ export class Battle {
       { fleeAt: 0.3, surrenderChance: 0.35, surrenderAt: 0.25, ...opts.enemyAI },
       actions('enemy'),
     );
+    this.boardingActions = this.actionsFor('player');
     this.playerAI = opts.autoPlayer
       ? new ShipAI(
           this.player,
@@ -171,6 +179,24 @@ export class Battle {
           actions('player'),
         )
       : null;
+    if (opts.mate) this.setMate(opts.mate);
+  }
+
+  private actionsFor(side: Side) {
+    return {
+      board: (crew: Crew[], room: string) => this.board(side, crew, room),
+      recall: (crew: Crew) => this.recall(side, crew),
+      inTransit: () => this.transit.some((t) => t.crew.side === side),
+    };
+  }
+
+  /**
+   * Hand some of the player's ship to an AI first mate (co-op: the roles nobody holds), or take it all back with
+   * null. The mate never flees, strikes or boards on its own account.
+   */
+  setMate(duties: Partial<Record<Duty, boolean>> | null): void {
+    const any = duties && Object.values(duties).some(Boolean);
+    this.playerAI = any ? new ShipAI(this.player, this.enemy, this.rng, { fleeAt: 0, surrenderChance: 0, surrenderAt: 0, duties: { boarding: false, ...duties } }, this.boardingActions) : null;
   }
 
   get enemyFleeing(): boolean {
@@ -203,7 +229,7 @@ export class Battle {
 
   /** Advance by real elapsed seconds, in fixed steps. */
   update(realDt: number): void {
-    if (this.paused || this.outcome) return;
+    if (this.paused || this.outcome || this.remote) return;
     this.acc = Math.min(this.acc + realDt, 0.25);
     while (this.acc >= STEP && !this.outcome) {
       this.acc -= STEP;
@@ -305,6 +331,11 @@ export class Battle {
   runToEnd(maxSeconds = 600): Outcome | null {
     while (!this.outcome && this.time < maxSeconds) this.step(STEP);
     return this.outcome;
+  }
+
+  /** Queue events that happened elsewhere (a co-op copy receives its battle's events with each snapshot). */
+  pushEvents(events: BattleEvent[]): void {
+    this.events.push(...events);
   }
 
   drainEvents(): BattleEvent[] {

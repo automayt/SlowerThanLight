@@ -286,6 +286,13 @@ export type Encounter =
   | { kind: 'empty'; text: string; title?: string }
   | { kind: 'start' };
 
+/** Everything needed to build a battle: both ships and the fight's options. */
+export interface BattleSetup {
+  player: ShipDef;
+  enemy: ShipDef;
+  options: BattleOptions;
+}
+
 export interface BattleReport {
   kind: OutcomeKind;
   won: boolean;
@@ -774,6 +781,12 @@ export class Run {
 
   /** Build the fight for the current battle encounter. */
   startBattle(opts: Partial<BattleOptions> = {}): Battle {
+    const setup = this.battleSetup(opts);
+    return new Battle(setup.player, setup.enemy, setup.options);
+  }
+
+  /** The ships and options for the current battle encounter, as plain data (a co-op server sends it to its players). */
+  battleSetup(opts: Partial<BattleOptions> = {}): BattleSetup {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
     // Deeper sectors field better-found ships; the blockade frigate has her own fit.
@@ -781,19 +794,23 @@ export class Run {
     const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull);
     // The Brethren's sloops have already been at the blockade frigate.
     const aided = this.encounter.boss && this.tier('brethren') === 'allied';
-    return new Battle(this.ship, { ...ship, name: this.encounter.name, hull }, {
-      enemyHull: aided ? Math.round(hull * (1 - BRETHREN_AID)) : undefined,
-      consort: this.escort ? { name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE } : undefined,
-      seed: this.rng.int(2 ** 31),
-      enemyAI: foe.ai,
-      playerCondition: this.condition,
-      allowEscape: !this.encounter.boss,
-      boss: this.encounter.boss,
-      enemyReload: DIFFICULTY[this.difficulty].enemyReload,
-      playerReload: this.has('drill') ? 1.1 : 1,
-      playerNets: this.has('nets'),
-      ...opts,
-    });
+    return {
+      player: this.ship,
+      enemy: { ...ship, name: this.encounter.name, hull },
+      options: {
+        enemyHull: aided ? Math.round(hull * (1 - BRETHREN_AID)) : undefined,
+        consort: this.escort ? { name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE } : undefined,
+        seed: this.rng.int(2 ** 31),
+        enemyAI: foe.ai,
+        playerCondition: this.condition,
+        allowEscape: !this.encounter.boss,
+        boss: this.encounter.boss,
+        enemyReload: DIFFICULTY[this.difficulty].enemyReload,
+        playerReload: this.has('drill') ? 1.1 : 1,
+        playerNets: this.has('nets'),
+        ...opts,
+      },
+    };
   }
 
   /** Record a finished battle: damage carried, plunder taken, the fleet's reaction. */
