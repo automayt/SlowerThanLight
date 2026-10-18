@@ -303,8 +303,8 @@ export function chartSerpent(scene: Phaser.Scene): string {
 }
 
 /** A little ship in profile for "you are here", painted once. */
-export function chartShip(scene: Phaser.Scene): string {
-  const key = 'charticon:ship';
+export function chartShip(scene: Phaser.Scene, navy = false): string {
+  const key = navy ? 'charticon:navyship' : 'charticon:ship';
   if (scene.textures.exists(key)) return key;
   const tex = scene.textures.createCanvas(key, 64, 64)!;
   const ctx = tex.getContext();
@@ -316,7 +316,7 @@ export function chartShip(scene: Phaser.Scene): string {
   ctx.lineTo(50, 54);
   ctx.lineTo(14, 54);
   ctx.closePath();
-  ctx.fillStyle = '#3b2412';
+  ctx.fillStyle = navy ? '#1c1f2a' : '#3b2412';
   ctx.fill();
   ctx.strokeStyle = '#120804';
   ctx.lineWidth = 2;
@@ -337,9 +337,14 @@ export function chartShip(scene: Phaser.Scene): string {
     ctx.fill();
     ctx.stroke();
   }
-  // Black flag.
-  ctx.fillStyle = '#111';
+  // Black flag, or the King's red ensign.
+  ctx.fillStyle = navy ? '#b0242a' : '#111';
   ctx.fillRect(40, 4, 9, 6);
+  if (navy) {
+    // A yellow band at the gunports.
+    ctx.fillStyle = '#c9a23a';
+    ctx.fillRect(12, 46, 40, 2);
+  }
   tex.refresh();
   return key;
 }

@@ -92,6 +92,7 @@ export class SeaMapScene extends Phaser.Scene {
   private chartG!: Phaser.GameObjects.Graphics;
   /** The fleet's tide, its edge rippling, under the seals. */
   private fleetG!: Phaser.GameObjects.Graphics;
+  private squadron: Phaser.GameObjects.Image[] = [];
   /** Pulsing rings and the hover ring, over the seals. */
   private g!: Phaser.GameObjects.Graphics;
   /** Where you can sail next, top to bottom: number keys pick from this. */
@@ -132,6 +133,8 @@ export class SeaMapScene extends Phaser.Scene {
     playLoop(this, 'creak', 0.2);
     this.parchment();
     this.fleetG = this.add.graphics().setDepth(-0.5);
+    // The squadron hunting you: three of the King's ships at the front of the tide.
+    this.squadron = [0, 1, 2].map(() => this.add.image(0, 0, chartShip(this, true)).setScale(0.42).setDepth(2.6).setFlipX(false));
     this.chartG = this.add.graphics();
     this.g = this.add.graphics().setDepth(0.5);
     this.bar = new RunBar(this, run);
@@ -641,6 +644,12 @@ export class SeaMapScene extends Phaser.Scene {
     const top = CHART.y + 3;
     const bottom = CHART.y + CHART.h - 3;
     const front = Math.min(CHART.x + CHART.w - 3, Math.max(CHART.x, this.colX(run.navy)));
+    // Its ships ride at the front of the tide, or hull-down at the chart's edge while it is still astern.
+    this.squadron.forEach((ship, i) => {
+      const astern = front <= CHART.x + 20;
+      ship.setPosition(Math.max(CHART.x + 22, front - 14) + Math.sin(time / 900 + i) * 2, top + (bottom - top) * (0.22 + 0.28 * i) + Math.sin(time / 600 + i * 2) * 3);
+      ship.setAlpha(astern ? 0.55 : 0.95);
+    });
     if (front > CHART.x) {
       f.fillStyle(RED_INK, 0.22).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
       f.lineStyle(3, RED_INK, 0.85);
