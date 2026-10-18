@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2022"] },
+  "exclude": [],
+  "include": ["../server", "../tests/server", "../src/sim", "../src/data", "../src/net/protocol.ts"]
+}

@@ -4,3 +4,5 @@ dist/
 .DS_Store
 tools/art/raw/
 .claude/worktrees/
+# Co-op crews saved by `npm run server`
+saves/

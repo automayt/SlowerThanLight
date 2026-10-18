@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
+import { COOP_PORT } from './src/net/protocol';
 import { defineConfig } from 'vitest/config';
 
 const PHASER_SRC = fileURLToPath(new URL('./node_modules/phaser/src/', import.meta.url)).replaceAll('\\', '/');
@@ -41,7 +42,8 @@ function phaserWithoutPhysics(): Plugin {
 export default defineConfig({
   plugins: [phaserWithoutPhysics()],
   // host: true listens on every network interface so other devices on the LAN can play.
-  server: { port: 5173, host: true },
+  // /ws goes to the co-op server (`npm run server`), so friends who open the dev server can sail together too.
+  server: { port: 5173, host: true, proxy: { '/ws': { target: `ws://127.0.0.1:${COOP_PORT}`, ws: true } } },
   preview: { host: true },
   build: {
     // Phaser alone is ~1 MB; it gets its own long-cached chunk so game updates stay small.
