@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NAVY_CUTTER } from '../../src/data/enemies';
 import { playerShip } from '../../src/data/ships';
-import { applyHit, BULWARK_RECHARGE, changeShot, hitChance, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from '../../src/sim/Combat';
+import { applyHit, BULWARK_RECHARGE, SHOT_EFFECTS, changeShot, hitChance, UNCREWED_RELOAD, updateBulwarks, updateGuns, updateProjectiles, type CombatStats, type Projectile } from '../../src/sim/Combat';
 import { updateCrew } from '../../src/sim/Crew';
 import type { BattleEvent } from '../../src/sim/events';
 import { Rng } from '../../src/sim/rng';
@@ -41,6 +41,15 @@ describe('shot types', () => {
     expect(ship.hull).toBe(NAVY_CUTTER.hull);
     expect(ship.system('sails')!.damage).toBe(2);
     expect(ship.escape).toBeLessThan(50);
+  });
+
+  it('chain shot flies high: full damage on deck, only a glancing share below decks', () => {
+    const effect = SHOT_EFFECTS.chain;
+    expect(effect.system(2, 'helm')).toBe(2);
+    expect(effect.system(2, 'bulwarks')).toBe(2);
+    expect(effect.system(2, 'sails')).toBe(3);
+    expect(effect.system(2, 'guns')).toBe(1);
+    expect(effect.system(1, 'pumps')).toBe(0);
   });
 
   it('grape shot hurts everyone in the room and nothing else', () => {

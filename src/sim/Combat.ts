@@ -31,9 +31,10 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
   },
   chain: {
     label: 'Chain',
-    blurb: 'Wrecks systems and shreds rigging, and ignores stout sides. Heavy chain splinters a little hull.',
+    blurb: 'Flies high: wrecks sails, helm and bulwarks and shreds rigging, ignores stout sides, but does little below decks.',
     hull: (d) => (d >= 2 ? 1 : 0),
-    system: (d, sys) => d + (sys === 'sails' ? 1 : 0),
+    // Aimed at masts and deck: what stands on deck takes it all, the stations below only a glancing share.
+    system: (d, sys) => (sys === 'sails' ? d + 1 : sys && BELOW_DECKS.has(sys) ? Math.floor(d / 2) : d),
     crew: 5,
     fireChance: 0,
     breachChance: 0,
@@ -60,6 +61,9 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
     rigging: 0,
   },
 };
+
+/** Stations below the weather deck, out of reach of chain shot aimed at the rigging. */
+export const BELOW_DECKS = new Set<SystemId>(['guns', 'pumps', 'surgeon']);
 
 /** Reload speed with nobody serving the guns: hands alone load slowly. */
 export const UNCREWED_RELOAD = 0.4;
@@ -219,7 +223,7 @@ export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: n
   const hull = Math.min(target.hull, fx.hull(damage));
   target.hull -= hull;
   // Guns are spread along the deck: round and hot shot often strike planking between them. Chain is aimed to wreck.
-  const glancesGuns = sysId === 'guns' && shot !== 'chain' && !rng.chance(GUN_DECK_HIT_CHANCE);
+  const glancesGuns = sysId === 'guns' && !rng.chance(GUN_DECK_HIT_CHANCE);
   if (sysId && !glancesGuns) target.damageSystem(sysId, fx.system(damage, sysId));
   for (const c of target.crew) if (c.room === roomId) c.hp -= fx.crew;
   target.escape = Math.max(0, target.escape - fx.rigging);
