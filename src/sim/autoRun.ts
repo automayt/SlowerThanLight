@@ -49,6 +49,8 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
         (run.isLateral(n) ? (n.kind === 'port' && (hurt || hungry) ? 1 : -4) : 0) +
         (n.kind === 'port' && (hurt || hungry) ? 5 : 0) +
         (n.kind === 'battle' && hurt ? -2 : 0) +
+        // Keep out of a foul wind, take a fair one.
+        ({ foul: -1.5, beam: 0, fair: 0.5 } as const)[run.pointOfSail(run.node, n)] +
         run.rng.next();
       const pick = [...options].sort((a, b) => score(b) - score(a))[0];
       run.jump(pick.id);

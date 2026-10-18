@@ -204,7 +204,7 @@ describe('short rations', () => {
     let deserted = 0;
     const tries = 200;
     for (let seed = 0; seed < tries; seed++) {
-      const run = new Run('maw', seed);
+      const run = calm(new Run('maw', seed));
       run.provisions = 0;
       const before = run.condition.crew.length;
       sail(run);
@@ -257,3 +257,9 @@ describe('guard rails', () => {
     expect(run.legs).toEqual({ sailed: 2, total: run.chart.columns - 1 });
   });
 });
+
+/** Hold the wind abeam, for tests about what a plain jump costs. */
+function calm(run: Run): Run {
+  run.pointOfSail = () => 'beam';
+  return run;
+}

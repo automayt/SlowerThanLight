@@ -145,6 +145,21 @@ export const COMMISSION_STANDING = 15;
 /** How much of the blockade frigate's hull the Brethren shoot away when they come to your aid. */
 export const BRETHREN_AID = 0.2;
 
+/**
+ * The wind on the chart. A leg sailed into it (its heading within 60 degrees of where the wind comes from) is foul:
+ * a day lost beating to windward, eating an extra day's provisions while the fleet closes. A leg with the wind astern
+ * is fair, and you gain on the fleet. The wind backs and veers by up to 45 degrees each jump.
+ */
+export const FOUL_FLEET = 0.25;
+export const FAIR_FLEET = 0.25;
+const WIND_SHIFT = Math.PI / 2;
+/** How tall the chart is for its width, so a leg's heading matches what the chart shows (one column across, 0..1 down). */
+const CHART_ASPECT = 1.8;
+
+export type PointOfSail = 'foul' | 'beam' | 'fair';
+
+const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+
 /** Chance that crossing open sea brings an incident aboard. */
 export const INCIDENT_CHANCE = 0.6;
 
@@ -206,6 +221,7 @@ export interface RunSave {
   commission?: Commission | null;
   recent?: string[];
   sectorId?: string;
+  wind?: number;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -365,6 +381,8 @@ export class Run {
   seenEvents: string[] = [];
   /** Events met in this player's last few voyages: drawn less often, so tales stay fresh. */
   recent: string[] = [];
+  /** Where the wind blows from, as an angle on the chart (0 from the east, a quarter turn from the south). */
+  wind = Math.PI;
   /** Spoils of the last battle, until you sail on. */
   prize: Prize | null = null;
   /** Which stretch of the voyage you are in (0-based). */
@@ -394,6 +412,22 @@ export class Run {
     for (const c of this.condition.crew) this.usedNames.add(c.name);
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
     this.chart = this.makeChart(0);
+    this.wind = this.rng.next() * 2 * Math.PI;
+  }
+
+  /** How a leg between two marks lies to the wind. */
+  pointOfSail(from: SeaNode, to: SeaNode): PointOfSail {
+    const heading = Math.atan2((to.y - from.y) * CHART_ASPECT, to.col - from.col);
+    const off = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+    if (off(heading, this.wind) < Math.PI / 3) return 'foul';
+    if (off(heading, this.wind + Math.PI) < Math.PI / 3) return 'fair';
+    return 'beam';
+  }
+
+  /** The wind in words: "from the north-east". */
+  get windName(): string {
+    const i = Math.round(this.wind / (Math.PI / 4));
+    return `from the ${COMPASS[((i % 8) + 8) % 8]}`;
   }
 
   /**
@@ -515,14 +549,20 @@ export class Run {
     const node = this.reachable().find((n) => n.id === id);
     if (!node) throw new Error(`Cannot sail to node ${id} from ${this.nodeId}`);
     const overrun = this.willBeOverrun(node);
+    const sail = this.pointOfSail(this.node, node);
     this.nodeId = id;
     this.jumps++;
     this.visited.push(id);
     this.prize = null;
-    // Hungry crews do not mend: eat first, and heal only on a full belly.
-    const fed = this.eat();
+    // Hungry crews do not mend: eat first, and heal only on a full belly. Beating into a foul wind costs a second day.
+    let fed = this.eat();
+    const hunger = this.hungerNote;
+    if (sail === 'foul') fed = this.eat() && fed;
     this.runningRepairs(fed);
-    this.navy += this.navySpeed;
+    this.navy += this.navySpeed + (sail === 'foul' ? FOUL_FLEET : sail === 'fair' ? -FAIR_FLEET : 0);
+    const windNote = sail === 'foul' ? 'A foul wind: a day lost beating to windward, and a day’s provisions with it.' : '';
+    this.hungerNote = [windNote, hunger, this.hungerNote].filter((x, i, all) => x && all.indexOf(x) === i).join(' ');
+    this.wind += (this.rng.next() - 0.5) * WIND_SHIFT;
 
     if (node.kind === 'exit') return this.enterSector(this.sector + 1, node.to);
     if (node.kind === 'boss') {
@@ -598,6 +638,7 @@ export class Run {
     this.nodeId = 0;
     this.visited = [0];
     this.navy = NAVY_START + SECTOR_CARRY * lost;
+    this.wind = this.rng.next() * 2 * Math.PI;
     this.placeLeads();
     const def = this.sectorDef;
     const fleet = lost >= 1 ? 'The fleet is hard on your heels: its topsails were in sight as you cleared the passage.' : 'The fleet has lost your trail for now. It will find it again.';
@@ -1565,6 +1606,7 @@ export class Run {
       commission: this.commission,
       recent: this.recent,
       sectorId: this.sectorId,
+      wind: this.wind,
     });
   }
 
@@ -1603,6 +1645,7 @@ export class Run {
     run.escort = s.escort ?? null;
     run.commission = s.commission ?? null;
     run.recent = s.recent ?? [];
+    run.wind = s.wind ?? Math.PI;
     return run;
   }
 }

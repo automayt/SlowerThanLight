@@ -257,7 +257,38 @@ export class SeaMapScene extends Phaser.Scene {
       const disc = this.add.circle(bx, by, 9, this.ambush.has(n.id) ? RING_AMBUSH : RING).setStrokeStyle(1.5, INK).setDepth(3.5);
       const num = this.add.text(bx, by, `${i + 1}`, textStyle(12, '#fff8e6', { fontStyle: 'bold' })).setOrigin(0.5).setDepth(3.6);
       this.badges.push(disc, num);
+      // How the leg lies to the wind, written along it.
+      const sail = run.pointOfSail(run.node, n);
+      if (sail !== 'beam') {
+        const from = this.pos(run.node);
+        const tag = this.add
+          .text((from.x + x) / 2, (from.y + y) / 2 - 10, sail === 'foul' ? 'foul wind' : 'fair wind', { fontFamily: TITLE_FONT, fontSize: '12px', color: sail === 'foul' ? '#8a1c10' : '#1f5a3a', fontStyle: 'bold italic' })
+          .setOrigin(0.5)
+          .setDepth(3.4);
+        const back = this.add.rectangle(tag.x, tag.y, tag.width + 8, tag.height, PAPER, 0.85).setDepth(3.3);
+        this.badges.push(back, tag);
+      }
     });
+    // The wind, in the chart's top corner: an arrow blowing the way it blows.
+    const wx = CHART.x + 52;
+    const wy = CHART.y + 34;
+    const toward = run.wind + Math.PI;
+    const g = this.add.graphics().setDepth(3.4);
+    const tip = { x: wx + Math.cos(toward) * 22, y: wy + Math.sin(toward) * 22 };
+    const tail = { x: wx - Math.cos(toward) * 22, y: wy - Math.sin(toward) * 22 };
+    g.fillStyle(PAPER, 0.85).fillCircle(wx, wy, 28).lineStyle(1.5, INK, 0.5).strokeCircle(wx, wy, 28);
+    g.lineStyle(3, INK, 0.9).lineBetween(tail.x, tail.y, tip.x, tip.y);
+    g.fillStyle(INK, 0.9).fillTriangle(
+      tip.x + Math.cos(toward) * 6,
+      tip.y + Math.sin(toward) * 6,
+      tip.x + Math.cos(toward + 2.5) * 10,
+      tip.y + Math.sin(toward + 2.5) * 10,
+      tip.x + Math.cos(toward - 2.5) * 10,
+      tip.y + Math.sin(toward - 2.5) * 10,
+    );
+    const label = this.add.text(wx + 36, wy, `Wind ${run.windName}`, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#2a170a', fontStyle: 'italic' }).setOrigin(0, 0.5).setDepth(3.4);
+    const labelBack = this.add.rectangle(label.x - 4, wy, label.width + 8, label.height, PAPER, 0.8).setOrigin(0, 0.5).setDepth(3.3);
+    this.badges.push(g, labelBack, label);
   }
 
   /** Everything on the chart that stays put until the next jump: the fleet's next mark, channels, routes and seals. */
@@ -664,6 +695,9 @@ export class SeaMapScene extends Phaser.Scene {
     if (n.kind === 'exit') lines.push(`A passage into ${n.name}. Tougher ships, richer prizes, and the fleet loses your trail for a while.`);
     const reachable = this.reach.includes(n);
     if (reachable && run.isLateral(n)) lines.push('Across the column: exploring costs a jump and a day’s provisions.');
+    const sail = reachable ? run.pointOfSail(run.node, n) : 'beam';
+    if (sail === 'foul') lines.push('Foul wind: a day lost beating to windward (an extra day’s provisions), and the fleet gains.');
+    if (sail === 'fair') lines.push('Fair wind: you gain on the fleet.');
     if (reachable && run.provisions === 0) lines.push('⚠ No provisions: the crew will go hungry.');
     if (reachable && run.willBeOverrun(n)) lines.push('⚠ The fleet will overrun this before you get there: a Navy ambush.');
     else if (n.kind !== 'boss' && n.kind !== 'exit' && n.col <= run.navy) lines.push('Overrun by the Navy fleet.');

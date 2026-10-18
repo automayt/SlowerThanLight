@@ -97,7 +97,7 @@ describe('run', () => {
   });
 
   it('the fleet advances every jump', () => {
-    const run = new Run('gull', 3);
+    const run = calm(new Run('gull', 3));
     const before = run.navy;
     run.jump(run.reachable()[0].id);
     expect(run.navy).toBeCloseTo(before + NAVY_SPEED);
@@ -471,7 +471,7 @@ describe('sectors, provisions and the chandler', () => {
   });
 
   it('a straight run shakes off the fleet in the passage; ground lost to detours follows you into the next sector', () => {
-    const straight = new Run('gull', 11);
+    const straight = calm(new Run('gull', 11));
     crossSector(straight);
     // crossSector holds the fleet far back: the passage forgives a straight run entirely.
     expect(straight.navy).toBe(NAVY_START);
@@ -486,9 +486,9 @@ describe('sectors, provisions and the chandler', () => {
     expect(dawdler.encounter).toMatchObject({ kind: 'empty' });
     expect((dawdler.encounter as { text: string }).text).toContain('hard on your heels');
 
-    // A straight run on Normal (every jump onward, no rests) never meets an ambush in any sector.
+    // A straight run on Normal (every jump onward, no rests, no foul winds) never meets an ambush in any sector.
     for (let seed = 1; seed <= 10; seed++) {
-      const run = new Run('maw', seed);
+      const run = calm(new Run('maw', seed));
       for (let guard = 0; guard < 60 && !run.over && !(run.encounter.kind === 'battle' && run.encounter.boss); guard++) {
         if (run.status === 'hail') run.hail('attack');
         else if (run.status === 'battle') {
@@ -526,13 +526,13 @@ describe('sectors, provisions and the chandler', () => {
   });
 
   it('every jump eats a provision; on empty stores the crew go hungry', () => {
-    const run = new Run('gull', 4);
+    const run = calm(new Run('gull', 4));
     const food = run.provisions;
     run.navy = -10;
     run.jump(run.reachable()[0].id);
     expect(run.provisions).toBe(food - 1);
 
-    const starving = new Run('gull', 4);
+    const starving = calm(new Run('gull', 4));
     starving.provisions = 0;
     starving.navy = -10;
     const hp = starving.condition.crew.map((c) => c.hp);
@@ -541,7 +541,7 @@ describe('sectors, provisions and the chandler', () => {
     // A hungry crew does not mend: the full 25 comes off, even with a surgeon's chest aboard.
     starving.condition.crew.forEach((c, i) => expect(c.hp).toBe(Math.max(1, hp[i] - 25)));
 
-    const chest = new Run('gull', 4);
+    const chest = calm(new Run('gull', 4));
     chest.provisions = 0;
     chest.navy = -10;
     chest.fittings.push('chest');
@@ -874,5 +874,54 @@ describe('a fork in the route', () => {
     expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).sectorId).toBe('coast');
     // The last stage has no fork: one passage leads on to the blockade's waters.
     expect(run.chart.nodes.filter((n) => n.kind === 'exit').map((n) => n.to)).toEqual(['kings']);
+  });
+});
+
+/** Hold the wind abeam, for tests about what a plain jump costs. */
+function calm(run: Run): Run {
+  run.pointOfSail = () => 'beam';
+  return run;
+}
+
+describe('the wind', () => {
+  it('a leg into the wind is foul, one before it is fair, across it is beam', () => {
+    const run = new Run('gull', 1);
+    const from = { id: 0, col: 1, y: 0.5, kind: 'empty' as const, next: [] };
+    const east = { ...from, id: 1, col: 2 };
+    run.wind = 0; // from the east
+    expect(run.pointOfSail(from, east)).toBe('foul');
+    run.wind = Math.PI; // from the west
+    expect(run.pointOfSail(from, east)).toBe('fair');
+    run.wind = -Math.PI / 2; // from the north
+    expect(run.pointOfSail(from, east)).toBe('beam');
+    expect(run.windName).toBe('from the north');
+  });
+
+  it('a foul leg costs an extra day and lets the fleet close; a fair one gains on it', () => {
+    const go = (sail: 'foul' | 'fair' | 'beam') => {
+      const run = new Run('gull', 4);
+      run.navy = -10;
+      run.pointOfSail = () => sail;
+      const food = run.provisions;
+      const navy = run.navy;
+      run.jump(run.reachable()[0].id);
+      return { food: food - run.provisions, fleet: run.navy - navy, note: run.hungerNote };
+    };
+    const beam = go('beam');
+    const foul = go('foul');
+    const fair = go('fair');
+    expect(foul.food).toBe(beam.food + 1);
+    expect(foul.fleet).toBeGreaterThan(beam.fleet);
+    expect(foul.note).toMatch(/foul wind/);
+    expect(fair.fleet).toBeLessThan(beam.fleet);
+  });
+
+  it('shifts as you sail, and is kept in a save', () => {
+    const run = new Run('gull', 4);
+    const before = run.wind;
+    run.navy = -10;
+    run.jump(run.reachable()[0].id);
+    expect(run.wind).not.toBe(before);
+    expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).wind).toBe(run.wind);
   });
 });
