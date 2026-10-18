@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { placeBackdrop } from '../render/art';
 import { ledgerOpen } from '../render/Ledger';
 import { harbourTerms, PortEnvoy } from '../render/PortEnvoy';
+import { HiringHall } from '../render/HiringHall';
+import { TRAITS } from '../data/traits';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, goldText, panel, Sea } from '../render/ui';
@@ -59,6 +61,7 @@ export class PortScene extends Phaser.Scene {
   /** What each of this screen's commands does here, by the command (rebuilt with the buttons). */
   private readonly fns = new Map<string, () => void>();
   private envoy: PortEnvoy | null = null;
+  private hall: HiringHall | null = null;
 
   constructor() {
     super('Port');
@@ -67,6 +70,7 @@ export class PortScene extends Phaser.Scene {
   create(): void {
     const run = (this.run = currentRun(this));
     this.envoy = null;
+    this.hall = null;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     playLoop(this, 'waves', 0.22);
     playLoop(this, 'creak', 0.2);
@@ -118,6 +122,15 @@ export class PortScene extends Phaser.Scene {
       if (fn) return fn();
       if (cmd.t === 'gift' && this.envoy) return this.envoy.gift();
       if (cmd.t === 'commission' && this.envoy) return this.envoy.take();
+      if (cmd.t === 'hire') {
+        const who = applyVoyage(this.run, cmd);
+        if (who.t === 'text' && who.text) {
+          playSfx(this, 'coins', 0.5);
+          this.say(`${who.text} signs the articles.`);
+        }
+        this.hall?.refresh();
+        return this.later();
+      }
       applyVoyage(this.run, cmd);
       this.later();
     };
@@ -135,8 +148,13 @@ export class PortScene extends Phaser.Scene {
       leavePort: leave,
     });
     const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', () => voyage(this, { t: 'leavePort' }, `Weigh anchor and leave ${name}`), { size: 18, hint: 'Enter' });
-    this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !ledgerOpen(this) && weigh.press());
+    this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !this.hall && !ledgerOpen(this) && weigh.press());
     this.rebuild();
+  }
+
+  private openHall(): void {
+    if (this.hall || this.envoy) return;
+    this.hall = new HiringHall(this, this.run, () => (this.hall = null));
   }
 
   private openEnvoy(): void {
@@ -217,18 +235,15 @@ export class PortScene extends Phaser.Scene {
       why: missing ? 'Only one point to patch: use the button above.' : sound,
     });
     y += ROW + 6;
+    // The hiring hall opens over the port: sailors with backgrounds, each at their own price.
     const full = run.condition.crew.length >= run.maxCrew;
-    this.button(x, y, w, full ? 'No bunks to spare' : `Hire crew member (${run.crewPrice}g)`, {
-      enabled: run.canHire(),
-      cmd: { t: 'hire' },
-      fn: () => {
-        const who = run.hireCrew();
-        if (who) this.say(`${who} signs the articles.`);
-      },
-      detail: `Crew ${run.condition.crew.length}/${run.maxCrew}`,
-      price: full ? undefined : run.crewPrice,
-      why: 'Every bunk aboard is taken.',
-    });
+    const waiting = run.encounter.kind === 'port' ? (run.encounter.hands ?? []).length : 0;
+    const hall = new Button(this, x, y, w, 40, full ? 'No bunks to spare' : `Hiring hall (${waiting} looking)`, () => this.openHall(), {
+      size: 14,
+      tip: run.portFeud ? 'Nobody here will sign on with you.' : full ? 'Every bunk aboard is taken.' : !waiting ? 'Nobody is looking for a berth.' : undefined,
+    }).setEnabled(!full && waiting > 0 && !run.portFeud);
+    hall.label.setOrigin(0, 0.5).setX(12);
+    this.dyn.push(hall, this.add.text(x + w + 10, y + 20, `Crew ${run.condition.crew.length}/${run.maxCrew}`, textStyle(12, COLORS.textDim)).setOrigin(0, 0.5));
     y += ROW + 10;
 
     // Chandler: victuals and fittings.
@@ -269,7 +284,10 @@ export class PortScene extends Phaser.Scene {
     }
     y += 6;
     // Crew, compactly: the chandler's goods push the roster down the column.
-    const roster = run.condition.crew.map((c) => `${c.name} ${c.hp}%${badges(c) ? ` ${badges(c)}` : ''}`).join('  ·  ');
+    // Skills show as badges; a background that brings no skill (a cook, a surgeon, a navigator) is named.
+    const roster = run.condition.crew
+      .map((c) => `${c.name} ${c.hp}%${badges(c) ? ` ${badges(c)}` : ''}${c.trait && !TRAITS[c.trait]?.xp && c.trait !== 'landsman' ? ` (${TRAITS[c.trait].name})` : ''}`)
+      .join('  ·  ');
     this.dyn.push(this.add.text(x, y, roster, textStyle(12, COLORS.text, { lineSpacing: 2, wordWrap: { width: COLS[0].w } })));
   }
 

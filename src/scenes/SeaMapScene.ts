@@ -46,11 +46,13 @@ interface SectorLook {
 }
 
 /** Each stretch of sea is drawn by a different hand: bright islands to windward, ochre and serpents on the Main, cold grey near the King. */
-const SECTOR_LOOKS: SectorLook[] = [
-  { tint: 0xfff8ea, islands: 6, serpent: false, wash: 0x000000, washAlpha: 0 },
-  { tint: 0xf4d6a0, islands: 4, serpent: true, wash: 0x5a2a08, washAlpha: 0.06 },
-  { tint: 0xd6d4cc, islands: 3, serpent: true, wash: 0x0e2234, washAlpha: 0.12 },
-];
+const SECTOR_LOOKS: Record<string, SectorLook> = {
+  windward: { tint: 0xfff8ea, islands: 6, serpent: false, wash: 0x000000, washAlpha: 0 },
+  main: { tint: 0xf4d6a0, islands: 4, serpent: true, wash: 0x5a2a08, washAlpha: 0.06 },
+  // The Mosquito Coast: a greener sheet, crowded with cays and logwood islands.
+  coast: { tint: 0xe4ecca, islands: 8, serpent: false, wash: 0x1e3a14, washAlpha: 0.07 },
+  kings: { tint: 0xd6d4cc, islands: 3, serpent: true, wash: 0x0e2234, washAlpha: 0.12 },
+};
 
 /** A small seeded random, so a chart's ornaments stay put when you come back to it. */
 function seeded(seed: number): () => number {
@@ -322,7 +324,7 @@ export class SeaMapScene extends Phaser.Scene {
    */
   private parchment(): void {
     const { x, y, w, h } = CHART;
-    const look = SECTOR_LOOKS[Math.min(this.run.sector, SECTOR_LOOKS.length - 1)];
+    const look = SECTOR_LOOKS[this.run.sectorId] ?? SECTOR_LOOKS.windward;
     this.add.rectangle(x + 6, y + 9, w, h, 0x000000, 0.45).setOrigin(0).setDepth(-1);
     const paper = this.textures.exists('art:chart-paper') ? 'art:chart-paper' : this.textures.exists('art:tex-chart') ? 'art:tex-chart' : null;
     if (paper) {

@@ -95,7 +95,7 @@ export type VoyageCommand =
   | { t: 'choose'; index: number }
   | { t: 'rest' }
   | { t: 'repairHull'; points: number }
-  | { t: 'hire' }
+  | { t: 'hire'; pick?: number }
   | { t: 'provisions'; n: number }
   | { t: 'fitting'; id: string }
   | { t: 'upgrade'; id: UpgradeId }
@@ -146,7 +146,7 @@ export function applyVoyage(run: Run, cmd: VoyageCommand): VoyageResult {
     case 'repairHull':
       return { t: 'ok', ok: run.repairHull(cmd.points) };
     case 'hire':
-      return { t: 'text', text: run.hireCrew() };
+      return { t: 'text', text: run.hireCrew(cmd.pick) };
     case 'provisions':
       return { t: 'ok', ok: run.buyProvisions(cmd.n) };
     case 'fitting':

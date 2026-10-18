@@ -178,6 +178,8 @@ export interface EventNeeds {
   standing?: Partial<Record<PowerId, number | { max: number }>>;
   /** A chandler's fitting aboard (see data/fittings.ts). */
   fitting?: string;
+  /** Someone aboard with this background (see data/traits.ts). */
+  trait?: string;
   /** Only aboard one of these ships. */
   ship?: string[];
   /** Someone aboard at least this rank in a skill (1 Veteran, 2 Expert). */

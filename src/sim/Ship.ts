@@ -103,6 +103,8 @@ export interface Crew {
   melee: number;
   /** Experience per skill (player crew only gain it). */
   xp: SkillXp;
+  /** Where they learned the trade (data/traits.ts), if anywhere in particular. */
+  trait?: string;
 }
 
 /** A crew member as remembered between battles. */
@@ -112,6 +114,8 @@ export interface CrewRecord {
   home: string;
   /** Experience per skill; missing for green hands. */
   xp?: SkillXp;
+  /** Their background (data/traits.ts). */
+  trait?: string;
 }
 
 /** Wear and tear a ship carries from one encounter to the next. */
@@ -198,6 +202,7 @@ export class Ship {
         task: 'idle',
         melee: def.melee ?? 1,
         xp: { ...(c.xp ?? {}) },
+        ...(c.trait ? { trait: c.trait } : {}),
       });
     }
 
@@ -219,7 +224,7 @@ export class Ship {
     for (const s of this.systems.values()) if (s.damage > 0) damage[s.id] = s.damage;
     return {
       hull: Math.max(0, this.hull),
-      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.max(1, Math.round(c.hp)), home: c.home, ...(Object.keys(c.xp).length ? { xp: { ...c.xp } } : {}) })),
+      crew: this.own().filter((c) => c.hp > 0).map((c) => ({ name: c.name, hp: Math.max(1, Math.round(c.hp)), home: c.home, ...(Object.keys(c.xp).length ? { xp: { ...c.xp } } : {}), ...(c.trait ? { trait: c.trait } : {}) })),
       damage,
     };
   }

@@ -1,6 +1,7 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
 import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
+import { COOK_FORAGE, SURGEON_TRAIT_HEAL, TRAIT_IDS, trait } from '../data/traits';
 import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTOR_ROUTE, seaEvent, sectorDef, type PortSpeciality } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { POWER_IDS, portPower, power, relation } from '../data/powers';
@@ -287,6 +288,8 @@ export type Encounter =
       commission?: Commission | null;
       /** What happened as you came in, e.g. a dispatch delivered. */
       welcome?: string[];
+      /** Sailors in the hiring hall, each with a background (and a price to match). */
+      hands?: Candidate[];
     }
   | { kind: 'empty'; text: string; title?: string }
   | { kind: 'start' };
@@ -296,6 +299,12 @@ export interface BattleSetup {
   player: ShipDef;
   enemy: ShipDef;
   options: BattleOptions;
+}
+
+/** A sailor looking for a berth. */
+export interface Candidate {
+  name: string;
+  trait: string;
 }
 
 export interface BattleReport {
@@ -548,7 +557,7 @@ export class Run {
     // Open sea: often something happens aboard on the way.
     const incident = this.rng.chance(INCIDENT_CHANCE) ? this.drawEvent('incident') : null;
     if (incident) return this.startEvent(incident);
-    if (this.rng.chance(FORAGE_CHANCE) && this.provisions < this.maxProvisions) {
+    if (this.rng.chance(FORAGE_CHANCE + (this.hasTrait('cook') ? COOK_FORAGE : 0)) && this.provisions < this.maxProvisions) {
       this.provisions++;
       return this.begin({ kind: 'empty', text: this.rng.pick(FORAGE_LINES) });
     }
@@ -800,7 +809,8 @@ export class Run {
 
   /** Between nodes: wounds mend a little (not on empty stores) and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
   private runningRepairs(heal: boolean): void {
-    const hp = !heal ? 0 : this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL;
+    const surgeons = this.condition.crew.filter((c) => c.trait === 'surgeon').length;
+    const hp = !heal ? 0 : (this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL) + surgeons * SURGEON_TRAIT_HEAL;
     for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + hp);
     for (let i = this.has('spars') ? 2 : 1; i > 0; i--) {
       const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
@@ -1053,6 +1063,7 @@ export class Run {
     if (n.minCol !== undefined && col < n.minCol) return 'too early';
     if (n.maxCol !== undefined && col > n.maxCol) return 'too late';
     if (n.fitting && !this.has(n.fitting)) return `needs ${fitting(n.fitting).name}`;
+    if (n.trait && !this.hasTrait(n.trait)) return `needs a ${trait(n.trait).name} aboard`;
     if (n.ship && !n.ship.includes(this.def.id)) return 'not aboard this ship';
     for (const [s, r] of Object.entries(n.skill ?? {}) as [Skill, number][]) {
       if (!c.crew.some((m) => skillRank(m.xp, s) >= r)) return `needs ${r >= 2 ? 'an Expert' : 'a Veteran'} ${SKILL_LABEL[s]}`;
@@ -1202,13 +1213,30 @@ export class Run {
   }
 
   /** Sign on a new crew member if there is room. Returns their name, or null when the ship is full. */
-  private recruit(named?: string): string | null {
+  private recruit(named?: string, background?: string): string | null {
     if (this.condition.crew.length >= this.maxCrew) return null;
-    const free = RECRUIT_NAMES.filter((n) => !this.usedNames.has(n));
-    const name = named ?? (free.length ? this.rng.pick(free) : `Hand #${this.usedNames.size + 1}`);
+    const name = named ?? this.freshName();
     this.usedNames.add(name);
-    this.condition.crew.push({ name, hp: 100, home: '' });
+    // Those who join at sea are a mixed lot: some have a trade.
+    const t = background ?? (named ? undefined : this.rng.chance(0.4) ? this.rng.pick(TRAIT_IDS) : undefined);
+    const xp = t ? trait(t).xp : undefined;
+    this.condition.crew.push({ name, hp: 100, home: '', ...(xp ? { xp: { ...xp } } : {}), ...(t ? { trait: t } : {}) });
     return name;
+  }
+
+  private freshName(): string {
+    const free = RECRUIT_NAMES.filter((n) => !this.usedNames.has(n));
+    return free.length ? this.rng.pick(free) : `Hand #${this.usedNames.size + 1}`;
+  }
+
+  /** Whether anyone aboard has this background. */
+  hasTrait(id: string): boolean {
+    return this.condition.crew.some((c) => c.trait === id);
+  }
+
+  /** What a candidate in the hiring hall asks. */
+  handPrice(c: Candidate): number {
+    return Math.max(5, this.crewPrice + trait(c.trait).premium);
   }
 
   // --- Port ---------------------------------------------------------------
@@ -1243,8 +1271,13 @@ export class Run {
     return true;
   }
 
-  canHire(): boolean {
-    return this.status === 'port' && this.gold >= this.crewPrice && this.condition.crew.length < this.maxCrew && !this.portFeud;
+  /** Whether a hand can be signed on here: the one at `pick` in the hiring hall, or any (the cheapest) when unsaid. */
+  canHire(pick?: number): boolean {
+    if (this.status !== 'port' || this.encounter.kind !== 'port' || this.condition.crew.length >= this.maxCrew || this.portFeud) return false;
+    const hands = this.encounter.hands ?? [];
+    if (pick === undefined) return hands.length ? hands.some((c) => this.gold >= this.handPrice(c)) : this.gold >= this.crewPrice;
+    const c = hands[pick];
+    return !!c && this.gold >= this.handPrice(c);
   }
 
   /** A harbour whose masters want you dead: nobody will sign on, and nobody offers work. */
@@ -1261,6 +1294,7 @@ export class Run {
     const enc: Extract<Encounter, { kind: 'port' }> = { kind: 'port', name, rested: false, stock, welcome };
     this.begin(enc);
     enc.fittings = this.stockFittings();
+    enc.hands = this.hiringHall();
     // Foundries and arsenals stock more guns than the chart's armoury list: one more, or the heaviest.
     const special = this.speciality;
     const extra = special === 'heavy' ? ['pdr18', 'carronade'] : special === 'armoury' ? ARMOURY.filter((id) => !stock.includes(id)) : [];
@@ -1268,6 +1302,19 @@ export class Run {
     if (more.length) stock.push(this.rng.pick(more));
     enc.commission = this.offerCommission(name);
     return enc;
+  }
+
+  /** Three sailors looking for a berth, each with a different background. */
+  private hiringHall(): Candidate[] {
+    const pool = [...TRAIT_IDS];
+    const out: Candidate[] = [];
+    while (out.length < 3 && pool.length) {
+      const t = pool.splice(this.rng.int(pool.length), 1)[0];
+      let name = this.freshName();
+      while (out.some((c) => c.name === name) && RECRUIT_NAMES.length > out.length + this.usedNames.size) name = this.freshName();
+      out.push({ name, trait: t });
+    }
+    return out;
   }
 
   /** What a gift to the harbour's masters costs. */
@@ -1322,10 +1369,19 @@ export class Run {
     return [`${what}: +${job.gold} gold from ${power(job.patron).short}.`, ...this.shift(job.patron, job.standing, false)];
   }
 
-  hireCrew(): string | null {
-    if (!this.canHire()) return null;
-    this.gold -= this.crewPrice;
-    return this.recruit();
+  /** Sign on a hand from the hiring hall (the cheapest when unsaid). Returns their name. */
+  hireCrew(pick?: number): string | null {
+    if (!this.canHire(pick) || this.encounter.kind !== 'port') return null;
+    const hands = this.encounter.hands ?? [];
+    if (!hands.length) {
+      this.gold -= this.crewPrice;
+      return this.recruit();
+    }
+    const i = pick ?? hands.reduce((best, c, j) => (this.handPrice(c) < this.handPrice(hands[best]) ? j : best), 0);
+    const c = hands[i];
+    this.gold -= this.handPrice(c);
+    hands.splice(i, 1);
+    return this.recruit(c.name, c.trait);
   }
 
   leavePort(): void {
@@ -1587,6 +1643,7 @@ function skillRank(xp: SkillXp | undefined, skill: Skill): number {
 export function specialNeed(needs: EventNeeds | undefined): string | null {
   if (!needs) return null;
   if (needs.fitting) return fitting(needs.fitting).name;
+  if (needs.trait) return `${trait(needs.trait).name[0].toUpperCase()}${trait(needs.trait).name.slice(1)} aboard`;
   if (needs.ship) return needs.ship.map((id) => playerShip(id).name).join(' or ');
   const skill = Object.entries(needs.skill ?? {})[0] as [Skill, number] | undefined;
   if (skill) return `${skill[1] >= 2 ? 'Expert' : 'Veteran'} ${SKILL_LABEL[skill[0]]}`;

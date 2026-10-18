@@ -216,7 +216,9 @@ describe('port', () => {
   it('sells hull repairs and crew for gold', () => {
     const run = runAt('port');
     run.condition.hull = 10;
-    run.gold = HULL_PRICE * 2 + CREW_PRICE;
+    // The hiring hall's cheapest hand.
+    const hands = run.encounter.kind === 'port' ? run.encounter.hands! : [];
+    run.gold = HULL_PRICE * 2 + Math.min(...hands.map((c) => run.handPrice(c)));
     run.condition.crew.pop();
     expect(run.repairHull(2)).toBe(true);
     expect(run.condition.hull).toBe(12);
@@ -795,6 +797,60 @@ describe('fittings that change the fight, and ports known for something', () => 
 function enemyAI(id: string) {
   return ENEMIES[id].ai;
 }
+
+describe('the hiring hall', () => {
+  it('offers three sailors with different backgrounds, each at their own price', () => {
+    const run = runAt('port');
+    run.gold = 500;
+    run.condition.crew.pop();
+    const hands = run.encounter.kind === 'port' ? run.encounter.hands! : [];
+    expect(hands).toHaveLength(3);
+    expect(new Set(hands.map((c) => c.trait)).size).toBe(3);
+    const pick = hands.findIndex((c) => c.trait !== 'landsman');
+    const chosen = hands[pick];
+    const price = run.handPrice(chosen);
+    const gold = run.gold;
+    expect(run.hireCrew(pick)).toBe(chosen.name);
+    expect(run.gold).toBe(gold - price);
+    const aboard = run.condition.crew.find((c) => c.name === chosen.name)!;
+    expect(aboard.trait).toBe(chosen.trait);
+    expect(run.hasTrait(chosen.trait)).toBe(true);
+    // They are gone from the hall once signed.
+    expect(run.encounter.kind === 'port' && run.encounter.hands!.some((c) => c.name === chosen.name)).toBe(false);
+  });
+
+  it('a skilled hand comes aboard with the skill, and keeps background and skill through a battle', () => {
+    const run = new Run('gull', 3);
+    run.applyEffect({ text: '', recruit: 0 });
+    run.condition.crew.pop();
+    (run as unknown as { recruit(n: string, t: string): string }).recruit('Bess Gunn', 'gunner');
+    run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS X', boss: false, ambush: false, text: '' };
+    run.status = 'battle';
+    const b = run.startBattle();
+    b.enemy.hull = 0;
+    b.step(0.05);
+    run.finishBattle(b);
+    const bess = run.condition.crew.find((c) => c.name === 'Bess Gunn')!;
+    expect(bess.trait).toBe('gunner');
+    expect(bess.xp?.gunnery).toBeGreaterThanOrEqual(50);
+  });
+
+  it('a barber-surgeon heals the crew more each jump, and events can ask for a background', () => {
+    const run = new Run('gull', 3);
+    expect(run.unmet({ trait: 'navigator' })).toMatch(/navigator/);
+    run.condition.crew[0].trait = 'navigator';
+    expect(run.unmet({ trait: 'navigator' })).toBeNull();
+    const plain = new Run('gull', 3);
+    const doc = new Run('gull', 3);
+    doc.condition.crew[0].trait = 'surgeon';
+    for (const r of [plain, doc]) {
+      for (const c of r.condition.crew) c.hp = 40;
+      r.navy = -99;
+      r.jump(r.reachable()[0].id);
+    }
+    expect(doc.condition.crew[1].hp).toBeGreaterThan(plain.condition.crew[1].hp);
+  });
+});
 
 describe('a fork in the route', () => {
   it('the first stage ends at two passages, and the one you take decides the next sector', () => {
