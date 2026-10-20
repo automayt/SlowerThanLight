@@ -24,7 +24,7 @@ function scripted(seed: number): Battle {
   const b = new Battle(playerShip('wolf'), MERCHANT_BRIG, { seed, enemyAI: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 } });
   const orders: [number, () => void][] = [
     [0.5, () => b.player.guns.forEach((_, i) => b.aimGun(i, i % 2 ? 'helm' : 'sails'))],
-    [3, () => b.setShot(0, 'chain')],
+    [3, () => b.setShot(1, 'chain')],
     [6, () => b.setBroadside(true)],
     [9, () => b.orderCrew(b.player.own().slice(3, 6).map((c) => c.id), 'hold', 'enemy')],
     [10, () => b.moveCrew(b.player.own()[0].id, 'sails')],

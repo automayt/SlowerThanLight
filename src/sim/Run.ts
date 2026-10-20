@@ -38,7 +38,7 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 /** What each difficulty changes: how fast the fleet closes, starting gold, and how tough enemy hulls are. */
 export const DIFFICULTY: Record<Difficulty, { label: string; navySpeed: number; startGold: number; provisions: number; enemyHull: number; enemyReload: number; blurb: string }> = {
   easy: { label: 'Easy', navySpeed: 1.0, startGold: 80, provisions: 14, enemyHull: 0.75, enemyReload: 0.8, blurb: 'A slower fleet, a fuller purse, weaker enemies.' },
-  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, provisions: 10, enemyHull: 1.1, enemyReload: 1, blurb: 'The voyage as intended.' },
+  normal: { label: 'Normal', navySpeed: NAVY_SPEED, startGold: START_GOLD, provisions: 10, enemyHull: 1.1, enemyReload: 1.05, blurb: 'The voyage as intended.' },
   hard: { label: 'Hard', navySpeed: 1.5, startGold: 10, provisions: 8, enemyHull: 1.3, enemyReload: 1.15, blurb: 'A faster fleet, an empty purse, deadlier enemies.' },
 };
 
@@ -145,7 +145,7 @@ export const DISPATCH_REWARD = 25;
 export const COMMISSION_STANDING = 15;
 /** A prize in company: crew you must keep aboard to spare a prize crew, how often she fires, and her price at a prize court. */
 export const PRIZE_MIN_CREW = 2;
-export const PRIZE_EVERY = 10;
+export const PRIZE_EVERY = 14;
 export const PRIZE_COURT = 1.2;
 /** How much of the blockade frigate's hull the Brethren shoot away when they come to your aid. */
 export const BRETHREN_AID = 0.2;
@@ -1043,10 +1043,10 @@ export class Run {
     return `No free gun port: her ${w.name} fetches ${scrap} gold.`;
   }
 
-  /** Her broadside in company: her heaviest gun's weight, up to three balls, every ten seconds. */
+  /** Her broadside in company, sailed by a prize crew of one: two balls at most, no heavier than 2, every fourteen seconds. */
   private prizeBroadside(p: PrizeShip) {
     const guns = enemy(p.enemy).ship.guns.map((g) => weapon(g.weapon));
-    return { name: p.name, every: PRIZE_EVERY, damage: Math.max(1, ...guns.map((g) => g.damage)), shots: Math.min(3, guns.length), hull: p.hull, maxHull: p.maxHull };
+    return { name: p.name, every: PRIZE_EVERY, damage: Math.min(2, Math.max(1, ...guns.map((g) => g.damage))), shots: Math.min(2, guns.length), hull: p.hull, maxHull: p.maxHull };
   }
 
   /** Why the beaten ship can't be sailed in company, or null if she can. */

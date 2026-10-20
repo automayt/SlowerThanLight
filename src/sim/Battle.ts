@@ -67,8 +67,8 @@ export interface Consort {
 }
 
 /** Seconds between the enemy's shots at a prize in company, and the chance each one hits. */
-export const CONSORT_TARGETED_EVERY = 12;
-export const CONSORT_HIT_CHANCE = 0.6;
+export const CONSORT_TARGETED_EVERY = 9;
+export const CONSORT_HIT_CHANCE = 0.65;
 
 /** Hull fraction at which a boss rallies, and how much faster she then loads. */
 export const BOSS_RALLY_AT = 0.4;
