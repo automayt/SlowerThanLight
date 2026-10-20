@@ -65,6 +65,9 @@ export const SHOT_EFFECTS: Record<ShotType, ShotEffect> = {
 /** Stations below the weather deck, out of reach of chain shot aimed at the rigging. */
 export const BELOW_DECKS = new Set<SystemId>(['guns', 'pumps', 'surgeon']);
 
+/** A mortar shell's chance to land on its room, however nimble the target. */
+export const LOB_HIT = 0.55;
+
 /** Reload speed with nobody serving the guns: hands alone load slowly. */
 export const UNCREWED_RELOAD = 0.4;
 /** Chance a ball no heavier than the target's armour glances off her sides. */
@@ -93,6 +96,8 @@ export interface Projectile {
   room: string;
   damage: number;
   inaccuracy: number;
+  /** A mortar shell: drops over bulwarks, hits on a fixed chance. */
+  lob?: boolean;
   /** Seconds since the volley was fired. */
   t: number;
   /** Seconds before this ball leaves the muzzle. */
@@ -110,7 +115,7 @@ export function hitChance(target: Ship, inaccuracy: number): number {
 }
 
 export function changeShot(gun: GunState, shot: ShotType): void {
-  if (gun.shot === shot) return;
+  if (gun.shot === shot || gun.def.fixedShot) return;
   gun.shot = shot;
   gun.charge = Math.max(0, gun.charge - SWITCH_PENALTY);
 }
@@ -152,7 +157,8 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
       g.charge = Math.max(0, g.charge - dt * 3);
       return;
     }
-    g.charge = Math.min(g.def.loadTime, g.charge + dt * rate * (ship.shotRate[g.shot] ?? 1));
+    const chase = g.def.chaser && target.running ? 2 : 1;
+    g.charge = Math.min(g.def.loadTime, g.charge + dt * rate * chase * (ship.shotRate[g.shot] ?? 1));
     if (g.charge < g.def.loadTime || !g.target || !target.rooms.has(g.target) || hold) return;
     for (let s = 0; s < g.def.shots; s++) {
       out.push({
@@ -162,6 +168,7 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
         room: g.target,
         damage: g.def.damage,
         inaccuracy: g.def.inaccuracy,
+        ...(g.def.lob ? { lob: true } : {}),
         t: 0,
         delay: s * VOLLEY_GAP,
       });
@@ -190,9 +197,9 @@ export function updateProjectiles(
       continue;
     }
     const target = ships[p.from === 'player' ? 'enemy' : 'player'];
-    if (rng.chance(hitChance(target, p.inaccuracy))) {
-      // Bulwarks soak a ball each; chain shot flies high over them, into the rigging.
-      if (p.shot !== 'chain' && target.layers > 0) {
+    if (rng.chance(p.lob ? LOB_HIT : hitChance(target, p.inaccuracy))) {
+      // Bulwarks soak a ball each; chain shot flies high over them, into the rigging, and a mortar shell drops behind them.
+      if (p.shot !== 'chain' && !p.lob && target.layers > 0) {
         target.layers--;
         target.layerCharge = 0;
         events.push({ t: 'block', side: target.side, room: p.room });

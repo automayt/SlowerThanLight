@@ -153,6 +153,8 @@ export class Ship {
   shotRate: Partial<Record<ShotType, number>> = {};
   /** Pumping speed multiplier (chain pumps). */
   pumpRate = 1;
+  /** Running from the fight (a bow chaser loads faster at her). */
+  running = false;
   /** Bounding size in tiles. */
   readonly width: number;
   readonly height: number;
@@ -179,7 +181,7 @@ export class Ship {
       wanted: false,
       charge: 0,
       target: null,
-      shot: g.shot ?? 'round',
+      shot: weapon(g.weapon).fixedShot ?? g.shot ?? 'round',
     }));
 
     const roster: CrewRecord[] = condition?.crew ?? def.crew.map((c) => ({ name: c.name, hp: 100, home: c.room }));

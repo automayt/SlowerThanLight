@@ -6,6 +6,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
   pdr12: { id: 'pdr12', name: '12-Pounder', hands: 2, loadTime: 13, damage: 2, shots: 2, inaccuracy: 0, price: 50 },
   carronade: { id: 'carronade', name: '24-Pdr Short Gun', hands: 2, loadTime: 12, damage: 3, shots: 1, inaccuracy: 10, price: 55 },
   pdr18: { id: 'pdr18', name: '18-Pounder Long Gun', hands: 3, loadTime: 15, damage: 3, shots: 2, inaccuracy: 0, price: 75 },
+  swivel: { id: 'swivel', name: 'Swivel Guns', hands: 0, loadTime: 6, damage: 1, shots: 2, inaccuracy: 5, price: 30, fixedShot: 'grape', note: 'grape only · no hands' },
+  mortar: { id: 'mortar', name: 'Sea Mortar', hands: 2, loadTime: 20, damage: 3, shots: 1, inaccuracy: 0, price: 65, lob: true, note: 'over bulwarks · 55% hit' },
+  chaser: { id: 'chaser', name: 'Bow Chaser', hands: 1, loadTime: 9, damage: 1, shots: 1, inaccuracy: 0, price: 30, chaser: true, note: 'twice as fast at a runner' },
 };
 
 export function weapon(id: string): WeaponDef {

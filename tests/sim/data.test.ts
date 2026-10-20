@@ -94,7 +94,9 @@ describe('weapons, fittings, ports and names', () => {
   it('weapons are filed under their ids, with positive stats and prices', () => {
     for (const [id, w] of Object.entries(WEAPONS)) {
       expect(w.id).toBe(id);
-      for (const k of ['hands', 'loadTime', 'damage', 'shots', 'price'] as const) expect(w[k], `${id} ${k}`).toBeGreaterThan(0);
+      for (const k of ['loadTime', 'damage', 'shots', 'price'] as const) expect(w[k], `${id} ${k}`).toBeGreaterThan(0);
+      // Swivels need no hands; everything else at least one.
+      expect(w.hands, id).toBeGreaterThanOrEqual(w.fixedShot === 'grape' ? 0 : 1);
       expect(w.inaccuracy).toBeGreaterThanOrEqual(0);
     }
   });

@@ -256,7 +256,7 @@ export class Hud {
         cb.order({ t: 'gunPower', gun: i });
         cb.aimWith(i);
       }, { size: 12 });
-      scene.add.text(x + 88, BOTTOM_Y + 47, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''}\n${gun.def.shots}×${gun.def.damage} dmg`, textStyle(12, COLORS.textDim, { lineSpacing: -1 }));
+      scene.add.text(x + 88, BOTTOM_Y + 47, `${gun.def.hands ? `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''}` : 'no hands'}\n${gun.def.shots}×${gun.def.damage} dmg`, textStyle(12, COLORS.textDim, { lineSpacing: -1 }));
       const status = scene.add.text(x + 8, BOTTOM_Y + 97, '', textStyle(12, COLORS.textDim, { wordWrap: { width: CARD_W - 16 }, lineSpacing: -2 }));
       const target = scene.add.text(x + 8, BOTTOM_Y + 113, '', textStyle(12));
       const shots = SHOT_TYPES.map((s, j) => {
@@ -267,12 +267,17 @@ export class Hud {
           this.hintDone('shot');
         }, { size: 13 });
         b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));
+        // A gun that fires only one kind of shot offers only that one.
+        if (gun.def.fixedShot && gun.def.fixedShot !== s) b.setEnabled(false).setAlpha(0.35);
         b.bg.on('pointerover', () => this.showTooltip(`${SHOT_EFFECTS[s].label} shot: ${SHOT_EFFECTS[s].blurb}
 Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
         b.bg.on('pointerout', () => this.tooltip.setVisible(false));
         return b;
       });
-      scene.add.text(x + CARD_W / 2, BOTTOM_Y + 174, 'Click, then her room', textStyle(12, COLORS.textDim)).setOrigin(0.5, 0);
+      // A special gun says what sets it apart in place of the usual reminder.
+      scene.add
+        .text(x + CARD_W / 2, BOTTOM_Y + 174, gun.def.note ?? 'Click, then her room', textStyle(gun.def.note ? 11 : 12, gun.def.note ? COLORS.gold : COLORS.textDim, { fontStyle: gun.def.note ? 'italic' : 'normal', align: 'center', wordWrap: { width: CARD_W - 12 } }))
+        .setOrigin(0.5, 0);
       this.cards.push({ bg, name, status, target, power, shots, x });
     });
 

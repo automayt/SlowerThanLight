@@ -263,6 +263,7 @@ export class Battle {
     if (enemyMove === 'surrender') return this.finish('surrender');
     if (enemyMove === 'escape') return this.finish('enemyEscaped');
     this.playerAI?.update(dt);
+    this.enemy.running = this.enemyAI.fleeing;
 
     this.updateTransit(dt);
     const grappled = this.grappled;

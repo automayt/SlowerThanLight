@@ -47,6 +47,14 @@ export interface WeaponDef {
   inaccuracy: number;
   /** Price in gold at a port armoury. */
   price: number;
+  /** It fires only this shot (swivels: grape). */
+  fixedShot?: ShotType;
+  /** A mortar's shell drops from above: over bulwarks, and evasion doesn't spoil the aim (see Combat.LOB_HIT). */
+  lob?: boolean;
+  /** A bow chaser: loads twice as fast while her target is running. */
+  chaser?: boolean;
+  /** What sets it apart, in a few words, for the gun card and the armoury. */
+  note?: string;
 }
 
 export interface GunMount {

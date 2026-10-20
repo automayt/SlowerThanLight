@@ -32,7 +32,7 @@ function fittingName(id: string): string {
 }
 
 function gunStats(w: WeaponDef): string {
-  return `${w.shots}×${w.damage} dmg · ${w.loadTime}s · ${w.hands} hand${w.hands > 1 ? 's' : ''}`;
+  return `${w.shots}×${w.damage} dmg · ${w.loadTime}s · ${w.hands ? `${w.hands} hand${w.hands > 1 ? 's' : ''}` : 'no hands'}${w.note ? `\n${w.note}` : ''}`;
 }
 
 interface BuyOptions {

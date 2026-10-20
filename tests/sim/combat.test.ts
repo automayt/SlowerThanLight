@@ -165,3 +165,56 @@ describe('bulwarks', () => {
     expect(out.length).toBe(gull.guns.filter((g) => g.powered).reduce((n, g) => n + g.def.shots, 0));
   });
 });
+
+describe('special guns', () => {
+  const fire = (weaponId: string, target: Ship, seed = 1) => {
+    const w = { ...NAVY_CUTTER, guns: [{ weapon: weaponId }] };
+    const ship = new Ship(w, 'player');
+    const out: Projectile[] = [];
+    ship.guns[0].powered = true;
+    ship.guns[0].target = [...target.rooms.keys()][1];
+    ship.guns[0].charge = ship.guns[0].def.loadTime;
+    updateGuns(ship, target, 0.05, out, [], { shotsFired: 0, hits: 0, hullDamage: 0 });
+    return { ship, out, rng: new Rng(seed) };
+  };
+
+  it('swivels fire grape and nothing else, and need no hands', () => {
+    const target = new Ship(NAVY_CUTTER, 'enemy');
+    const { ship, out } = fire('swivel', target);
+    expect(ship.guns[0].shot).toBe('grape');
+    expect(out.every((p) => p.shot === 'grape')).toBe(true);
+    changeShot(ship.guns[0], 'round');
+    expect(ship.guns[0].shot).toBe('grape');
+  });
+
+  it('a mortar shell drops behind bulwarks, and evasion does not spoil it', () => {
+    let blocked = 0;
+    let hits = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const target = new Ship(NAVY_CUTTER, 'enemy');
+      target.layers = 2;
+      const { out, rng } = fire('mortar', target, seed);
+      const events: BattleEvent[] = [];
+      for (const p of out) p.t = 99;
+      updateProjectiles(out, { player: target, enemy: target }, 0.05, rng, events, { player: { shotsFired: 0, hits: 0, hullDamage: 0 }, enemy: { shotsFired: 0, hits: 0, hullDamage: 0 } });
+      if (events.some((e) => e.t === 'block')) blocked++;
+      if (events.some((e) => e.t === 'hit')) hits++;
+    }
+    expect(blocked).toBe(0);
+    expect(hits / 200).toBeGreaterThan(0.45);
+    expect(hits / 200).toBeLessThan(0.65);
+  });
+
+  it('a bow chaser loads twice as fast at a ship that runs', () => {
+    const load = (running: boolean) => {
+      const target = new Ship(NAVY_CUTTER, 'enemy');
+      target.running = running;
+      const w = { ...NAVY_CUTTER, guns: [{ weapon: 'chaser' }] };
+      const ship = new Ship(w, 'player');
+      ship.guns[0].powered = true;
+      updateGuns(ship, target, 1, [], [], { shotsFired: 0, hits: 0, hullDamage: 0 });
+      return ship.guns[0].charge;
+    };
+    expect(load(true)).toBeCloseTo(load(false) * 2);
+  });
+});
