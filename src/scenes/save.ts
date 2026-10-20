@@ -5,6 +5,7 @@ import { seaEvent } from '../data/voyage';
 import { Run } from '../sim/Run';
 import { coop } from '../net/CoopClient';
 import { Ship } from '../sim/Ship';
+import { CAPTAINS, type CaptainDef } from '../data/captains';
 
 const KEY = 'slower-than-light.voyage.v1';
 
@@ -140,20 +141,49 @@ export interface Profile {
   voyages: number;
   wins: number;
   captures: number;
+  /** Renown earned over every voyage: it unlocks captains (data/captains.ts). */
+  renown: number;
+  /** Voyages (by seed) whose renown has been counted, so a voyage is only counted once. */
+  counted?: number[];
 }
 
 export function profile(): Profile {
-  const fresh: Profile = { voyages: 0, wins: 0, captures: 0 };
+  const fresh: Profile = { voyages: 0, wins: 0, captures: 0, renown: 0 };
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     const p = raw ? (JSON.parse(raw) as Partial<Profile>) : {};
-    return { voyages: Number(p.voyages) || 0, wins: Number(p.wins) || 0, captures: Number(p.captures) || 0 };
+    return { voyages: Number(p.voyages) || 0, wins: Number(p.wins) || 0, captures: Number(p.captures) || 0, renown: Number(p.renown) || 0, counted: Array.isArray(p.counted) ? p.counted : [] };
   } catch {
     return fresh;
   }
 }
 
-export function bumpProfile(key: keyof Profile): void {
+/** Captains whose renown is earned. */
+export function unlockedCaptains(): CaptainDef[] {
+  const r = profile().renown;
+  return CAPTAINS.filter((c) => c.renown <= r);
+}
+
+/**
+ * Add a finished voyage's renown to the lifetime total (once per voyage), and say which captains it unlocked.
+ * Dev sandboxes and co-op voyages count nothing.
+ */
+export function awardRenown(run: Run): { earned: number; total: number; unlocked: CaptainDef[] } {
+  const p = profile();
+  const earned = run.renown;
+  if (!writable || coop() || p.counted?.includes(run.seed)) return { earned, total: p.renown, unlocked: [] };
+  const before = p.renown;
+  p.renown += earned;
+  p.counted = [...(p.counted ?? []), run.seed].slice(-20);
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  } catch {
+    // Without storage, renown is kept for this visit only.
+  }
+  return { earned, total: p.renown, unlocked: CAPTAINS.filter((c) => c.renown > before && c.renown <= p.renown) };
+}
+
+export function bumpProfile(key: 'voyages' | 'wins' | 'captures'): void {
   if (!writable) return;
   try {
     const p = profile();

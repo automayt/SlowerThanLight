@@ -2,6 +2,7 @@ import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
 import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
 import { COOK_FORAGE, SURGEON_TRAIT_HEAL, TRAIT_IDS, trait } from '../data/traits';
+import { captain, type CaptainDef } from '../data/captains';
 import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTOR_ROUTE, seaEvent, sectorDef, type PortSpeciality } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { POWER_IDS, portPower, power, relation } from '../data/powers';
@@ -227,6 +228,7 @@ export interface RunSave {
   recent?: string[];
   sectorId?: string;
   wind?: number;
+  captain?: string;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -421,8 +423,12 @@ export class Run {
   hungerNote = '';
   private usedNames = new Set<string>();
 
-  constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal') {
+  /** Who commands, and the gift they bring (data/captains.ts). */
+  readonly captain: CaptainDef;
+
+  constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal', captainId = 'rover') {
     this.difficulty = difficulty;
+    this.captain = captain(captainId);
     this.gold = DIFFICULTY[difficulty].startGold;
     this.provisions = DIFFICULTY[difficulty].provisions;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
@@ -433,6 +439,13 @@ export class Run {
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
     this.chart = this.makeChart(0);
     this.wind = this.rng.next() * 2 * Math.PI;
+    // The captain's gift to the start of the voyage.
+    const c = this.captain;
+    this.gold += c.gold ?? 0;
+    this.provisions += c.provisions ?? 0;
+    if (c.standing) for (const p of Object.keys(this.standing) as PowerId[]) this.standing[p] += c.standing;
+    for (const [p, d] of Object.entries(c.shift ?? {}) as [PowerId, number][]) this.standing[p] += d;
+    if (c.flag) this.flags.add(c.flag);
   }
 
   /** How a leg between two marks lies to the wind. */
@@ -484,6 +497,15 @@ export class Run {
     return { sailed: this.sector * per + this.node.col, total: SECTOR_ROUTE.length * per };
   }
 
+  /**
+   * Renown this voyage has earned, for the captain's name in the taverns: distance sailed, fights won, sectors
+   * reached, plunder taken, powers made allies, and breaking the blockade above all.
+   */
+  get renown(): number {
+    const allies = (Object.keys(this.standing) as PowerId[]).filter((p) => this.tier(p) === 'allied').length;
+    return Math.round(this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.status === 'won' ? 40 : 0));
+  }
+
   /** Progress through the voyage on the old single-chart scale (0..7), which event conditions are written against. */
   get progressCol(): number {
     const { sailed, total } = this.legs;
@@ -503,7 +525,7 @@ export class Run {
    * the other way) and by each of Spain and France that counts you an ally (their squadrons draw it off).
    */
   get navySpeed(): number {
-    let v = DIFFICULTY[this.difficulty].navySpeed;
+    let v = DIFFICULTY[this.difficulty].navySpeed - (this.captain.fleet ?? 0);
     if (atLeast(this.tier('crown'), 'friendly')) v -= 0.1;
     for (const p of ['spain', 'france'] as PowerId[]) if (this.tier(p) === 'allied') v -= 0.1;
     return v;
@@ -525,7 +547,7 @@ export class Run {
   get ship(): ShipDef {
     const f = this.fit;
     const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0) + (this.has('copper') ? 5 : 0);
-    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1);
+    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1) * (this.captain.melee ?? 1);
     return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, melee, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
@@ -577,10 +599,11 @@ export class Run {
     // Hungry crews do not mend: eat first, and heal only on a full belly. Beating into a foul wind costs a second day.
     let fed = this.eat();
     const hunger = this.hungerNote;
-    if (sail === 'foul') fed = this.eat() && fed;
+    const foulDay = sail === 'foul' && !this.captain.weatherwise;
+    if (foulDay) fed = this.eat() && fed;
     this.runningRepairs(fed);
     this.navy += this.navySpeed + (sail === 'foul' ? FOUL_FLEET : sail === 'fair' ? -FAIR_FLEET : 0);
-    const windNote = sail === 'foul' ? 'A foul wind: a day lost beating to windward, and a day’s provisions with it.' : '';
+    const windNote = foulDay ? 'A foul wind: a day lost beating to windward, and a day’s provisions with it.' : '';
     this.hungerNote = [windNote, hunger, this.hungerNote].filter((x, i, all) => x && all.indexOf(x) === i).join(' ');
     this.wind += (this.rng.next() - 0.5) * WIND_SHIFT;
 
@@ -748,13 +771,13 @@ export class Run {
 
   /** Odds a false flag fools her (better with a locker of every nation's flags). */
   coloursChance(): number {
-    return this.has('flags') ? 0.7 : FALSE_COLOURS_CHANCE;
+    return Math.min(0.9, (this.has('flags') ? 0.7 : FALSE_COLOURS_CHANCE) + (this.captain.colours ?? 0));
   }
 
   /** What a bribe to let you pass costs. */
   bribePrice(): number {
     const { foe } = this.hailing;
-    return Math.round((20 + 15 * this.sector) * (this.tier(foe.power) === 'hostile' ? 1.5 : 1));
+    return Math.round((20 + 15 * this.sector) * (this.tier(foe.power) === 'hostile' ? 1.5 : 1) * (this.captain.bribe ?? 1));
   }
 
   /** Odds that a captain who meant to fight hears you out instead. */
@@ -923,7 +946,7 @@ export class Run {
         allowEscape: !this.encounter.boss,
         boss: this.encounter.boss,
         enemyReload: DIFFICULTY[this.difficulty].enemyReload,
-        playerReload: this.has('drill') ? 1.1 : 1,
+        playerReload: (this.has('drill') ? 1.1 : 1) * (this.captain.reload ?? 1),
         playerNets: this.has('nets'),
         playerShotRate: this.has('lockers') ? { chain: 1.2, grape: 1.2 } : undefined,
         playerPumps: this.has('pumps') ? 1.5 : undefined,
@@ -1699,13 +1722,14 @@ export class Run {
       recent: this.recent,
       sectorId: this.sectorId,
       wind: this.wind,
+      captain: this.captain.id,
     });
   }
 
   static fromSave(raw: RunSave): Run {
     if (raw?.version !== 1) throw new Error('Unknown save version');
     const s = structuredClone(raw);
-    const run = new Run(s.shipId, s.seed, s.difficulty ?? 'normal');
+    const run = new Run(s.shipId, s.seed, s.difficulty ?? 'normal', s.captain ?? 'rover');
     run.rng.position = s.rng;
     run.chart = s.chart;
     run.nodeId = s.nodeId;

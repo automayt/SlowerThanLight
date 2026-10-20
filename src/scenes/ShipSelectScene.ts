@@ -10,7 +10,8 @@ import { addTip, Button, divider, drawBar, drawPips, frame, goldText, panel, Sea
 import { DIFFICULTY, Run, type Difficulty } from '../sim/Run';
 import { Ship } from '../sim/Ship';
 import { SYSTEM_NAMES, type ShipDef, type SystemId } from '../sim/types';
-import { bumpProfile, profile, recentEvents } from './save';
+import { bumpProfile, profile, recentEvents, unlockedCaptains } from './save';
+import { CAPTAINS } from '../data/captains';
 
 const MARGIN = 22;
 /** The featured ship: her portrait, the shipwright's draught of her below it, and her particulars to the right. */
@@ -51,6 +52,7 @@ export class ShipSelectScene extends Phaser.Scene {
   private selected = 1;
   private launch!: Button;
   private difficulty: Difficulty = 'normal';
+  private captainId = 'rover';
 
   constructor() {
     super('ShipSelect');
@@ -122,7 +124,23 @@ export class ShipSelectScene extends Phaser.Scene {
       diff.setText(label()).setTip(tip());
     }, { size: 14, hint: 'D', tip: tip() });
 
+    // The captain: those earned with renown, in turn. The locked ones are named in the tip, with the renown they need.
+    const captains = unlockedCaptains();
+    const savedCaptain = this.registry.get('captain') as string | undefined;
+    this.captainId = captains.some((c) => c.id === savedCaptain) ? savedCaptain! : 'rover';
+    const fame = profile().renown;
+    const locked = CAPTAINS.filter((c) => c.renown > fame);
+    const captainLabel = () => `Captain: ${CAPTAINS.find((c) => c.id === this.captainId)!.name.replace(/^The /, '')}`;
+    const captainTip = () =>
+      `${CAPTAINS.find((c) => c.id === this.captainId)!.blurb}${locked.length ? `\n\nRenown ${fame}. Still to earn: ${locked.map((c) => `${c.name} (${c.renown})`).join(', ')}.` : ''}`;
+    const cap = new Button(this, MARGIN + 120 + 12, FOOT_Y + 6, 250, 34, captainLabel(), () => {
+      this.captainId = captains[(captains.findIndex((c) => c.id === this.captainId) + 1) % captains.length].id;
+      this.registry.set('captain', this.captainId);
+      cap.setText(captainLabel()).setTip(captainTip());
+    }, { size: 14, hint: 'C', tip: captainTip() });
+
     const kb = this.input.keyboard!;
+    kb.on('keydown-C', () => cap.press());
     kb.on('keydown-LEFT', () => this.select((this.selected + PLAYER_SHIPS.length - 1) % PLAYER_SHIPS.length));
     kb.on('keydown-RIGHT', () => this.select((this.selected + 1) % PLAYER_SHIPS.length));
     PLAYER_SHIPS.forEach((_, i) => kb.on(`keydown-${NUMBER_KEYS[i]}`, () => this.select(i)));
@@ -256,7 +274,7 @@ export class ShipSelectScene extends Phaser.Scene {
     if (this.locks[this.selected]) return;
     bumpProfile('voyages');
     this.registry.set('counted-win', false);
-    const run = new Run(def.id, undefined, this.difficulty);
+    const run = new Run(def.id, undefined, this.difficulty, this.captainId);
     // Tales from the last few voyages come round less often.
     run.recent = recentEvents();
     setRun(this, run);

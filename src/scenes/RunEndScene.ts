@@ -4,7 +4,7 @@ import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, gild, goldText, panel, Sea, waxSeal } from '../render/ui';
-import { bumpProfile, clearSave, recordVoyage } from './save';
+import { awardRenown, bumpProfile, clearSave, recordVoyage } from './save';
 
 /** The end of a voyage: escape to the open ocean, or a summary of how far you got. */
 export class RunEndScene extends Phaser.Scene {
@@ -18,6 +18,7 @@ export class RunEndScene extends Phaser.Scene {
     const run = currentRun(this);
     clearSave();
     recordVoyage(run);
+    const fame = awardRenown(run);
     if (run.status === 'won' && !this.registry.get('counted-win')) bumpProfile('wins');
     this.registry.set('counted-win', true);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
@@ -38,6 +39,8 @@ export class RunEndScene extends Phaser.Scene {
 
     const rows: [string, string][] = [
       ['Ship', `${run.def.name} (${run.def.className})`],
+      ['Captain', run.captain.name],
+      ['Renown', `+${fame.earned}  (${fame.total} in all)${fame.unlocked.length ? `  ·  ${fame.unlocked.map((c) => c.name).join(', ')} will now sail with you` : ''}`],
       ['Distance sailed', `${run.legs.sailed} of ${run.legs.total} legs (${run.sectorDef.name})`],
       ['Battles won', `${run.battlesWon}`],
       ['Plunder taken', `${run.plunderTaken} gold`],

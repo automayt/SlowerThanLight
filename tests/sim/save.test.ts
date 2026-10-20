@@ -157,7 +157,7 @@ describe('saveRun and loadRun', () => {
     expect(() => save.clearSave()).not.toThrow();
     expect(save.discovered().size).toBe(0);
     expect(() => save.recordDiscovery('storm')).not.toThrow();
-    expect(save.profile()).toEqual({ voyages: 0, wins: 0, captures: 0 });
+    expect(save.profile()).toMatchObject({ voyages: 0, wins: 0, captures: 0 });
     expect(() => save.bumpProfile('voyages')).not.toThrow();
   });
 });
@@ -244,11 +244,27 @@ describe('logbook and profile', () => {
     save.bumpProfile('voyages');
     save.bumpProfile('voyages');
     save.bumpProfile('captures');
-    expect(save.profile()).toEqual({ voyages: 2, wins: 0, captures: 1 });
+    expect(save.profile()).toMatchObject({ voyages: 2, wins: 0, captures: 1 });
     storage.setItem('slower-than-light.profile.v1', '{"voyages":"many","wins":-0,"captures":null}');
-    expect(save.profile()).toEqual({ voyages: 0, wins: 0, captures: 0 });
+    expect(save.profile()).toMatchObject({ voyages: 0, wins: 0, captures: 0 });
     storage.setItem('slower-than-light.profile.v1', '[[[');
-    expect(save.profile()).toEqual({ voyages: 0, wins: 0, captures: 0 });
+    expect(save.profile()).toMatchObject({ voyages: 0, wins: 0, captures: 0 });
+  });
+});
+
+describe('renown and captains', () => {
+  it('a finished voyage adds its renown once, and unlocks the captains it reaches', () => {
+    const run = new Run('gull', 77);
+    run.battlesWon = 6;
+    run.plunderTaken = 400;
+    run.status = 'won';
+    expect(run.renown).toBeGreaterThan(60);
+    const first = save.awardRenown(run);
+    expect(first.total).toBe(run.renown);
+    expect(first.unlocked.map((c) => c.id)).toContain('gentleman');
+    // The same voyage is never counted twice.
+    expect(save.awardRenown(run).total).toBe(first.total);
+    expect(save.unlockedCaptains().map((c) => c.id)).toContain('gentleman');
   });
 });
 

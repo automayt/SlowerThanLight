@@ -1001,3 +1001,33 @@ describe('prize ships', () => {
     expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).consort).toEqual(run.consort);
   });
 });
+
+describe('captains', () => {
+  it('each brings a gift: the gunner loads faster, the navigator slows the fleet, the gentleman is liked, the privateer has a letter of marque', () => {
+    const plain = new Run('gull', 3);
+    const gunner = new Run('gull', 3, 'normal', 'gunner');
+    for (const r of [plain, gunner]) {
+      r.encounter = { kind: 'battle', enemy: 'cutter', name: 'X', boss: false, ambush: false, text: '' };
+      r.status = 'battle';
+    }
+    expect(gunner.startBattle().player.reloadRate).toBeGreaterThan(plain.startBattle().player.reloadRate);
+    expect(new Run('gull', 3, 'normal', 'navigator').navySpeed).toBeLessThan(plain.navySpeed);
+    expect(new Run('gull', 3, 'normal', 'gentleman').standing.crown).toBe(plain.standing.crown + 10);
+    const priv = new Run('gull', 3, 'normal', 'privateer');
+    expect(priv.flags.has('marque')).toBe(true);
+    expect(priv.gold).toBe(plain.gold + 40);
+    expect(new Run('gull', 3, 'normal', 'smuggler').provisions).toBe(plain.provisions + 6);
+  });
+
+  it('the captain is kept in a save, and a navigator does not lose a day to a foul wind', () => {
+    const run = new Run('gull', 3, 'normal', 'navigator');
+    const back = Run.fromSave(JSON.parse(JSON.stringify(run.toSave())));
+    expect(back.captain.id).toBe('navigator');
+    expect(back.gold).toBe(run.gold);
+    run.pointOfSail = () => 'foul';
+    run.navy = -10;
+    const food = run.provisions;
+    run.jump(run.reachable()[0].id);
+    expect(food - run.provisions).toBe(1);
+  });
+});
