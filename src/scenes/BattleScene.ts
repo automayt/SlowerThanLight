@@ -119,6 +119,7 @@ export class BattleScene extends Phaser.Scene {
         this.selected.add(id);
       },
       selectGun: (i) => (this.aimingGun = this.aimingGun === i ? null : i),
+      aimWith: (i) => (this.aimingGun = i),
       clearGunTarget: (i) => {
         this.order({ t: 'aim', gun: i, room: null });
         if (this.aimingGun === i) this.aimingGun = null;
@@ -294,6 +295,8 @@ export class BattleScene extends Phaser.Scene {
     this.drag = { x: ptr.x, y: ptr.y, active: false };
     if (!ptr.event.shiftKey) this.selected.clear();
     this.aimingGun = null;
+    // A click on her ship with no gun picked: say so, rather than doing nothing.
+    if (enemyRoom) this.hud.flash('PICK A GUN FIRST: CLICK ITS CARD OR PRESS ITS NUMBER', 2400);
   }
 
   update(time: number, delta: number): void {

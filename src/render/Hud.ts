@@ -13,6 +13,8 @@ import type { BattleCommand } from '../sim/commands';
 export interface HudCallbacks {
   selectCrew(id: number, additive: boolean): void;
   selectGun(index: number): void;
+  /** Pick a gun for aiming (no toggle): any click on its card, buttons included, readies it. */
+  aimWith(index: number): void;
   clearGunTarget(index: number): void;
   toggleSpeed(): void;
   /** Give a battle order (in co-op it goes to the server, if it is this player's to give). */
@@ -248,13 +250,18 @@ export class Hud {
       bg.on('pointerdown', (p: Phaser.Input.Pointer) => (p.rightButtonDown() ? cb.clearGunTarget(i) : cb.selectGun(i)));
       if (scene.textures.exists('sysicon:guns')) scene.add.image(x + 18, BOTTOM_Y + 19, 'sysicon:guns').setScale(0.55);
       const name = scene.add.text(x + 34, BOTTOM_Y + 8, `${i + 1}. ${gun.def.name}`, { fontFamily: TITLE_FONT, fontSize: '14px', color: COLORS.gold, fontStyle: 'bold', wordWrap: { width: CARD_W - 42 } });
-      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 24, '', () => cb.order({ t: 'gunPower', gun: i }), { size: 12 });
+      const power = new Button(scene, x + 8, BOTTOM_Y + 50, 72, 24, '', () => {
+        cb.order({ t: 'gunPower', gun: i });
+        cb.aimWith(i);
+      }, { size: 12 });
       scene.add.text(x + 88, BOTTOM_Y + 47, `${gun.def.hands} hand${gun.def.hands > 1 ? 's' : ''}\n${gun.def.shots}×${gun.def.damage} dmg`, textStyle(12, COLORS.textDim, { lineSpacing: -1 }));
       const status = scene.add.text(x + 8, BOTTOM_Y + 97, '', textStyle(12, COLORS.textDim, { wordWrap: { width: CARD_W - 16 }, lineSpacing: -2 }));
       const target = scene.add.text(x + 8, BOTTOM_Y + 113, '', textStyle(12));
       const shots = SHOT_TYPES.map((s, j) => {
         const b = new Button(scene, x + 9 + j * 35.5, BOTTOM_Y + 143, 33, 24, '', () => {
           cb.order({ t: 'shot', gun: i, shot: s });
+          // Choosing the shot readies the gun too: pick chain, then click where it goes.
+          cb.aimWith(i);
           this.hintDone('shot');
         }, { size: 13 });
         b.add(scene.add.image(16.5, 12, shotIcon(scene, s)).setScale(0.5));
