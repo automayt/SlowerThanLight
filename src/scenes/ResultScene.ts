@@ -115,7 +115,9 @@ export class ResultScene extends Phaser.Scene {
           this.registry.set('chart-note', [o.text, ...report.lines].join(' '));
           this.scene.start('SeaMap');
         };
-    const go = new Button(this, cx - 150, BOX.y + BOX.h - 62, 300, 44, run.over ? 'Voyage’s end →' : 'Back to the chart →', next, { size: 18, hint: 'Enter' });
+    // With spoils to pick on the right, the way on sits under the left column, clear of them.
+    const spoilsShown = !!run.prize && !run.prize.taken;
+    const go = new Button(this, spoilsShown ? lx : cx - 150, BOX.y + BOX.h - 62, 300, 44, run.over ? 'Voyage’s end →' : 'Back to the chart →', next, { size: 18, hint: 'Enter' });
     this.input.keyboard!.once('keydown-ENTER', () => go.press());
   }
 
@@ -124,12 +126,26 @@ export class ResultScene extends Phaser.Scene {
     const run = currentRun(this);
     const prize = run.prize;
     if (!prize || prize.taken) return;
-    const picks: [string, () => string | null, VoyageCommand][] = [
-      ...prize.guns.map((id): [string, () => string | null, VoyageCommand] => {
+    type Pick = [string, () => string | null, VoyageCommand, string];
+    const ship = prize.ship;
+    const picks: Pick[] = [
+      // The ship herself, sailed in company by a prize crew (selling any prize already with you).
+      ...(ship
+        ? [
+            [
+              `Sail ${ship.name} in company${run.consort ? ` (sell ${run.consort.name})` : ''}`,
+              () => run.takePrizeShip(),
+              { t: 'prizeShip' },
+              `No hands to spare for a prize crew (${run.prizeShipBlocker() ?? ''}).`,
+            ] as Pick,
+          ]
+        : []),
+      // Her two heaviest guns, so the picks fit.
+      ...[...prize.guns].sort((a, b) => weapon(b).price - weapon(a).price).slice(0, 2).map((id): Pick => {
         // Will the gun deck have the bars to crew it alongside the guns already aboard?
         const hands = run.fit.guns.reduce((n, g) => n + weapon(g.weapon).hands, 0) + weapon(id).hands;
         const short = run.fit.guns.length < MAX_GUNS && hands > (run.fit.systems.guns ?? 0) ? `  (needs Gun Deck ${hands})` : '';
-        return [`Take her ${weapon(id).name}${short}`, () => run.takePrizeGun(id), { t: 'prizeGun', weapon: id }];
+        return [`Take her ${weapon(id).name}${short}`, () => run.takePrizeGun(id), { t: 'prizeGun', weapon: id }, 'No room aboard for her guns.'];
       }),
       ...(prize.recruits
         ? [
@@ -140,7 +156,8 @@ export class ResultScene extends Phaser.Scene {
                 return who ? `${who} signs the articles.` : null;
               },
               { t: 'pressCrew' },
-            ] as [string, () => string | null, VoyageCommand],
+              'No bunk to spare for a prisoner.',
+            ] as Pick,
           ]
         : []),
     ];
@@ -150,13 +167,16 @@ export class ResultScene extends Phaser.Scene {
     const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
     // Taking spoils is the captain's call: the pick plays out here when it is made.
     const takes = new Map<string, () => void>();
-    onVoyage(this, { prizeGun: (cmd) => takes.get(JSON.stringify(cmd))?.(), pressCrew: (cmd) => takes.get(JSON.stringify(cmd))?.() });
-    picks.forEach(([text, take, cmd], i) => {
+    const run_ = (cmd: VoyageCommand) => takes.get(JSON.stringify(cmd))?.();
+    onVoyage(this, { prizeGun: run_, pressCrew: run_, prizeShip: run_ });
+    // Picks pack closer when there are many, so they stay clear of the button below.
+    const step = picks.length > 3 ? 34 : 38;
+    picks.forEach(([text, take, cmd, fail], i) => {
       if (keys[i]) this.input.keyboard!.on(`keydown-${keys[i]}`, () => buttons[i]?.active && buttons[i].press());
       takes.set(JSON.stringify(cmd), () => {
           const said = take();
           if (!said) {
-            label.setText(i === picks.length - 1 && prize.recruits ? 'No bunk to spare for a prisoner.' : 'No room aboard for her guns.').setColor(COLORS.textWarn);
+            label.setText(fail).setColor(COLORS.textWarn);
             return;
           }
           // Destroy after this click has finished dispatching.
@@ -164,7 +184,7 @@ export class ResultScene extends Phaser.Scene {
           label.setText(said).setColor(COLORS.textGood);
           saveRun(run);
       });
-      buttons.push(new Button(this, x, y + 26 + i * 38, w, 32, `${i + 1}. ${text}`, () => voyage(this, cmd, text), { size: 14 }));
+      buttons.push(new Button(this, x, y + 26 + i * step, w, step - 6, `${i + 1}. ${text}`, () => voyage(this, cmd, text), { size: 14 }));
     });
   }
 

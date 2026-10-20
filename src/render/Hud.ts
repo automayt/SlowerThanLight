@@ -156,6 +156,7 @@ export class Hud {
   private flashText = '';
   private flashUntil = 0;
   private readonly hoverText: Phaser.GameObjects.Text;
+  private readonly companyText: Phaser.GameObjects.Text;
   private readonly tooltip: Phaser.GameObjects.Text;
   private readonly pointer: Phaser.Input.Pointer;
 
@@ -171,6 +172,7 @@ export class Hud {
     panel(scene, 8, 8, 470, 66);
     heading(scene, 18, 14, 'HULL', 15);
     this.playerStats = scene.add.text(18, 50, '', textStyle(13));
+    this.companyText = scene.add.text(14, 78, '', textStyle(12, COLORS.textGood, { fontStyle: 'italic', backgroundColor: '#0b1622cc', padding: { x: 6, y: 2 } })).setDepth(HUD_DEPTH.panels);
     this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => cb.order({ t: 'escape' }), { size: 13 });
 
     // --- Top centre: the clock ---
@@ -389,6 +391,8 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     this.drawHull(player, 18 + HULL_BAR_DX, 14);
     this.drawLayers(player, 18 + HULL_BAR_DX, 36);
     this.playerStats.setText(`Evasion ${Math.round(player.evasion())}%  ·  Flood ${floodPct(player)}  ·  Board ${battle.canBoard() ? '✓' : '✗'}`);
+    const company = battle.consorts.filter((c) => c.hull === undefined || c.hull > 0).map((c) => (c.hull !== undefined ? `${c.name} ${c.hull}/${c.maxHull}` : c.name));
+    this.companyText.setText(company.length ? `In company: ${company.join(', ')}` : '');
     tint(this.playerStats, battle.grappled ? COLORS.gold : COLORS.text);
     drawBar(g, 250, 48, 100, 16, player.escape / 100, battle.canEscape() ? 0x7fdc6a : 0x6a9ac0);
     const rate = player.escapeRate();

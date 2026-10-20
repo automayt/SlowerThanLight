@@ -105,7 +105,9 @@ export type VoyageCommand =
   | { t: 'commission' }
   | { t: 'leavePort' }
   | { t: 'prizeGun'; weapon: string }
-  | { t: 'pressCrew' };
+  | { t: 'pressCrew' }
+  | { t: 'prizeShip' }
+  | { t: 'sellConsort' };
 
 /** What a voyage command produced, for the screen that shows it. */
 export type VoyageResult =
@@ -126,6 +128,8 @@ export function voyageAllowed(run: Run, cmd: VoyageCommand): boolean {
     case 'prizeGun':
     case 'pressCrew':
       return !!run.prize && !run.prize.taken;
+    case 'prizeShip':
+      return !run.prizeShipBlocker();
     default:
       return run.status === 'port';
   }
@@ -168,6 +172,10 @@ export function applyVoyage(run: Run, cmd: VoyageCommand): VoyageResult {
       return { t: 'text', text: run.takePrizeGun(cmd.weapon) };
     case 'pressCrew':
       return { t: 'text', text: run.pressPrizeCrew() };
+    case 'prizeShip':
+      return { t: 'text', text: run.takePrizeShip() };
+    case 'sellConsort':
+      return { t: 'text', text: run.canSellConsort() ? `${run.consort!.name} fetches ${run.sellConsort()} gold at the prize court.` : null };
   }
 }
 

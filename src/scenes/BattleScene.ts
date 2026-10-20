@@ -684,6 +684,15 @@ export class BattleScene extends Phaser.Scene {
         this.hud.addLog(`${ev.name} fires into her!`, COLORS.textGood);
         break;
       }
+      case 'consortHit':
+        playSfx(this, 'hit-wood', 0.3);
+        this.hud.addLog(`${this.battle.enemy.def.name} fires into ${ev.name} (hull ${ev.hull}/${ev.maxHull}).`, COLORS.textWarn);
+        break;
+      case 'consortSunk':
+        playSfx(this, 'sink', 0.5);
+        this.hud.flash(`${ev.name.toUpperCase()} IS SUNK`, 3500);
+        this.hud.addLog(`${ev.name} goes down with her prize crew!`, COLORS.textWarn);
+        break;
       case 'rally':
         playSfx(this, 'bell', 0.6);
         this.cameras.main.shake(400, 0.005);

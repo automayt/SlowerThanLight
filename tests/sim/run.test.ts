@@ -925,3 +925,79 @@ describe('the wind', () => {
     expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).wind).toBe(run.wind);
   });
 });
+
+describe('prize ships', () => {
+  /** Win a fight by her striking her colours, with her ship on offer. */
+  const struck = (seed = 6) => {
+    const run = new Run('gull', seed);
+    run.encounter = { kind: 'battle', enemy: 'merchant', name: 'The Good Intent', boss: false, ambush: false, text: '' };
+    run.status = 'battle';
+    const b = run.startBattle();
+    (b as unknown as { finish(k: string): void }).finish('surrender');
+    run.finishBattle(b);
+    return run;
+  };
+
+  it('a ship that strikes can sail in company, with one of your hands as prize master', () => {
+    const run = struck();
+    expect(run.prize?.ship?.name).toBe('The Good Intent');
+    const crew = run.condition.crew.length;
+    expect(run.takePrizeShip()).toMatch(/prize master/);
+    expect(run.consort?.name).toBe('The Good Intent');
+    expect(run.condition.crew.length).toBe(crew - 1);
+    // The captain stays aboard his own ship.
+    expect(run.consort?.crew?.name).not.toBe(run.def.crew[0].name);
+    expect(run.takePrizeShip()).toBeNull();
+  });
+
+  it('she fights beside you, and the enemy may sink her', () => {
+    const run = struck();
+    run.takePrizeShip();
+    run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS X', boss: false, ambush: false, text: '' };
+    run.status = 'battle';
+    const b = run.startBattle();
+    const prize = b.consorts.find((c) => c.name === 'The Good Intent')!;
+    expect(prize.hull).toBeGreaterThan(0);
+    let fired = 0;
+    let hit = false;
+    for (let t = 0; t < 60 && !b.outcome; t += 0.05) {
+      b.step(0.05);
+      for (const e of b.drainEvents()) {
+        if (e.t === 'consort' && e.name === 'The Good Intent') fired++;
+        if (e.t === 'consortHit') hit = true;
+      }
+    }
+    expect(fired).toBeGreaterThan(0);
+    expect(hit).toBe(true);
+    // Whatever the fight did to her goes with her.
+    prize.hull = 0;
+    (b as unknown as { finish(k: string): void }).finish('victory');
+    const report = run.finishBattle(b);
+    expect(run.consort).toBeNull();
+    expect(report.lines.some((l) => l.includes('sunk under you'))).toBe(true);
+  });
+
+  it('a prize court buys her, and her prize crew comes home', () => {
+    const run = struck();
+    run.takePrizeShip();
+    const crew = run.condition.crew.length;
+    run.encounter = { kind: 'port', name: 'Bridgetown', rested: false, stock: [] };
+    run.status = 'port';
+    const gold = run.gold;
+    const price = run.consortValue();
+    expect(price).toBeGreaterThan(0);
+    expect(run.sellConsort()).toBe(price);
+    expect(run.gold).toBe(gold + price);
+    expect(run.consort).toBeNull();
+    expect(run.condition.crew.length).toBe(crew + 1);
+  });
+
+  it('a skeleton crew cannot spare a prize crew, and the consort survives a save', () => {
+    const thin = struck();
+    thin.condition.crew = thin.condition.crew.slice(0, 2);
+    expect(thin.prizeShipBlocker()).toMatch(/crew/);
+    const run = struck();
+    run.takePrizeShip();
+    expect(Run.fromSave(JSON.parse(JSON.stringify(run.toSave()))).consort).toEqual(run.consort);
+  });
+});

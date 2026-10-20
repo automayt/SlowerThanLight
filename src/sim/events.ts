@@ -15,5 +15,9 @@ export type BattleEvent =
   | { t: 'rally'; side: Side; text: string }
   /** A friendly ship in company fires into the enemy (`side`); the hit follows as its own event. */
   | { t: 'consort'; side: Side; name: string; room: string }
+  /** The enemy turns her guns on our consort. */
+  | { t: 'consortHit'; side: Side; name: string; hull: number; maxHull: number }
+  /** Our consort goes down. */
+  | { t: 'consortSunk'; side: Side; name: string }
   /** `side` is the side sending boarders. */
   | { t: 'board'; side: Side; count: number; room: string };

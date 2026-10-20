@@ -23,6 +23,8 @@ export interface BattleSnapshot {
   stats: Record<Side, CombatStats>;
   player: ShipSnapshot;
   enemy: ShipSnapshot;
+  /** Hull of each ship in company (prizes have one). */
+  consorts?: (number | undefined)[];
 }
 
 interface ShipSnapshot {
@@ -72,6 +74,7 @@ export function battleSnapshot(b: Battle): BattleSnapshot {
     stats: { player: { ...b.stats.player }, enemy: { ...b.stats.enemy } },
     player: shipSnapshot(b.player),
     enemy: shipSnapshot(b.enemy),
+    consorts: b.consorts.map((c) => c.hull),
   };
 }
 
@@ -123,5 +126,6 @@ export function applySnapshot(b: Battle, s: BattleSnapshot, events: BattleEvent[
   Object.assign(b.stats.player, s.stats.player);
   Object.assign(b.stats.enemy, s.stats.enemy);
   (b as unknown as { enemyAI: { fleeing: boolean } }).enemyAI.fleeing = s.fleeing;
+  s.consorts?.forEach((h, i) => b.consorts[i] && (b.consorts[i].hull = h));
   b.pushEvents(events);
 }

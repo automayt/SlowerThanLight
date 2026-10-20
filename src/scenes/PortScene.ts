@@ -143,6 +143,7 @@ export class PortScene extends Phaser.Scene {
       upgrade: perform,
       buyGun: perform,
       sellGun: perform,
+      sellConsort: perform,
       gift: perform,
       commission: perform,
       leavePort: leave,
@@ -244,6 +245,23 @@ export class PortScene extends Phaser.Scene {
     }).setEnabled(!full && waiting > 0 && !run.portFeud);
     hall.label.setOrigin(0, 0.5).setX(12);
     this.dyn.push(hall, this.add.text(x + w + 10, y + 20, `Crew ${run.condition.crew.length}/${run.maxCrew}`, textStyle(12, COLORS.textDim)).setOrigin(0, 0.5));
+    // A prize sailing in company can go to the prize court here.
+    const prize = run.consort;
+    if (prize) {
+      y += ROW;
+      const value = run.consortValue();
+      this.button(x, y, w, `Sell ${prize.name} (${value}g)`, {
+        enabled: run.canSellConsort(),
+        cmd: { t: 'sellConsort' },
+        fn: () => {
+          const name = prize.name;
+          const price = run.sellConsort();
+          if (price) this.say(`The prize court pays ${price} gold for ${name}.`);
+        },
+        detail: `Hull ${prize.hull}/${prize.maxHull}`,
+        tip: 'Her prize crew comes back aboard if there is a bunk.',
+      });
+    }
     y += ROW + 10;
 
     // Chandler: victuals and fittings.

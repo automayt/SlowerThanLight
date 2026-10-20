@@ -72,7 +72,7 @@ export class RunBar {
   refresh(): void {
     const { run } = this;
     const c = run.condition;
-    const state = `${c.hull}/${run.fit.hull} ${c.crew.map((m) => m.hp).join()}/${run.maxCrew} ${run.gold} ${JSON.stringify(c.damage)} ${run.navy}@${run.nodeId} ${run.sector} ${run.provisions}/${run.maxProvisions}`;
+    const state = `${c.hull}/${run.fit.hull} ${c.crew.map((m) => m.hp).join()}/${run.maxCrew} ${run.gold} ${JSON.stringify(c.damage)} ${run.navy}@${run.nodeId} ${run.sector} ${run.provisions}/${run.maxProvisions} ${run.consort?.hull ?? '-'}`;
     if (state === this.shown) return;
     this.shown = state;
     const g = this.g;
@@ -81,7 +81,8 @@ export class RunBar {
     const frac = c.hull / run.fit.hull;
     drawBar(g, 330, 17, 200, 14, frac, frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f);
     const hurt = c.crew.filter((m) => m.hp < 70).length;
-    this.crew.setText(`Crew ${c.crew.length}/${run.maxCrew}${hurt ? `  (${hurt} wounded)` : ''}`);
+    const prize = run.consort ? `  ·  + ${run.consort.name} ${run.consort.hull}/${run.consort.maxHull}` : '';
+    this.crew.setText(`Crew ${c.crew.length}/${run.maxCrew}${hurt ? `  (${hurt} wounded)` : ''}${prize}`);
     this.gold.setText(`${run.gold} gold`);
     const dmg = (Object.entries(c.damage) as [SystemId, number][]).map(([id, n]) => `${SYSTEM_NAMES[id]} −${n}`);
     this.damage.setText(dmg.length ? `Damaged: ${dmg.join(', ')}` : '');

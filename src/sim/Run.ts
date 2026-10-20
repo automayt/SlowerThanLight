@@ -9,7 +9,7 @@ import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
 import { AGGRESSION, atLeast, BETRAYAL, describeShift, freshStanding, OUTCOME_STANDING, PORT_PRICE, shiftStanding, tierOf, type Standing } from './Diplomacy';
 import { Rng } from './rng';
 import { generateChart, nodeById, SECTOR_COLUMNS, type SeaChart, type SeaNode } from './SeaChart';
-import { Ship, type ShipCondition } from './Ship';
+import { Ship, type CrewRecord, type ShipCondition } from './Ship';
 import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, PowerId, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
 import { RANK_XP, SKILL_LABEL, type Skill, type SkillXp } from './Skills';
@@ -142,6 +142,10 @@ export const GIFT_STANDING = 10;
 export const HUNT_REWARD = 45;
 export const DISPATCH_REWARD = 25;
 export const COMMISSION_STANDING = 15;
+/** A prize in company: crew you must keep aboard to spare a prize crew, how often she fires, and her price at a prize court. */
+export const PRIZE_MIN_CREW = 2;
+export const PRIZE_EVERY = 10;
+export const PRIZE_COURT = 1.2;
 /** How much of the blockade frigate's hull the Brethren shoot away when they come to your aid. */
 export const BRETHREN_AID = 0.2;
 
@@ -218,6 +222,7 @@ export interface RunSave {
   fittings?: string[];
   standing?: Standing;
   escort?: Escort | null;
+  consort?: PrizeShip | null;
   commission?: Commission | null;
   recent?: string[];
   sectorId?: string;
@@ -331,7 +336,20 @@ export interface BattleReport {
 }
 
 /** What a beaten ship has to offer beyond her gold: one pick, made on the result screen. */
+/** A captured ship sailing in company, with a prize crew of one of your own aboard. */
+export interface PrizeShip {
+  /** Her kind (an enemy id), for her guns and her worth. */
+  enemy: string;
+  name: string;
+  hull: number;
+  maxHull: number;
+  /** The hand put aboard to sail her: back with you if she is sold, lost if she sinks. */
+  crew?: CrewRecord;
+}
+
 export interface Prize {
+  /** The ship herself, when she struck or was carried by boarding: sail her in company, or sell her. */
+  ship?: PrizeShip;
   /** Weapon ids of her guns you could take. */
   guns: string[];
   /** Survivors willing to sign on (only when she struck her colours). */
@@ -395,6 +413,8 @@ export class Run {
   standing: Standing = freshStanding();
   /** A friendly ship sailing in company for the next fight. */
   escort: Escort | null = null;
+  /** A prize sailing in company, until she is sunk or sold. */
+  consort: PrizeShip | null = null;
   /** Work taken on for a power, until done. */
   commission: Commission | null = null;
   /** What the last jump cost you on short rations, for the chart to report (not saved). */
@@ -850,6 +870,7 @@ export class Run {
 
   /** Between nodes: wounds mend a little (not on empty stores) and the carpenter fixes the worst-damaged system by one point (two with spare spars). */
   private runningRepairs(heal: boolean): void {
+    if (this.consort) this.consort.hull = Math.min(this.consort.maxHull, this.consort.hull + 1);
     const surgeons = this.condition.crew.filter((c) => c.trait === 'surgeon').length;
     const hp = !heal ? 0 : (this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL) + surgeons * SURGEON_TRAIT_HEAL;
     for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + hp);
@@ -891,7 +912,10 @@ export class Run {
       enemy: { ...ship, name: this.encounter.name, hull },
       options: {
         enemyHull: aided ? Math.round(hull * (1 - BRETHREN_AID)) : undefined,
-        consort: this.escort ? { name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE } : undefined,
+        consorts: [
+          ...(this.escort ? [{ name: this.escort.name, every: CONSORT_EVERY, damage: CONSORT_DAMAGE }] : []),
+          ...(this.consort ? [this.prizeBroadside(this.consort)] : []),
+        ],
         seed: this.rng.int(2 ** 31),
         // A fearsome figurehead makes a wavering captain strike sooner.
         enemyAI: this.has('figurehead') && foe.ai.surrenderChance > 0 ? { ...foe.ai, surrenderChance: Math.min(1, foe.ai.surrenderChance + 0.1) } : foe.ai,
@@ -956,6 +980,15 @@ export class Run {
       lines.push(`${this.escort.name} dips her ensign and parts company.`);
       this.escort = null;
     }
+    // A prize in company carries what the fight did to her.
+    const mine = this.consort && battle.consorts.find((c) => c.name === this.consort!.name && c.hull !== undefined);
+    if (this.consort && mine) {
+      this.consort.hull = mine.hull!;
+      if (this.consort.hull <= 0) {
+        lines.push(`${this.consort.name} is sunk under you${this.consort.crew ? `, and ${this.consort.crew.name} goes down with her` : ''}.`);
+        this.consort = null;
+      }
+    }
 
     if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') {
       this.end('lost', o.text);
@@ -967,7 +1000,8 @@ export class Run {
     if (!enc.boss && (o.kind === 'captured' || o.kind === 'surrender')) {
       // The guns she actually fought with, as found for this sector.
       const guns = scaleEnemy(foe.ship, this.sector).guns.map((g) => g.weapon);
-      this.prize = { guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
+      const ship = { enemy: foe.id, name: enc.name, hull: Math.max(1, battle.enemy.hull), maxHull: battle.enemy.def.hull };
+      this.prize = { ship, guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
     }
     return { kind: o.kind, won: o.won, plunder: enc.boss ? 0 : plunder, lines };
   }
@@ -984,6 +1018,63 @@ export class Run {
     const scrap = Math.floor(w.price / 2);
     this.gold += scrap;
     return `No free gun port: her ${w.name} fetches ${scrap} gold.`;
+  }
+
+  /** Her broadside in company: her heaviest gun's weight, up to three balls, every ten seconds. */
+  private prizeBroadside(p: PrizeShip) {
+    const guns = enemy(p.enemy).ship.guns.map((g) => weapon(g.weapon));
+    return { name: p.name, every: PRIZE_EVERY, damage: Math.max(1, ...guns.map((g) => g.damage)), shots: Math.min(3, guns.length), hull: p.hull, maxHull: p.maxHull };
+  }
+
+  /** Why the beaten ship can't be sailed in company, or null if she can. */
+  prizeShipBlocker(): string | null {
+    if (!this.prize?.ship || this.prize.taken) return 'nothing to take';
+    if (this.condition.crew.length <= PRIZE_MIN_CREW) return `needs ${PRIZE_MIN_CREW + 1} crew to spare a prize crew`;
+    return null;
+  }
+
+  /**
+   * Put a prize crew aboard her and sail her in company. One of your hands (the least seasoned) goes across. A
+   * prize already in company is sold to make room. Returns what happened.
+   */
+  takePrizeShip(): string | null {
+    if (this.prizeShipBlocker() || !this.prize?.ship) return null;
+    this.prize.taken = true;
+    const lines: string[] = [];
+    if (this.consort) lines.push(`${this.consort.name} is sold for ${this.sellConsort()} gold to make room.`);
+    const crew = this.condition.crew;
+    const xp = (c: CrewRecord) => Object.values(c.xp ?? {}).reduce((n, v) => n + (v ?? 0), 0);
+    // The least seasoned hand, and among equals the newest: never the captain at the head of the list.
+    const hand = crew.slice(1).reverse().sort((a, b) => xp(a) - xp(b))[0];
+    crew.splice(crew.indexOf(hand), 1);
+    this.consort = { ...this.prize.ship, crew: hand };
+    lines.push(`${hand.name} takes ${this.consort.name} as prize master. She sails in company.`);
+    return lines.join(' ');
+  }
+
+  /** What a prize court pays for the ship in company: her hold's worth, as much of it as her hull has left. */
+  consortValue(): number {
+    const p = this.consort;
+    if (!p) return 0;
+    const foe = enemy(p.enemy);
+    const worth = Math.max(25, (foe.plunder[0] + foe.plunder[1]) / 2);
+    return Math.round(worth * PRIZE_COURT * (0.4 + (0.6 * p.hull) / p.maxHull) * (1 + SECTOR_PLUNDER * this.sector));
+  }
+
+  /** Sell the ship in company: gold, and her prize crew comes back aboard if there is a bunk. Returns the price. */
+  sellConsort(): number {
+    const p = this.consort;
+    if (!p) return 0;
+    const price = this.consortValue();
+    this.gold += price;
+    this.plunderTaken += price;
+    if (p.crew && this.condition.crew.length < this.maxCrew) this.condition.crew.push(p.crew);
+    this.consort = null;
+    return price;
+  }
+
+  canSellConsort(): boolean {
+    return this.inPort && !!this.consort;
   }
 
   /** Sign on one of the surrendered crew. Returns the new hand's name. */
@@ -1603,6 +1694,7 @@ export class Run {
       fittings: this.fittings,
       standing: this.standing,
       escort: this.escort,
+      consort: this.consort,
       commission: this.commission,
       recent: this.recent,
       sectorId: this.sectorId,
@@ -1643,6 +1735,7 @@ export class Run {
     run.fittings = s.fittings ?? [];
     run.standing = { ...freshStanding(), ...s.standing };
     run.escort = s.escort ?? null;
+    run.consort = s.consort ?? null;
     run.commission = s.commission ?? null;
     run.recent = s.recent ?? [];
     run.wind = s.wind ?? Math.PI;

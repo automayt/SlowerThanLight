@@ -49,6 +49,8 @@ export interface BattleOptions {
   enemyHull?: number;
   /** A friendly ship in company: every `every` seconds her broadside puts a ball of `damage` into the enemy. */
   consort?: Consort;
+  /** More ships in company (a prize sailing with you as well as an ally's escort). */
+  consorts?: Consort[];
   /** An AI first mate for the player's ship, doing only these duties (co-op: the roles no player holds). */
   mate?: Partial<Record<Duty, boolean>>;
 }
@@ -57,7 +59,16 @@ export interface Consort {
   name: string;
   every: number;
   damage: number;
+  /** Balls in each broadside (one when unsaid). */
+  shots?: number;
+  /** A prize in company has a hull, and the enemy will spare a gun for her now and then; an ally's escort does not. */
+  hull?: number;
+  maxHull?: number;
 }
+
+/** Seconds between the enemy's shots at a prize in company, and the chance each one hits. */
+export const CONSORT_TARGETED_EVERY = 12;
+export const CONSORT_HIT_CHANCE = 0.6;
 
 /** Hull fraction at which a boss rallies, and how much faster she then loads. */
 export const BOSS_RALLY_AT = 0.4;
@@ -112,9 +123,10 @@ export class Battle {
   readonly seed: number;
   readonly allowEscape: boolean;
   readonly boss: boolean;
-  readonly consort: Consort | null;
-  /** Seconds since the consort last fired. */
-  private consortTimer = 0;
+  /** Ships in company: each fires on her own clock. */
+  readonly consorts: (Consort & { timer: number })[];
+  /** Seconds since the enemy last fired on a prize in company. */
+  private consortFire = 0;
   /** Whether the boss has rallied yet. */
   rallied = false;
   /** The enemy runs from the first moment (a merchant or smuggler): only crippling her stops her. */
@@ -148,7 +160,7 @@ export class Battle {
     this.rng = new Rng(this.seed);
     this.allowEscape = opts.allowEscape ?? true;
     this.boss = opts.boss ?? false;
-    this.consort = opts.consort ?? null;
+    this.consorts = [...(opts.consort ? [opts.consort] : []), ...(opts.consorts ?? [])].map((c) => ({ ...c, timer: 0 }));
     this.player = new Ship(playerDef, 'player', opts.playerCondition);
     this.enemy = new Ship(enemyDef, 'enemy');
     manStations(this.player);
@@ -269,7 +281,7 @@ export class Battle {
       else updateGuns(ship, foe, dt, this.projectiles, this.events, this.stats[ship.side]);
     }
     this.projectiles = updateProjectiles(this.projectiles, this.ships, dt, this.rng, this.events, this.stats);
-    if (this.consort) this.updateConsort(dt);
+    if (this.consorts.length) this.updateConsorts(dt);
     // Steering under fire is how helmsmen learn.
     const helmsman = this.player.stationed('helm');
     if (helmsman) train(helmsman, 'seamanship', dt * 0.5, this.events);
@@ -304,15 +316,37 @@ export class Battle {
     if (hold) this.player.guns.forEach((g, i) => (g.target = targets[i]));
   }
 
-  /** The consort's broadside, now and then, into a random room of the enemy (held while our boarders are over there). */
-  private updateConsort(dt: number): void {
-    const c = this.consort!;
-    this.consortTimer += dt;
-    if (this.consortTimer < c.every || this.boardersOut) return;
-    this.consortTimer = 0;
-    const room = this.rng.pick([...this.enemy.rooms.keys()]);
-    this.events.push({ t: 'consort', side: 'enemy', name: c.name, room });
-    applyHit(this.enemy, room, 'round', c.damage, this.rng, this.events);
+  /** The first ship in company (the old single-consort view). */
+  get consort(): Consort | null {
+    return this.consorts[0] ?? null;
+  }
+
+  /**
+   * Ships in company fire their broadsides into random rooms of the enemy (held while our boarders are over there).
+   * The enemy spares a gun for a prize in company now and then, and can sink her.
+   */
+  private updateConsorts(dt: number): void {
+    for (const c of this.consorts) {
+      if (c.hull !== undefined && c.hull <= 0) continue;
+      c.timer += dt;
+      if (c.timer < c.every || this.boardersOut) continue;
+      c.timer = 0;
+      for (let i = 0; i < (c.shots ?? 1); i++) {
+        const room = this.rng.pick([...this.enemy.rooms.keys()]);
+        this.events.push({ t: 'consort', side: 'enemy', name: c.name, room });
+        applyHit(this.enemy, room, 'round', c.damage, this.rng, this.events);
+      }
+    }
+    const prize = this.consorts.find((c) => c.hull !== undefined && c.hull > 0);
+    if (!prize || this.enemyFleeing || this.enemy.level('guns') <= 0) return;
+    this.consortFire += dt;
+    if (this.consortFire < CONSORT_TARGETED_EVERY) return;
+    this.consortFire = 0;
+    if (!this.rng.chance(CONSORT_HIT_CHANCE)) return;
+    const heaviest = Math.max(1, ...this.enemy.guns.filter((g) => g.powered).map((g) => g.def.damage * g.def.shots));
+    prize.hull = Math.max(0, prize.hull! - heaviest);
+    this.events.push({ t: 'consortHit', side: 'player', name: prize.name, hull: prize.hull, maxHull: prize.maxHull ?? prize.hull });
+    if (prize.hull <= 0) this.events.push({ t: 'consortSunk', side: 'player', name: prize.name });
   }
 
   /** The boss's second wind: every system repaired, fires out, bulwarks up, her guns served a little faster. */
