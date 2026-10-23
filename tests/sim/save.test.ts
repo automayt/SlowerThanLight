@@ -40,7 +40,7 @@ afterEach(() => {
 const viaJson = (run: Run): RunSave => JSON.parse(JSON.stringify(run.toSave()));
 
 /** A run that has sailed a few legs, so its save has a chart, history and wear on it. */
-function sailed(shipId = 'gull', seed = 3, decisions = 6): Run {
+function sailed(shipId = 'gull', seed = 1, decisions = 6): Run {
   const run = new Run(shipId, seed);
   for (let i = 0; i < decisions && !run.over; i++) autoStep(run);
   return run;
