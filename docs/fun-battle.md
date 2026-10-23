@@ -37,3 +37,16 @@ Built: 1 to 4. Not built: 5 and 6. They are listed in order of value.
 - The AI uses the orders for both ships, so headless balance numbers include them. An AI mate in co-op uses
   only the orders for its own duties (*Rake* with the guns duty, *Cold steel* with the crew duty), never the
   captain's.
+
+## Balance check
+
+| | Before | After |
+|---|---|---|
+| Whole voyages, mean of 20 ship/captain rows (60 each) | 50.9% (range 28–73%) | 50.5% (range 23–75%) |
+| Single battles, mean win (`balance.ts 60 battles`) | 77.4%, 102 s long | 78.0%, 83 s long |
+| Tests | 642 | 659 (+17 in `tests/sim/fun.test.ts`) |
+
+The first temper pass made voyages much harder, with a mean win rate of 36%. Two things caused it: a long gun
+laying a gun on your helm, and a boarder sending parties at long odds. Both were toned down, so each temper now
+changes how a fight plays more than how hard it is. The privateer, at sector 1 in `tactics.ts`, is still harder
+than before.
