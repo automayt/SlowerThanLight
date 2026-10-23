@@ -12,6 +12,7 @@ import { Ship } from '../sim/Ship';
 import { SYSTEM_NAMES, type ShipDef, type SystemId } from '../sim/types';
 import { bumpProfile, profile, recentEvents, unlockedCaptains } from './save';
 import { CAPTAINS } from '../data/captains';
+import { CHALLENGES, CHALLENGE_IDS, challengeRenown } from '../data/challenges';
 
 const MARGIN = 22;
 /** The featured ship: her portrait, the shipwright's draught of her below it, and her particulars to the right. */
@@ -53,6 +54,10 @@ export class ShipSelectScene extends Phaser.Scene {
   private launch!: Button;
   private difficulty: Difficulty = 'normal';
   private captainId = 'rover';
+  /** Hardships chosen for more renown (data/challenges.ts), and the open picker, if any. */
+  private challenges = new Set<string>();
+  private picker: Phaser.GameObjects.GameObject[] = [];
+  private hardships!: Button;
 
   constructor() {
     super('ShipSelect');
@@ -66,6 +71,7 @@ export class ShipSelectScene extends Phaser.Scene {
     this.thumbs = [];
     this.names = [];
     this.locks = PLAYER_SHIPS.map(lockReason);
+    this.picker = [];
   }
 
   preload(): void {
@@ -139,15 +145,77 @@ export class ShipSelectScene extends Phaser.Scene {
       cap.setText(captainLabel()).setTip(captainTip());
     }, { size: 14, hint: 'C', tip: captainTip() });
 
+    // Hardships: chosen in a small picker, each for a share more renown.
+    const saved2 = this.registry.get('challenges') as string[] | undefined;
+    this.challenges = new Set((saved2 ?? []).filter((id) => CHALLENGE_IDS.includes(id)));
+    this.hardships = new Button(this, SCREEN.w / 2 + 182, FOOT_Y + 6, 196, 34, '', () => this.togglePicker(), { size: 14, hint: 'H' });
+    this.refreshHardships();
+
     const kb = this.input.keyboard!;
-    kb.on('keydown-C', () => cap.press());
+    kb.on('keydown-C', () => !this.picker.length && cap.press());
+    kb.on('keydown-H', () => this.hardships.press());
     kb.on('keydown-LEFT', () => this.select((this.selected + PLAYER_SHIPS.length - 1) % PLAYER_SHIPS.length));
     kb.on('keydown-RIGHT', () => this.select((this.selected + 1) % PLAYER_SHIPS.length));
-    PLAYER_SHIPS.forEach((_, i) => kb.on(`keydown-${NUMBER_KEYS[i]}`, () => this.select(i)));
-    kb.on('keydown-ENTER', () => this.launch.press());
-    kb.on('keydown-ESC', () => back.press());
-    kb.on('keydown-D', () => diff.press());
+    PLAYER_SHIPS.forEach((_, i) =>
+      kb.on(`keydown-${NUMBER_KEYS[i]}`, () => {
+        // With the picker open, the number keys toggle hardships instead.
+        if (this.picker.length) (this.picker.filter((o) => o instanceof Button)[i] as Button | undefined)?.press();
+        else this.select(i);
+      }),
+    );
+    kb.on('keydown-ENTER', () => (this.picker.length ? this.togglePicker() : this.launch.press()));
+    kb.on('keydown-ESC', () => (this.picker.length ? this.togglePicker() : back.press()));
+    kb.on('keydown-D', () => !this.picker.length && diff.press());
     this.select(this.selected);
+  }
+
+  /** The hardships button: how many are chosen and the renown they earn. */
+  private refreshHardships(): void {
+    const n = this.challenges.size;
+    const bonus = Math.round((challengeRenown([...this.challenges]) - 1) * 100);
+    this.hardships.setText(n ? `Hardships: ${n} (+${bonus}%)` : 'Hardships: none').setOn(n > 0);
+    const chosen = CHALLENGES.filter((c) => this.challenges.has(c.id));
+    this.hardships.setTip(
+      `Sail with a handicap for more renown.${chosen.length ? `\n\n${chosen.map((c) => `${c.name}: ${c.blurb}`).join('\n')}` : ' None chosen: an ordinary voyage.'}`,
+    );
+  }
+
+  /** Open or close the hardships picker: one toggle for each, over a dimmed screen. */
+  private togglePicker(): void {
+    if (this.picker.length) {
+      for (const o of this.picker) o.destroy();
+      this.picker = [];
+      this.refreshHardships();
+      return;
+    }
+    const ROW = 56;
+    const w = 600;
+    const h = 108 + CHALLENGES.length * ROW + 60;
+    const x = (SCREEN.w - w) / 2;
+    const y = (SCREEN.h - h) / 2;
+    const veil = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.55).setOrigin(0).setDepth(20).setInteractive();
+    veil.on('pointerdown', () => this.togglePicker());
+    const box = panel(this, x, y, w, h, { modal: true }).setDepth(21);
+    box.setInteractive();
+    const head = goldText(this, SCREEN.w / 2, y + 16, 'Hardships', 32).setOrigin(0.5, 0).setDepth(22);
+    const note = this.add
+      .text(SCREEN.w / 2, y + 62, 'Each one makes the voyage harder and earns a share more renown.', textStyle(14, COLORS.textDim, { align: 'center' }))
+      .setOrigin(0.5, 0)
+      .setDepth(22);
+    this.picker.push(veil, box, head, note);
+    CHALLENGES.forEach((c, i) => {
+      const label = () => `${this.challenges.has(c.id) ? '✓ ' : ''}${c.name}  ·  +${Math.round(c.renown * 100)}% renown`;
+      const b: Button = new Button(this, x + 30, y + 96 + i * ROW, w - 60, 44, label(), () => {
+        if (this.challenges.has(c.id)) this.challenges.delete(c.id);
+        else this.challenges.add(c.id);
+        this.registry.set('challenges', [...this.challenges]);
+        b.setText(label()).setOn(this.challenges.has(c.id));
+      }, { size: 16, tip: c.blurb, hint: `${i + 1}` });
+      b.setOn(this.challenges.has(c.id)).setDepth(22);
+      this.picker.push(b);
+    });
+    const done = new Button(this, SCREEN.w / 2 - 90, y + h - 54, 180, 38, 'Done', () => this.togglePicker(), { size: 16, hint: 'Enter' }).setDepth(22);
+    this.picker.push(done);
   }
 
   /** Feature a ship: her portrait, draught and particulars, and set the launch button to match. */
@@ -274,7 +342,7 @@ export class ShipSelectScene extends Phaser.Scene {
     if (this.locks[this.selected]) return;
     bumpProfile('voyages');
     this.registry.set('counted-win', false);
-    const run = new Run(def.id, undefined, this.difficulty, this.captainId);
+    const run = new Run(def.id, undefined, this.difficulty, this.captainId, [...this.challenges]);
     // Tales from the last few voyages come round less often.
     run.recent = recentEvents();
     setRun(this, run);

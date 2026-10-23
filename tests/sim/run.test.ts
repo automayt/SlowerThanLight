@@ -755,7 +755,7 @@ describe('fittings that change the fight, and ports known for something', () => 
     run.encounter = { kind: 'battle', enemy: 'cutter', name: 'HMS X', boss: false, ambush: false, text: '' };
     run.status = 'battle';
     const b = run.startBattle();
-    expect(b.player.shotRate.chain).toBe(1.2);
+    expect(b.player.shotRate.chain).toBe(1.3);
     expect(b.player.pumpRate).toBe(1.5);
     expect(run.coloursChance()).toBe(0.7);
   });

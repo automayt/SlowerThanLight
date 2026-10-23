@@ -1,6 +1,8 @@
 import { enemy } from '../data/enemies';
 import { playerShip } from '../data/ships';
-import { FITTING_IDS, fitting, type FittingDef } from '../data/fittings';
+import { COMMON_FITTING_IDS, RARE_CHANCE, RARE_CHANCE_CHANDLER, RARE_FITTING_IDS, fitting, fittingEffects, type FittingDef } from '../data/fittings';
+import { challenge, challengeRenown } from '../data/challenges';
+import { LOG_LIMIT, outcomeVerb, type LogEntry } from './chronicle';
 import { COOK_FORAGE, SURGEON_TRAIT_HEAL, TRAIT_IDS, trait } from '../data/traits';
 import { captain, type CaptainDef } from '../data/captains';
 import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTOR_ROUTE, seaEvent, sectorDef, type PortSpeciality } from '../data/voyage';
@@ -12,7 +14,7 @@ import { AGGRESSION, atLeast, BETRAYAL, describeShift, freshStanding, OUTCOME_ST
 import { Rng } from './rng';
 import { generateChart, nodeById, SECTOR_COLUMNS, type SeaChart, type SeaNode } from './SeaChart';
 import { Ship, type CrewRecord, type ShipCondition } from './Ship';
-import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, PowerId, SeaEventDef, ShipDef, SystemId, UpgradeId, WeaponDef } from './types';
+import type { EnemyDef, EventEffect, EventNeeds, EventPool, EventRarity, GunMount, PowerId, SeaEventDef, ShipDef, ShotType, SystemId, UpgradeId, WeaponDef } from './types';
 import { SYSTEM_NAMES } from './types';
 import { RANK_XP, SKILL_LABEL, type Skill, type SkillXp } from './Skills';
 
@@ -255,6 +257,10 @@ export interface RunSave {
   wind?: number;
   captain?: string;
   nemesis?: Nemesis;
+  /** Hardships chosen at the start for more renown (data/challenges.ts). */
+  challenges?: string[];
+  /** The ship's log (sim/chronicle.ts). */
+  log?: LogEntry[];
 }
 
 /** Silas Crane, your old quartermaster with a grudge (data/nemesis.ts). */
@@ -488,10 +494,15 @@ export class Run {
 
   /** Who commands, and the gift they bring (data/captains.ts). */
   readonly captain: CaptainDef;
+  /** Hardships chosen before sailing, for more renown (data/challenges.ts). */
+  readonly challenges: string[];
+  /** The ship's log: fights, prizes, purchases and passages, for the end of the voyage (sim/chronicle.ts). */
+  log: LogEntry[] = [];
 
-  constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal', captainId = 'rover') {
+  constructor(shipId: string, seed?: number, difficulty: Difficulty = 'normal', captainId = 'rover', challenges: string[] = []) {
     this.difficulty = difficulty;
     this.captain = captain(captainId);
+    this.challenges = [...new Set(challenges.map((id) => challenge(id).id))];
     this.gold = DIFFICULTY[difficulty].startGold;
     this.provisions = DIFFICULTY[difficulty].provisions;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
@@ -510,6 +521,20 @@ export class Run {
     if (c.standing) for (const p of Object.keys(this.standing) as PowerId[]) this.standing[p] += c.standing;
     for (const [p, d] of Object.entries(c.shift ?? {}) as [PowerId, number][]) this.standing[p] += d;
     if (c.flag) this.flags.add(c.flag);
+    // Hardships chosen before sailing.
+    for (const h of this.challenges.map(challenge)) {
+      if (h.noGold) this.gold = 0;
+      this.provisions = Math.max(0, this.provisions - (h.provisions ?? 0));
+      if (h.hull) {
+        this.fit.hull = Math.max(1, Math.round(this.fit.hull * (1 - h.hull)));
+        this.condition.hull = Math.min(this.condition.hull, this.fit.hull);
+      }
+    }
+  }
+
+  /** Write a line in the ship's log. */
+  note(entry: Omit<LogEntry, 'jump' | 'sector'>): void {
+    if (this.log.length < LOG_LIMIT) this.log.push({ jump: this.jumps, sector: this.sector, ...entry });
   }
 
   /** How a leg between two marks lies to the wind. */
@@ -567,7 +592,9 @@ export class Run {
    */
   get renown(): number {
     const allies = (Object.keys(this.standing) as PowerId[]).filter((p) => this.tier(p) === 'allied').length;
-    return Math.round(this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.nemesis.done ? 15 : 0) + (this.status === 'won' ? 40 : 0));
+    const base = this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.nemesis.done ? 15 : 0) + (this.status === 'won' ? 40 : 0);
+    // Hardships chosen at the start earn their share.
+    return Math.round(base * challengeRenown(this.challenges));
   }
 
   /** Progress through the voyage on the old single-chart scale (0..7), which event conditions are written against. */
@@ -577,7 +604,8 @@ export class Run {
   }
 
   get maxProvisions(): number {
-    return this.has('casks') ? CASK_PROVISIONS : MAX_PROVISIONS;
+    const hold = this.challenges.reduce((n, id) => n + (challenge(id).hold ?? 0), 0);
+    return (this.has('casks') ? CASK_PROVISIONS : MAX_PROVISIONS) - hold;
   }
 
   has(fittingId: string): boolean {
@@ -590,6 +618,7 @@ export class Run {
    */
   get navySpeed(): number {
     let v = DIFFICULTY[this.difficulty].navySpeed - (this.captain.fleet ?? 0);
+    for (const id of this.challenges) v += challenge(id).fleet ?? 0;
     if (atLeast(this.tier('crown'), 'friendly')) v -= 0.1;
     for (const p of ['spain', 'france'] as PowerId[]) if (this.tier(p) === 'allied') v -= 0.1;
     return v;
@@ -610,9 +639,11 @@ export class Run {
   /** The ship as currently fitted out. */
   get ship(): ShipDef {
     const f = this.fit;
-    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0) + (this.has('copper') ? 5 : 0);
-    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1) * (this.captain.melee ?? 1);
-    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, melee, systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
+    const fx = fittingEffects(this.fittings);
+    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0) + (this.has('copper') ? 5 : 0) + fx.evasion;
+    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1) * (this.captain.melee ?? 1) * fx.melee;
+    const armour = Math.max(this.def.armour ?? 0, fx.armour) || undefined;
+    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, melee, ...(armour ? { armour } : {}), systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
   get node(): SeaNode {
@@ -785,6 +816,7 @@ export class Run {
     this.placeNemesis();
     const def = this.sectorDef;
     const fleet = lost >= 1 ? 'The fleet is hard on your heels: its topsails were in sight as you cleared the passage.' : 'The fleet has lost your trail for now. It will find it again.';
+    this.note({ kind: 'sector', text: `Into ${def.name}.`, name: def.name });
     return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} ${fleet}` });
   }
 
@@ -1085,6 +1117,8 @@ export class Run {
     const surgeons = this.condition.crew.filter((c) => c.trait === 'surgeon').length;
     const hp = !heal ? 0 : (this.has('chest') ? 2 * JUMP_HEAL : JUMP_HEAL) + surgeons * SURGEON_TRAIT_HEAL;
     for (const c of this.condition.crew) c.hp = Math.min(100, c.hp + hp);
+    // Spare planking: a point of hull a jump as well.
+    if (this.has('spars')) this.condition.hull = Math.min(this.fit.hull, this.condition.hull + 1);
     for (let i = this.has('spars') ? 2 : 1; i > 0; i--) {
       const worst = (Object.entries(this.condition.damage) as [SystemId, number][]).sort((a, b) => b[1] - a[1])[0];
       if (worst) this.setDamage(worst[0], worst[1] - 1);
@@ -1134,18 +1168,30 @@ export class Run {
         ],
         seed: this.rng.int(2 ** 31),
         // A fearsome figurehead makes a wavering captain strike sooner.
-        enemyAI: this.has('figurehead') && ai.surrenderChance > 0 ? { ...ai, surrenderChance: Math.min(1, ai.surrenderChance + 0.1) } : ai,
+        enemyAI: this.quarter(this.has('figurehead') && ai.surrenderChance > 0 ? { ...ai, surrenderChance: Math.min(1, ai.surrenderChance + 0.1) } : ai),
         playerCondition: this.condition,
         allowEscape: !this.encounter.boss,
         boss: this.encounter.boss,
-        enemyReload: DIFFICULTY[this.difficulty].enemyReload,
-        playerReload: (this.has('drill') ? 1.1 : 1) * (this.captain.reload ?? 1),
+        enemyReload: DIFFICULTY[this.difficulty].enemyReload * fittingEffects(this.fittings).enemyReload,
+        playerReload: (this.has('drill') ? 1.1 : 1) * (this.captain.reload ?? 1) * fittingEffects(this.fittings).reload,
         playerNets: this.has('nets'),
-        playerShotRate: this.has('lockers') ? { chain: 1.2, grape: 1.2 } : undefined,
+        playerShotRate: this.shotRates(),
         playerPumps: this.has('pumps') ? 1.5 : undefined,
         ...opts,
       },
     };
+  }
+
+  /** Loading speed by shot from the fittings aboard: shot lockers, a shot furnace, double-shotted guns. Undefined when none. */
+  private shotRates(): Partial<Record<ShotType, number>> | undefined {
+    const rates = { ...fittingEffects(this.fittings).shotRate };
+    if (this.has('lockers')) for (const s of ['chain', 'grape'] as ShotType[]) rates[s] = (rates[s] ?? 1) * 1.3;
+    return Object.keys(rates).length ? rates : undefined;
+  }
+
+  /** Under the red flag no ship strikes to you. */
+  private quarter<T extends { surrenderChance: number }>(ai: T): T {
+    return fittingEffects(this.fittings).noQuarter ? { ...ai, surrenderChance: 0 } : ai;
   }
 
   /** Record a finished battle: damage carried, plunder taken, the fleet's reaction. */
@@ -1220,6 +1266,18 @@ export class Run {
       const ship = { enemy: foe.id, name: enc.name, hull: Math.max(1, battle.enemy.hull), maxHull: battle.enemy.def.hull };
       this.prize = { ship, guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
     }
+    this.note({
+      kind: 'battle',
+      text: o.won ? `${enc.name} ${outcomeVerb(o.kind)}.` : o.title,
+      name: enc.name,
+      outcome: o.kind,
+      won: o.won,
+      gold: enc.boss ? 0 : plunder,
+      hullLeft: Math.max(0, this.condition.hull) / this.fit.hull,
+      dealt: battle.stats.player.hullDamage,
+      time: battle.time,
+      boss: enc.boss || undefined,
+    });
     return { kind: o.kind, won: o.won, plunder: enc.boss ? 0 : plunder, lines };
   }
 
@@ -1266,6 +1324,7 @@ export class Run {
     crew.splice(crew.indexOf(hand), 1);
     this.consort = { ...this.prize.ship, crew: hand };
     lines.push(`${hand.name} takes ${this.consort.name} as prize master. She sails in company.`);
+    this.note({ kind: 'prize', text: `${this.consort.name} sails in company, ${hand.name} her prize master.`, name: this.consort.name });
     return lines.join(' ');
   }
 
@@ -1881,10 +1940,13 @@ export class Run {
 
   /** Two fittings the port's chandler has, that you don't already carry. */
   private stockFittings(): string[] {
-    const pool = FITTING_IDS.filter((id) => !this.has(id));
+    const pool = COMMON_FITTING_IDS.filter((id) => !this.has(id));
     const out: string[] = [];
     const n = this.speciality === 'chandler' ? 4 : 3;
     while (out.length < n && pool.length) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
+    // Now and then, beyond the first sector, something rare in place of the last of them: more often on chandlers' row.
+    const rare = RARE_FITTING_IDS.filter((id) => !this.has(id));
+    if (this.sector > 0 && rare.length && this.rng.chance(this.speciality === 'chandler' ? RARE_CHANCE_CHANDLER : RARE_CHANCE)) out.splice(Math.min(out.length, n - 1), 1, this.rng.pick(rare));
     return out;
   }
 
@@ -1903,6 +1965,7 @@ export class Run {
     this.gold -= offer.price;
     this.fittings.push(id);
     this.encounter.fittings = (this.encounter.fittings ?? []).filter((x) => x !== id);
+    this.note({ kind: 'buy', text: `${offer.fitting.name} fitted at ${this.encounter.name}.`, item: id, gold: offer.price });
     return true;
   }
 
@@ -1988,6 +2051,7 @@ export class Run {
     this.gold -= offer.price;
     this.fit.guns.push({ weapon: weaponId });
     this.encounter.stock.splice(this.encounter.stock.indexOf(weaponId), 1);
+    this.note({ kind: 'buy', text: `${offer.weapon.name} bought at ${this.encounter.name}.`, item: weaponId, gold: offer.price });
     return true;
   }
 
@@ -2047,13 +2111,15 @@ export class Run {
       wind: this.wind,
       captain: this.captain.id,
       nemesis: this.nemesis,
+      challenges: this.challenges,
+      log: this.log,
     });
   }
 
   static fromSave(raw: RunSave): Run {
     if (raw?.version !== 1) throw new Error('Unknown save version');
     const s = structuredClone(raw);
-    const run = new Run(s.shipId, s.seed, s.difficulty ?? 'normal', s.captain ?? 'rover');
+    const run = new Run(s.shipId, s.seed, s.difficulty ?? 'normal', s.captain ?? 'rover', s.challenges ?? []);
     run.rng.position = s.rng;
     run.chart = s.chart;
     run.nodeId = s.nodeId;
@@ -2088,6 +2154,7 @@ export class Run {
     run.recent = s.recent ?? [];
     run.wind = s.wind ?? Math.PI;
     run.nemesis = s.nemesis ?? { grudge: 0, met: 0, last: 'first', done: false };
+    run.log = s.log ?? [];
     return run;
   }
 }

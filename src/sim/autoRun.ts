@@ -139,7 +139,7 @@ function hailChoice(run: Run, opts: AutoRunOptions): HailId {
 }
 
 /** Fittings a simple captain values, best first. */
-const FITTING_PRIORITY = ['drill', 'copper', 'careened', 'chest', 'marines', 'spars', 'lockers', 'pumps', 'nets', 'figurehead', 'casks', 'flags'];
+const FITTING_PRIORITY = ['doubleshot', 'drill', 'oak', 'copper', 'careened', 'chest', 'marines', 'spars', 'lockers', 'furnace', 'pumps', 'nets', 'redflag', 'figurehead', 'casks', 'flags'];
 
 /** Spend spare gold: the biggest affordable gun if a port is free, often a fitting, then upgrades in a sensible order. */
 function shop(run: Run): void {
