@@ -9,12 +9,12 @@ export const NEMESIS = {
   /** The enemy kind he sails, by sector (0-based): a privateer's hull to begin with, then a brigantine. */
   kinds: ['privateer', 'rival', 'rival'],
   /** Hull added per time he has got away. */
-  hullPerGrudge: 0.15,
+  hullPerGrudge: 0.1,
   /** Bounty before sector scaling, and what each escape adds to it. */
   bounty: 45,
   bountyPerGrudge: 30,
   /** Share of his hull at which he cuts and runs (until the last meeting, when he fights to the end). */
-  fleeAt: 0.4,
+  fleeAt: 0.55,
   /** What buying him off costs, relative to an ordinary bribe. */
   bribe: 1.5,
 };

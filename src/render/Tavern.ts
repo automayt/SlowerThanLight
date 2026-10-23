@@ -118,7 +118,7 @@ export class Tavern {
     };
     if (hand) {
       row('You', hand.you, false);
-      row(table.rival.split(' ')[0], hand.rival, true);
+      row('Rival', hand.rival, true);
     }
     if (this.last) {
       const said = add(scene.add.text(x, y, this.last, textStyle(14, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: w } })));
@@ -131,7 +131,7 @@ export class Tavern {
       return;
     }
     const left = DICE_HANDS - table.played;
-    add(scene.add.text(x, y, left > 0 ? `${left} hand${left > 1 ? 's' : ''} left before ${table.rival.split(' ')[0]} calls it a night.` : `${table.rival} has had enough of you for one night.`, textStyle(13, COLORS.textDim)));
+    add(scene.add.text(x, y, left > 0 ? `${left} hand${left > 1 ? 's' : ''} left before your rival calls it a night.` : `${table.rival} has had enough of you for one night.`, textStyle(13, COLORS.textDim)));
     y += 26;
     DICE_STAKES.forEach((stake, i) => {
       const why = left <= 0 ? 'The table is closed to you tonight.' : run.gold < stake ? `You are ${stake - run.gold} gold short.` : undefined;

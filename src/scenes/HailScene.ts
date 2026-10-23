@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { enemy } from '../data/enemies';
 import { power } from '../data/powers';
+import { NEMESIS } from '../data/nemesis';
 import { placeArt } from '../render/art';
 import { ledgerOpen, openLedger, standingBar } from '../render/Ledger';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
@@ -69,9 +70,17 @@ export class HailScene extends Phaser.Scene {
     // Under the painting: whose flag she flies and how that flag regards you.
     const fy = ART.y + (art ? ART.h + 16 : 0);
     const fx = ART.x;
-    this.add.text(fx, fy, `${foe.ship.className} · ${flag.name}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: flag.color });
-    standingBar(this, fx, fy + 38, ART.w, 12, run.standing[foe.power]);
-    this.add.text(fx, fy + 56, `${flag.name} regard${foe.power === 'brethren' || foe.power === 'trade' ? '' : 's'} you as ${tierName(run.tier(foe.power)).toLowerCase()} (${run.standing[foe.power]})`, textStyle(13, COLORS.text));
+    if (enc.nemesis) {
+      // Crane flies no flag but his own: his quarrel is with you, and nobody else takes sides.
+      this.add.text(fx, fy, `${foe.ship.className} · Captain ${NEMESIS.captain}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: COLORS.textWarn });
+      const { met, grudge } = run.nemesis;
+      const story = met <= 1 ? 'The first time you have met since you marooned him.' : `Your ${['second', 'third', 'fourth'][met - 2] ?? 'next'} meeting. He has got away from you ${grudge === 1 ? 'once' : `${grudge} times`}.`;
+      this.add.text(fx, fy + 34, `${story} No flag will take sides in this.`, textStyle(13, COLORS.text, { wordWrap: { width: ART.w } }));
+    } else {
+      this.add.text(fx, fy, `${foe.ship.className} · ${flag.name}`, { fontFamily: TITLE_FONT, fontSize: '20px', color: flag.color });
+      standingBar(this, fx, fy + 38, ART.w, 12, run.standing[foe.power]);
+      this.add.text(fx, fy + 56, `${flag.name} regard${foe.power === 'brethren' || foe.power === 'trade' ? '' : 's'} you as ${tierName(run.tier(foe.power)).toLowerCase()} (${run.standing[foe.power]})`, textStyle(13, COLORS.text));
+    }
     new Button(this, fx, fy + 82, 200, 34, 'Standing at sea', () => openLedger(this, run), { size: 14, hint: 'L' });
 
     this.tx = art ? ART.x + ART.w + 32 : X + 120;

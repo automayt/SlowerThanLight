@@ -373,7 +373,7 @@ export class SeaMapScene extends Phaser.Scene {
         const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
         const open = n.id === run.nodeId && reach.has(m.id);
         const pts = this.reefCurve(n, m).getPoints(28);
-        g.lineStyle(sailed ? 3.5 : open ? 3 : 2, sailed ? RED_INK : SHOAL_INK, sailed || open ? 0.95 : 0.55);
+        g.lineStyle(sailed ? 3.5 : open ? 3.5 : 2.5, sailed ? RED_INK : SHOAL_INK, sailed || open ? 0.95 : 0.75);
         for (let i = 0; i + 1 < pts.length; i += sailed ? 1 : 2) g.lineBetween(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
       }
     }

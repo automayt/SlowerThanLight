@@ -1823,11 +1823,11 @@ export class Run {
       const total = diceTotal(h.you);
       if (total > DICE_TARGET) {
         h.result = 'bust';
-        return `A ${die}: ${total}. Bust! ${t.rival} sweeps up your ${h.stake} gold.`;
+        return `You roll a ${die}: ${total}. Bust! ${t.rival} sweeps up your ${h.stake} gold.`;
       }
       // Exactly fifteen: nothing to gain by rolling on.
-      if (total === DICE_TARGET) return `A ${die}: fifteen! ${this.standDice(t, h)}`;
-      return `A ${die}: ${total}.`;
+      if (total === DICE_TARGET) return `You roll a ${die}: fifteen! ${this.standDice(t, h)}`;
+      return `You roll a ${die}: ${total}.`;
     }
     return this.standDice(t, h);
   }
