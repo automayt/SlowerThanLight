@@ -107,7 +107,11 @@ export type VoyageCommand =
   | { t: 'prizeGun'; weapon: string }
   | { t: 'pressCrew' }
   | { t: 'prizeShip' }
-  | { t: 'sellConsort' };
+  | { t: 'sellConsort' }
+  /** Stand a round in the tavern and hear what lies ahead. */
+  | { t: 'rumour' }
+  /** A move at the tavern's dice table: sit down with a stake, roll again, or stand. */
+  | { t: 'dice'; act: 'stake' | 'roll' | 'stand'; stake?: number };
 
 /** What a voyage command produced, for the screen that shows it. */
 export type VoyageResult =
@@ -130,6 +134,10 @@ export function voyageAllowed(run: Run, cmd: VoyageCommand): boolean {
       return !!run.prize && !run.prize.taken;
     case 'prizeShip':
       return !run.prizeShipBlocker();
+    case 'rumour':
+      return run.canBuyRumour();
+    case 'dice':
+      return run.canDice(cmd.act, cmd.stake);
     default:
       return run.status === 'port';
   }
@@ -176,6 +184,10 @@ export function applyVoyage(run: Run, cmd: VoyageCommand): VoyageResult {
       return { t: 'text', text: run.takePrizeShip() };
     case 'sellConsort':
       return { t: 'text', text: run.canSellConsort() ? `${run.consort!.name} fetches ${run.sellConsort()} gold at the prize court.` : null };
+    case 'rumour':
+      return { t: 'text', text: run.buyRumour().join(' ') || null };
+    case 'dice':
+      return { t: 'text', text: run.dice(cmd.act, cmd.stake) };
   }
 }
 

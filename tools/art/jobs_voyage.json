@@ -1,0 +1,35 @@
+[
+  {
+    "name": "event-crane-calling-card",
+    "model": "flux",
+    "seed": 9501,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A burnt-out merchant brig drifting on a grey sea, her scorched sails hanging in rags and smoke still rising from her hatches, a crude black dog's head daubed in tar across her mainsail, frightened survivors huddled in her waist, a single letter nailed to her mainmast, overcast stormy sky"
+  },
+  {
+    "name": "event-crane-quartermaster",
+    "model": "flux",
+    "seed": 9502,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A lone grizzled pirate quartermaster with a scarred face and a red head scarf rowing a small battered jolly boat across a calm sea toward the viewer, floating wreckage and broken spars around him, a pirate brigantine waiting in the distance, warm sunset light"
+  },
+  {
+    "name": "event-rumour-wreck",
+    "model": "flux",
+    "seed": 9503,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "The wreck of an old Spanish brig lying on her side on a coral reef in clear turquoise shallow water, her broken stern half sunk, a pirate ship's longboat beside the wreck with sailors hauling on a line, a diver surfacing holding up gold coins, bright tropical sunlight"
+  }
+]

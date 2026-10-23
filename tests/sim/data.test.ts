@@ -4,6 +4,7 @@ import { FITTING_IDS, FITTINGS } from '../../src/data/fittings';
 import { PLAYER_SHIPS, SHIP_UNLOCKS } from '../../src/data/ships';
 import { PORT_NAMES, PORT_TAGLINES, RECRUIT_NAMES, SEA_EVENTS, SECTORS } from '../../src/data/voyage';
 import { WEAPONS } from '../../src/data/weapons';
+import { VOYAGE_FLAGS } from '../../src/data/nemesis';
 import { MAX_GUNS, SYSTEM_CAP } from '../../src/sim/Run';
 import type { EventEffect, ShipDef, SystemId } from '../../src/sim/types';
 
@@ -121,7 +122,7 @@ describe('weapons, fittings, ports and names', () => {
 });
 
 describe('event story flags', () => {
-  const set = new Set(effects.map((x: EventEffect) => x.flag).filter(Boolean));
+  const set = new Set([...effects.map((x: EventEffect) => x.flag).filter(Boolean), ...VOYAGE_FLAGS]);
   it('every flag an event checks for, or clears, is one some event sets', () => {
     const used = SEA_EVENTS.flatMap((e) => [e.needs, ...e.choices.map((c) => c.needs)]).flatMap((n) => [n?.flag, n?.noFlag]);
     for (const f of [...used, ...effects.map((x) => x.clearFlag)].filter(Boolean)) expect(set.has(f), `${f} is never set`).toBe(true);

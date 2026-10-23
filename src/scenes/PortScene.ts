@@ -3,6 +3,7 @@ import { placeBackdrop } from '../render/art';
 import { ledgerOpen } from '../render/Ledger';
 import { harbourTerms, PortEnvoy } from '../render/PortEnvoy';
 import { HiringHall } from '../render/HiringHall';
+import { Tavern } from '../render/Tavern';
 import { TRAITS } from '../data/traits';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
@@ -62,6 +63,7 @@ export class PortScene extends Phaser.Scene {
   private readonly fns = new Map<string, () => void>();
   private envoy: PortEnvoy | null = null;
   private hall: HiringHall | null = null;
+  private tavern: Tavern | null = null;
 
   constructor() {
     super('Port');
@@ -71,6 +73,7 @@ export class PortScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     this.envoy = null;
     this.hall = null;
+    this.tavern = null;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
     playLoop(this, 'waves', 0.22);
     playLoop(this, 'creak', 0.2);
@@ -108,6 +111,9 @@ export class PortScene extends Phaser.Scene {
       tip: offered ? 'Gifts, your standing here, and work on offer.' : 'Gifts and your standing here.',
     });
     this.input.keyboard!.on('keydown-H', () => masters.press());
+    // The tavern, beside the harbour masters' door: rumours of the waters ahead, and dice.
+    const tavern = new Button(this, masters.x - 160, masters.y, 150, 32, 'Tavern', () => this.openTavern(), { size: 14, hint: 'T', tip: 'Rumours of the waters ahead, and a game of Bones.' });
+    this.input.keyboard!.on('keydown-T', () => tavern.press());
     const welcome = run.encounter.kind === 'port' ? (run.encounter.welcome ?? []) : [];
     if (welcome.length) this.say(welcome.join('  '));
     const leave = () => {
@@ -122,6 +128,13 @@ export class PortScene extends Phaser.Scene {
       if (fn) return fn();
       if (cmd.t === 'gift' && this.envoy) return this.envoy.gift();
       if (cmd.t === 'commission' && this.envoy) return this.envoy.take();
+      if (cmd.t === 'rumour' || cmd.t === 'dice') {
+        const gold = this.run.gold;
+        const out = applyVoyage(this.run, cmd);
+        playSfx(this, this.run.gold > gold ? 'coins' : 'click', 0.5);
+        this.tavern?.say(cmd.t === 'dice' && out.t === 'text' ? out.text : null);
+        return this.later();
+      }
       if (cmd.t === 'hire') {
         const who = applyVoyage(this.run, cmd);
         if (who.t === 'text' && who.text) {
@@ -146,20 +159,27 @@ export class PortScene extends Phaser.Scene {
       sellConsort: perform,
       gift: perform,
       commission: perform,
+      rumour: perform,
+      dice: perform,
       leavePort: leave,
     });
     const weigh = new Button(this, SCREEN.w / 2 - 130, SCREEN.h - 64, 260, 44, 'Weigh anchor →', () => voyage(this, { t: 'leavePort' }, `Weigh anchor and leave ${name}`), { size: 18, hint: 'Enter' });
-    this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !this.hall && !ledgerOpen(this) && weigh.press());
+    this.input.keyboard!.on('keydown-ENTER', () => !this.envoy && !this.hall && !this.tavern && !ledgerOpen(this) && weigh.press());
     this.rebuild();
   }
 
+  private openTavern(): void {
+    if (this.tavern || this.hall || this.envoy) return;
+    this.tavern = new Tavern(this, this.run, () => (this.tavern = null));
+  }
+
   private openHall(): void {
-    if (this.hall || this.envoy) return;
+    if (this.hall || this.envoy || this.tavern) return;
     this.hall = new HiringHall(this, this.run, () => (this.hall = null));
   }
 
   private openEnvoy(): void {
-    if (this.envoy) return;
+    if (this.envoy || this.hall || this.tavern) return;
     this.envoy = new PortEnvoy(this, this.run, () => this.later(), () => (this.envoy = null));
   }
 

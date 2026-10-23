@@ -4,10 +4,11 @@ import { CONSEQUENCE_EVENTS } from './consequences';
 import { DIPLOMACY_EVENTS } from './diplomacy';
 import { ENCOUNTER_EVENTS } from './encounters';
 import { LEGEND_EVENTS } from './legends';
+import { NEMESIS_EVENTS } from './nemesis';
 import { WEATHER_EVENTS } from './weather';
 
 /** Every event in the game. */
-export const SEA_EVENTS: SeaEventDef[] = [...ENCOUNTER_EVENTS, ...ABOARD_EVENTS, ...WEATHER_EVENTS, ...LEGEND_EVENTS, ...CONSEQUENCE_EVENTS, ...DIPLOMACY_EVENTS];
+export const SEA_EVENTS: SeaEventDef[] = [...ENCOUNTER_EVENTS, ...ABOARD_EVENTS, ...WEATHER_EVENTS, ...LEGEND_EVENTS, ...CONSEQUENCE_EVENTS, ...DIPLOMACY_EVENTS, ...NEMESIS_EVENTS];
 
 const BY_ID = new Map(SEA_EVENTS.map((e) => [e.id, e]));
 

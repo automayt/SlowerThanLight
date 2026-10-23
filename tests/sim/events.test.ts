@@ -7,11 +7,12 @@ import { FITTING_IDS } from '../../src/data/fittings';
 import { TRAIT_IDS } from '../../src/data/traits';
 import { PLAYER_SHIPS } from '../../src/data/ships';
 import type { EventEffect, EventNeeds, SeaEventDef } from '../../src/sim/types';
+import { VOYAGE_CHAIN_PAGES, VOYAGE_FLAGS } from '../../src/data/nemesis';
 
 const effects = (e: SeaEventDef): EventEffect[] => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect));
 const texts = (e: SeaEventDef): string[] => [e.text, ...(e.variants ?? []), ...e.choices.map((c) => c.label), ...effects(e).map((x) => x.text)];
 const SYSTEMS = ['helm', 'sails', 'guns', 'pumps', 'surgeon'];
-const flagsSet = new Set(SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.flag).filter(Boolean)));
+const flagsSet = new Set([...SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.flag).filter(Boolean)), ...VOYAGE_FLAGS]);
 
 /** A run in the middle of the voyage, rich, crewed, and with whatever an event or choice needs. */
 function richRun(seed: number, needs: (EventNeeds | undefined)[] = []): Run {
@@ -116,7 +117,7 @@ describe('event data', () => {
   }
 
   it('every chain page is reached from some event', () => {
-    const targets = new Set(SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.next)));
+    const targets = new Set([...SEA_EVENTS.flatMap((e) => effects(e).map((x) => x.next)), ...VOYAGE_CHAIN_PAGES]);
     for (const ev of SEA_EVENTS.filter((e) => e.pool === 'chain')) expect(targets.has(ev.id), ev.id).toBe(true);
   });
 });

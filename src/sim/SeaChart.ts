@@ -21,6 +21,14 @@ export interface SeaNode {
   to?: string;
   /** A lead the voyage's story has put here: the id of the event waiting at this mark. */
   story?: string;
+  /** Shortcuts through reefs and shoals: ids of nodes two columns on, reached in one risky jump. */
+  reef?: number[];
+  /** Silas Crane's Black Dog lies in wait here (a battle mark). */
+  nemesis?: boolean;
+  /** What a tavern rumour says waits at this unknown mark: an event id. */
+  rumour?: string;
+  /** A tavern rumour has told you what this sail is. */
+  scouted?: boolean;
 }
 
 export interface SeaChart {
@@ -89,7 +97,24 @@ export function generateChart(rng: Rng, opts: ChartOptions): SeaChart {
 
   for (let col = 0; col < last; col++) link(rng, cols[col], cols[col + 1]);
   assignKinds(rng, cols, opts);
+  addReefs(rng, cols);
   return { nodes, columns };
+}
+
+/** Chance of a reef shortcut from each column that has two columns of open sea after it. */
+export const REEF_CHANCE = 0.6;
+
+/**
+ * A few risky shortcuts across the shoals: from a mark to the nearest mark two columns on, skipping the column
+ * between. Never into the last column (the passages and the blockade are reached the long way).
+ */
+function addReefs(rng: Rng, cols: SeaNode[][]): void {
+  for (let col = 0; col + 2 < cols.length - 1; col++) {
+    if (!rng.chance(REEF_CHANCE)) continue;
+    const from = rng.pick(cols[col]);
+    const to = [...cols[col + 2]].sort((a, b) => Math.abs(a.y - from.y) - Math.abs(b.y - from.y))[0];
+    from.reef = [to.id];
+  }
 }
 
 /** Connect two columns (both sorted top to bottom) without crossings. */

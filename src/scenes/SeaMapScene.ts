@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { placeArt } from '../render/art';
 import { seaEvent } from '../data/voyage';
+import { enemy } from '../data/enemies';
+import { power } from '../data/powers';
+import { NEMESIS } from '../data/nemesis';
 import { playLoop, playSfx, stopLoop } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -24,6 +27,8 @@ const INK = 0x2a170a;
 const RED_INK = 0x8a1c1c;
 /** Clean parchment, for labels and notes laid over the chart. */
 const PAPER = 0xefe2bf;
+/** Shoal water: the ink of a reef shortcut. */
+const SHOAL_INK = 0x1d5a66;
 /** Rings around the seals you can sail to: gold, or red where the Navy will be waiting. */
 const RING = 0xb8860b;
 const RING_AMBUSH = 0xc0201a;
@@ -152,10 +157,26 @@ export class SeaMapScene extends Phaser.Scene {
       // A lead the story has put on the chart: a gilt ring, and the tale's name instead of "Unknown".
       const lead = node.story ? seaEvent(node.story) : null;
       if (lead) this.add.circle(x, y, NODE_R + 5).setStrokeStyle(3, 0xd8a531, 0.95).setDepth(2.1);
-      const label = lead ? lead.title : node.kind === 'port' || node.kind === 'start' || node.kind === 'exit' ? (node.name ?? style.label) : style.label;
+      // Silas Crane lies in wait: a ring of red ink, and his ship's name.
+      if (node.nemesis) this.add.circle(x, y, NODE_R + 5).setStrokeStyle(3, RED_INK, 0.95).setDepth(2.1);
+      // What a tavern rumour told you is here.
+      const heard = !lead && node.rumour ? seaEvent(node.rumour) : null;
+      const scouted = node.kind === 'battle' && node.scouted && node.enemy && !node.nemesis ? enemy(node.enemy).ship.className : null;
+      const label = node.nemesis
+        ? NEMESIS.ship
+        : lead
+          ? lead.title
+          : heard
+            ? heard.title
+            : scouted
+              ? scouted
+              : node.kind === 'port' || node.kind === 'start' || node.kind === 'exit'
+                ? (node.name ?? style.label)
+                : style.label;
       const big = node.kind === 'boss' || node.kind === 'exit' ? 6 : 0;
+      const ink = node.nemesis ? '#8a1c1c' : lead ? '#7a4a06' : heard || scouted ? '#1d4a66' : '#2a170a';
       // The name under the seal, on a scrap of clean parchment, kept inside the chart's frame.
-      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: lead ? '#7a4a06' : '#2a170a', fontStyle: lead ? 'bold italic' : 'italic' }).setDepth(2);
+      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: ink, fontStyle: lead || node.nemesis ? 'bold italic' : 'italic' }).setDepth(2);
       const inset = 16;
       name.setX(Phaser.Math.Clamp(x - name.width / 2, CHART.x + inset, CHART.x + CHART.w - inset - name.width));
       this.add
@@ -177,6 +198,14 @@ export class SeaMapScene extends Phaser.Scene {
         this.updateTip();
       });
       hit.on('pointerdown', () => this.chooseNode(node));
+    }
+    // Each shortcut through the shoals is named along its curve.
+    for (const n of run.chart.nodes) {
+      for (const id of n.reef ?? []) {
+        const at = this.reefCurve(n, nodeById(run.chart, id)).getPoint(0.5);
+        const tag = this.add.text(at.x, at.y, 'shoals', { fontFamily: TITLE_FONT, fontSize: '12px', color: '#1d5a66', fontStyle: 'bold italic' }).setOrigin(0.5).setDepth(1.95);
+        this.add.rectangle(tag.x, tag.y, tag.width + 8, tag.height, PAPER, 0.8).setDepth(1.9);
+      }
     }
     this.refreshChart();
     NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.chooseNode(this.reach[i])));
@@ -334,6 +363,18 @@ export class SeaMapScene extends Phaser.Scene {
         const open = n.id === run.nodeId && reach.has(m.id);
         g.lineStyle(sailed ? 3.5 : open ? 3 : 1.8, sailed ? RED_INK : INK, sailed ? 0.9 : open ? 0.9 : 0.35);
         g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+    }
+
+    // Shortcuts through the shoals: a dotted curve of shoal-ink, red once sailed.
+    for (const n of run.chart.nodes) {
+      for (const id of n.reef ?? []) {
+        const m = nodeById(run.chart, id);
+        const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
+        const open = n.id === run.nodeId && reach.has(m.id);
+        const pts = this.reefCurve(n, m).getPoints(28);
+        g.lineStyle(sailed ? 3.5 : open ? 3 : 2, sailed ? RED_INK : SHOAL_INK, sailed || open ? 0.95 : 0.55);
+        for (let i = 0; i + 1 < pts.length; i += sailed ? 1 : 2) g.lineBetween(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
       }
     }
 
@@ -507,6 +548,18 @@ export class SeaMapScene extends Phaser.Scene {
     if (note) return note;
     if (this.run.jumps === 0) return 'You slip out of Tortuga at dawn. Somewhere astern, a Royal Navy squadron has your scent. Three stretches of sea lie between you and freedom.';
     return this.run.node.kind === 'start' ? `${this.run.sectorDef.blurb}` : 'The chart is spread on the captain’s table.';
+  }
+
+  /** The curve a shoal shortcut is drawn along: bowed away from the nearest mark in the column it skips. */
+  private reefCurve(from: SeaNode, to: SeaNode): Phaser.Curves.QuadraticBezier {
+    const a = this.pos(from);
+    const b = this.pos(to);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const skipped = this.run.chart.nodes.filter((n) => n.col === from.col + 1).map((n) => this.pos(n));
+    const near = skipped.sort((p, q) => Math.abs(p.y - mid.y) - Math.abs(q.y - mid.y))[0];
+    const bow = near && near.y > mid.y ? -1 : 1;
+    const off = near ? Math.max(0, 46 - Math.abs(near.y - mid.y)) + 12 : 12;
+    return new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(a.x, a.y), new Phaser.Math.Vector2(mid.x, mid.y + bow * off * 2), new Phaser.Math.Vector2(b.x, b.y));
   }
 
   private pos(node: SeaNode): { x: number; y: number } {
@@ -694,16 +747,24 @@ export class SeaMapScene extends Phaser.Scene {
     const lines: string[] = [];
     const style = KIND_STYLE[n.kind];
     const lead = n.story ? seaEvent(n.story) : null;
-    lines.push(lead ? `${lead.title}: a lead to follow` : n.kind === 'port' ? `${n.name}: a friendly port` : n.kind === 'start' ? 'Tortuga' : style.label);
+    const heard = !lead && n.rumour ? seaEvent(n.rumour) : null;
+    const foe = n.kind === 'battle' && n.enemy ? enemy(n.enemy) : null;
+    if (n.nemesis) {
+      lines.push(`${NEMESIS.ship}: Silas Crane`);
+      lines.push(`Your old quartermaster, with a grudge. ${run.nemesisBounty()} gold on his head.`);
+      lines.push(run.nemesisFinal ? 'This time he fights to the end.' : 'He runs when beaten, and comes back tougher: cripple her sails.');
+    } else lines.push(lead ? `${lead.title}: a lead to follow` : heard ? `${heard.title}: so the tavern says` : n.kind === 'port' ? `${n.name}: a friendly port` : n.kind === 'start' ? 'Tortuga' : style.label);
     if (lead) lines.push('Something from earlier in the voyage waits here.');
-    if (n.kind === 'battle') lines.push('A ship. Prize or predator?');
-    if (n.kind === 'event' && !lead) lines.push('Something unusual on the horizon.');
+    if (heard) lines.push(n.rumour === 'rumour-wreck' ? 'A wreck an old salt marked for you. Her strongbox may still be aboard.' : 'A tale told in the tavern. It waits here, if it still can.');
+    if (n.kind === 'battle' && !n.nemesis) lines.push(n.scouted && foe ? `Scouted: a ${foe.ship.className.toLowerCase()} under ${power(foe.power).short}'s colours.` : 'A ship. Prize or predator?');
+    if (n.kind === 'event' && !lead && !heard) lines.push('Something unusual on the horizon.');
     if (n.kind === 'port') lines.push('Repair the hull, hire crew, rest and refit.');
     if (n.kind === 'empty') lines.push('Open sea. Time for repairs, if nothing happens aboard.');
     if (n.kind === 'boss') lines.push('HMS Relentless guards the channel to the open ocean. No running from this one.');
     if (n.kind === 'exit') lines.push(`A passage into ${n.name}. Tougher ships, richer prizes, and the fleet loses your trail for a while.`);
     const reachable = this.reach.includes(n);
     if (reachable && run.isLateral(n)) lines.push('Across the column: exploring costs a jump and a day’s provisions.');
+    if (reachable && run.isReef(n)) lines.push(`Through the shoals: skips a column, gaining on the fleet. ${Math.round(run.reefOdds() * 100)}% chance of a clean passage; otherwise a scraped hull, or aground (hull, mast and time).`);
     const sail = reachable ? run.pointOfSail(run.node, n) : 'beam';
     if (sail === 'foul') lines.push('Foul wind: a day lost beating to windward (an extra day’s provisions), and the fleet gains.');
     if (sail === 'fair') lines.push('Fair wind: you gain on the fleet.');

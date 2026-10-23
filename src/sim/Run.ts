@@ -6,6 +6,7 @@ import { captain, type CaptainDef } from '../data/captains';
 import { PORT_NAMES, PORT_SPECIALITY, RECRUIT_NAMES, SEA_EVENTS, SECTOR_ROUTE, seaEvent, sectorDef, type PortSpeciality } from '../data/voyage';
 import { WEAPONS, weapon } from '../data/weapons';
 import { POWER_IDS, portPower, power, relation } from '../data/powers';
+import { DICE_RIVALS, NEMESIS, NEMESIS_HAILS } from '../data/nemesis';
 import { Battle, type BattleOptions, type OutcomeKind } from './Battle';
 import { AGGRESSION, atLeast, BETRAYAL, describeShift, freshStanding, OUTCOME_STANDING, PORT_PRICE, shiftStanding, tierOf, type Standing } from './Diplomacy';
 import { Rng } from './rng';
@@ -168,6 +169,30 @@ const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-wes
 /** Chance that crossing open sea brings an incident aboard. */
 export const INCIDENT_CHANCE = 0.6;
 
+/**
+ * A shortcut through reefs or shoals skips a column. Odds of a clean passage (better with a navigator or a seasoned
+ * helmsman aboard); otherwise two times in three she scrapes, and the third she runs aground and loses time kedging off.
+ */
+export const REEF_CLEAN = 0.5;
+export const REEF_NAVIGATOR = 0.2;
+export const REEF_HELMSMAN = 0.15;
+export const REEF_SCRAPE = 3;
+export const REEF_AGROUND = 5;
+export const REEF_AGROUND_FLEET = 0.75;
+
+/** A round in a tavern buys what is known of the next few columns. */
+export const RUMOUR_PRICE = 10;
+export const RUMOUR_REACH = 3;
+export const RUMOUR_WRECK_CHANCE = 0.45;
+
+/**
+ * Bones, at a tavern table: roll two dice, then roll on or stand. Over fifteen is a bust. Your rival then rolls until
+ * he beats you or busts; a tie is a push. Even money, and exactly fifteen pays double. Played well, it is about even.
+ */
+export const DICE_TARGET = 15;
+export const DICE_STAKES = [10, 25, 50];
+export const DICE_HANDS = 3;
+
 export interface UpgradeOffer {
   id: UpgradeId;
   label: string;
@@ -229,6 +254,36 @@ export interface RunSave {
   sectorId?: string;
   wind?: number;
   captain?: string;
+  nemesis?: Nemesis;
+}
+
+/** Silas Crane, your old quartermaster with a grudge (data/nemesis.ts). */
+export interface Nemesis {
+  /** Times he got away, you ran, or you bought him off: each makes him tougher and his bounty richer. */
+  grudge: number;
+  /** Times you have met him. */
+  met: number;
+  /** How you last parted, for his greeting next time. */
+  last: 'first' | 'fled' | 'ran' | 'paid' | 'missed';
+  /** Sunk, taken or struck: he troubles you no more. */
+  done: boolean;
+}
+
+/** One hand of Bones. */
+export interface DiceHand {
+  stake: number;
+  you: number[];
+  rival: number[];
+  /** How it ended, once it has. */
+  result?: 'win' | 'perfect' | 'lose' | 'bust' | 'push';
+}
+
+/** The dice table in a port's tavern. */
+export interface DiceTable {
+  rival: string;
+  /** Hands played this visit. */
+  played: number;
+  hand: DiceHand | null;
 }
 
 /** Share of the enemy's hold you get to keep, by how the fight ended. */
@@ -297,6 +352,8 @@ export type Encounter =
       /** You started it with a ship that would have let you be; `betrayal` if she was a friend. */
       aggressor?: boolean;
       betrayal?: boolean;
+      /** Silas Crane's Black Dog. */
+      nemesis?: boolean;
     }
   | { kind: 'event'; event: string; actor?: string; actor2?: string; variant?: number }
   | {
@@ -313,6 +370,10 @@ export type Encounter =
       welcome?: string[];
       /** Sailors in the hiring hall, each with a background (and a price to match). */
       hands?: Candidate[];
+      /** What the tavern told you, once you have stood a round. */
+      rumours?: string[];
+      /** The tavern's dice table. */
+      dice?: DiceTable;
     }
   | { kind: 'empty'; text: string; title?: string }
   | { kind: 'start' };
@@ -421,6 +482,8 @@ export class Run {
   commission: Commission | null = null;
   /** What the last jump cost you on short rations, for the chart to report (not saved). */
   hungerNote = '';
+  /** Silas Crane, and how things stand between you. */
+  nemesis: Nemesis = { grudge: 0, met: 0, last: 'first', done: false };
   private usedNames = new Set<string>();
 
   /** Who commands, and the gift they bring (data/captains.ts). */
@@ -439,6 +502,7 @@ export class Run {
     this.fit = { hull: this.def.hull, hands: this.def.hands, systems: { ...this.def.systems }, guns: this.def.guns.map((g) => ({ ...g })) };
     this.chart = this.makeChart(0);
     this.wind = this.rng.next() * 2 * Math.PI;
+    this.placeNemesis();
     // The captain's gift to the start of the voyage.
     const c = this.captain;
     this.gold += c.gold ?? 0;
@@ -503,7 +567,7 @@ export class Run {
    */
   get renown(): number {
     const allies = (Object.keys(this.standing) as PowerId[]).filter((p) => this.tier(p) === 'allied').length;
-    return Math.round(this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.status === 'won' ? 40 : 0));
+    return Math.round(this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.nemesis.done ? 15 : 0) + (this.status === 'won' ? 40 : 0));
   }
 
   /** Progress through the voyage on the old single-chart scale (0..7), which event conditions are written against. */
@@ -573,7 +637,34 @@ export class Run {
       const i = column.indexOf(here);
       for (const n of [column[i - 1], column[i + 1]]) if (n && !this.visited.includes(n.id)) out.push(n);
     }
+    for (const id of here.reef ?? []) if (!this.visited.includes(id)) out.push(nodeById(this.chart, id));
     return out;
+  }
+
+  /** Whether a reachable node lies through the shoals, skipping a column. */
+  isReef(node: SeaNode): boolean {
+    return !!this.node.reef?.includes(node.id);
+  }
+
+  /** Odds of a clean passage through the shoals. */
+  reefOdds(): number {
+    const helmsman = this.condition.crew.some((m) => skillRank(m.xp, 'seamanship') >= 1);
+    return Math.min(0.85, REEF_CLEAN + (this.hasTrait('navigator') ? REEF_NAVIGATOR : 0) + (helmsman ? REEF_HELMSMAN : 0));
+  }
+
+  /** Thread the shoals: a clean passage, a scraped hull, or aground. Returns what happened. */
+  private runReef(): string {
+    const c = this.condition;
+    if (this.rng.chance(this.reefOdds())) return 'You thread the shoals with a leadsman in the chains, and come out a day ahead.';
+    if (this.rng.chance(2 / 3)) {
+      c.hull = Math.max(1, c.hull - REEF_SCRAPE);
+      return `Coral grinds along the keel as you clear the shoals (−${REEF_SCRAPE} hull).`;
+    }
+    c.hull = Math.max(1, c.hull - REEF_AGROUND);
+    const sails = this.fit.systems.sails ?? 0;
+    if (sails) this.setDamage('sails', Math.min(sails, (c.damage.sails ?? 0) + 1));
+    this.navy += REEF_AGROUND_FLEET;
+    return `Aground on the reef! A day kedging her off, the hull stove in (−${REEF_AGROUND}) and the mainmast sprung, while the fleet closes.`;
   }
 
   /** Whether a reachable node is across in the same column rather than onward. */
@@ -592,6 +683,7 @@ export class Run {
     if (!node) throw new Error(`Cannot sail to node ${id} from ${this.nodeId}`);
     const overrun = this.willBeOverrun(node);
     const sail = this.pointOfSail(this.node, node);
+    const reef = this.isReef(node);
     this.nodeId = id;
     this.jumps++;
     this.visited.push(id);
@@ -604,7 +696,8 @@ export class Run {
     this.runningRepairs(fed);
     this.navy += this.navySpeed + (sail === 'foul' ? FOUL_FLEET : sail === 'fair' ? -FAIR_FLEET : 0);
     const windNote = foulDay ? 'A foul wind: a day lost beating to windward, and a day’s provisions with it.' : '';
-    this.hungerNote = [windNote, hunger, this.hungerNote].filter((x, i, all) => x && all.indexOf(x) === i).join(' ');
+    const reefNote = reef ? this.runReef() : '';
+    this.hungerNote = [reefNote, windNote, hunger, this.hungerNote].filter((x, i, all) => x && all.indexOf(x) === i).join(' ');
     this.wind += (this.rng.next() - 0.5) * WIND_SHIFT;
 
     if (node.kind === 'exit') return this.enterSector(this.sector + 1, node.to);
@@ -622,6 +715,7 @@ export class Run {
     }
     switch (node.kind) {
       case 'battle': {
+        if (node.nemesis && !this.nemesis.done) return this.meetNemesis(node);
         const foe = enemy(node.enemy ?? 'cutter');
         const text = this.rng.pick([foe.sighting, ...(foe.sightings ?? [])]);
         return this.begin({ kind: 'battle', enemy: foe.id, name: this.shipName(foe), boss: false, ambush: false, text, intent: this.intentOf(foe) });
@@ -630,6 +724,9 @@ export class Run {
         // A lead marked on the chart, if its tale can still be told; otherwise whatever the sea brings.
         const lead = node.story ? seaEvent(node.story) : null;
         if (lead && this.unmet(lead.needs) === null && !this.seenEvents.includes(lead.id)) return this.startEvent(lead);
+        // What the tavern said would be here, if it still can be.
+        const heard = node.rumour ? seaEvent(node.rumour) : null;
+        if (heard && (heard.pool === 'chain' || (this.unmet(heard.needs) === null && !(heard.unique && this.seenEvents.includes(heard.id))))) return this.startEvent(heard);
         const ev = this.drawEvent('encounter') ?? this.drawEvent('incident');
         if (ev) return this.startEvent(ev);
         break;
@@ -675,6 +772,8 @@ export class Run {
     const gap = this.node.col - this.navy;
     const straight = (this.chart.columns - 1) * Math.max(0, this.navySpeed - 1);
     const lost = Math.max(0, fresh - gap - straight);
+    // Crane waited for you and you sailed past: he will say so.
+    if (this.nemesis.met > 0 && this.chart.nodes.some((n) => n.nemesis)) this.nemesis.last = 'missed';
     this.sector = sector;
     this.sectorId = id;
     this.chart = this.makeChart(sector, id);
@@ -683,6 +782,7 @@ export class Run {
     this.navy = NAVY_START + SECTOR_CARRY * lost;
     this.wind = this.rng.next() * 2 * Math.PI;
     this.placeLeads();
+    this.placeNemesis();
     const def = this.sectorDef;
     const fleet = lost >= 1 ? 'The fleet is hard on your heels: its topsails were in sight as you cleared the passage.' : 'The fleet has lost your trail for now. It will find it again.';
     return this.begin({ kind: 'empty', title: def.name, text: `You slip through into ${def.name}. ${def.blurb} ${fleet}` });
@@ -746,15 +846,91 @@ export class Run {
   }
 
   /** The ship being hailed, and how she greeted you. */
-  private get hailing(): { foe: EnemyDef; intent: Intent; name: string } {
+  private get hailing(): { foe: EnemyDef; intent: Intent; name: string; nemesis: boolean } {
     if (this.status !== 'hail' || this.encounter.kind !== 'battle' || !this.encounter.intent) throw new Error('No ship to hail');
-    return { foe: enemy(this.encounter.enemy), intent: this.encounter.intent, name: this.encounter.name };
+    return { foe: enemy(this.encounter.enemy), intent: this.encounter.intent, name: this.encounter.name, nemesis: !!this.encounter.nemesis };
+  }
+
+  // --- Silas Crane ------------------------------------------------------------------
+
+  /** The kind of ship Crane sails in this sector. */
+  get nemesisKind(): string {
+    return NEMESIS.kinds[Math.min(this.sector, NEMESIS.kinds.length - 1)];
+  }
+
+  /** The price on Crane's head, here and now. */
+  nemesisBounty(): number {
+    return Math.round((NEMESIS.bounty + NEMESIS.bountyPerGrudge * this.nemesis.grudge) * (1 + SECTOR_PLUNDER * this.sector));
+  }
+
+  /** In the last sector Crane neither runs nor strikes: this is the end of it, one way or the other. */
+  get nemesisFinal(): boolean {
+    return this.sector >= SECTOR_ROUTE.length - 1;
+  }
+
+  /** Put the Black Dog on a battle mark in the middle of this chart (or on quiet water, if there is no battle mark there). */
+  private placeNemesis(): void {
+    if (this.nemesis.done) return;
+    const last = this.chart.columns - 1;
+    const mid = this.chart.nodes.filter((n) => n.col >= 2 && n.col <= last - 2 && !n.story);
+    const battles = mid.filter((n) => n.kind === 'battle');
+    const spots = battles.length ? battles : mid.filter((n) => n.kind === 'empty' || n.kind === 'event');
+    if (!spots.length) return;
+    const spot = this.rng.pick(spots);
+    spot.kind = 'battle';
+    spot.enemy = this.nemesisKind;
+    spot.nemesis = true;
+    delete spot.rumour;
+  }
+
+  /** The Black Dog, waiting for you. */
+  private meetNemesis(node: SeaNode): Encounter {
+    delete node.nemesis;
+    const n = this.nemesis;
+    n.met++;
+    const foe = enemy(this.nemesisKind);
+    this.usedNames.add(NEMESIS.ship);
+    const text = NEMESIS_HAILS[n.met === 1 ? 'first' : n.last];
+    return this.begin({ kind: 'battle', enemy: foe.id, name: NEMESIS.ship, boss: false, ambush: false, text, intent: 'hostile', nemesis: true });
+  }
+
+  /** How a fight with Crane ends between you. */
+  private settleNemesis(kind: OutcomeKind, won: boolean): string[] {
+    const n = this.nemesis;
+    if (won) {
+      n.done = true;
+      const bounty = this.nemesisBounty();
+      this.gold += bounty;
+      this.plunderTaken += bounty;
+      this.flags.add('crane-dead');
+      this.placeLeads();
+      const how =
+        kind === 'captured'
+          ? 'Crane is dragged up from the cable tier in irons, spitting. The Governor will pay to see him dance.'
+          : kind === 'surrender'
+            ? 'Crane hauls down his own colours, white with rage, and hands you his sword hilt first.'
+            : `${NEMESIS.ship} goes down with Silas Crane still cursing you from her quarterdeck.`;
+      return [how, `The price on his head: +${bounty} gold.`];
+    }
+    if (kind === 'enemyEscaped' || kind === 'escaped') {
+      n.grudge++;
+      n.last = kind === 'escaped' ? 'ran' : 'fled';
+      this.flags.add('crane-fled');
+      this.placeLeads();
+      return [
+        kind === 'escaped'
+          ? 'Crane’s laughter follows you over the water. He will be back, and bolder.'
+          : '"This isn’t over!" Crane bellows from the taffrail as the Black Dog runs. He will be back, better found, with a fatter price on his head.',
+      ];
+    }
+    return [];
   }
 
   /** How she answers your colours, in a line. */
   hailText(): string {
-    const { foe, intent } = this.hailing;
+    const { foe, intent, nemesis } = this.hailing;
     const flag = power(foe.power);
+    if (nemesis) return `Crane wants your ship and your hide. There is ${this.nemesisBounty()} gold on his head${this.nemesisFinal ? ', and this time he will not run.' : '. He runs when he is losing: cripple her sails, or he gets away.'}`;
     switch (intent) {
       case 'hostile':
         return this.tier(foe.power) === 'wary'
@@ -776,7 +952,8 @@ export class Run {
 
   /** What a bribe to let you pass costs. */
   bribePrice(): number {
-    const { foe } = this.hailing;
+    const { foe, nemesis } = this.hailing;
+    if (nemesis) return Math.round((20 + 15 * this.sector) * NEMESIS.bribe * (this.captain.bribe ?? 1));
     return Math.round((20 + 15 * this.sector) * (this.tier(foe.power) === 'hostile' ? 1.5 : 1) * (this.captain.bribe ?? 1));
   }
 
@@ -806,6 +983,12 @@ export class Run {
     const flag = power(foe.power);
     const out: HailOption[] = [];
     const add = (o: Omit<HailOption, 'available'>) => out.push({ ...o, available: !o.blocker });
+    if (this.hailing.nemesis) {
+      add({ id: 'attack', label: 'Run out the guns', detail: this.nemesisFinal ? 'Finish it.' : 'Settle it. Cripple her sails, or he slips away.', fight: 'yes' });
+      const cost = this.bribePrice();
+      add({ id: 'bribe', label: 'Pay him to sheer off', detail: 'He takes the gold and laughs. He will be back, and he will remember the price.', cost, fight: 'no', blocker: this.gold < cost ? `needs ${cost} gold` : undefined });
+      return out;
+    }
     if (intent === 'commodore') {
       add({ id: 'pardon', label: 'Accept the King’s pardon', detail: 'Strike your colours, swear the oath and go home free. The voyage ends.', fight: 'no' });
       add({ id: 'attack', label: 'Refuse, and fight', detail: 'Break the blockade the hard way.', fight: 'yes' });
@@ -862,6 +1045,11 @@ export class Run {
       case 'bribe': {
         const cost = this.bribePrice();
         this.gold -= cost;
+        if (this.hailing.nemesis) {
+          this.nemesis.grudge++;
+          this.nemesis.last = 'paid';
+          return pass('Crane weighs the purse in his hand and grins. "Till next time, Captain." The Black Dog bears away.', [`−${cost} gold`]);
+        }
         return pass(`Her captain pockets ${cost} gold and finds something interesting on the far horizon.`, [`−${cost} gold`, ...this.shift(p, 2, false)]);
       }
       case 'colours':
@@ -926,8 +1114,12 @@ export class Run {
     if (this.status !== 'battle' || this.encounter.kind !== 'battle') throw new Error('No battle to start');
     const foe = this.currentEnemy();
     // Deeper sectors field better-found ships; the blockade frigate has her own fit.
-    const ship = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : this.sector);
-    const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull);
+    const nemesis = !!this.encounter.nemesis;
+    const scaled = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : this.sector);
+    // Crane at the helm, and more timber for every time he got away.
+    const ship = nemesis ? { ...scaled, crew: scaled.crew.map((c, i) => (i === 0 ? { ...c, name: `Captain ${NEMESIS.captain}` } : c)) } : scaled;
+    const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull * (nemesis ? 1 + NEMESIS.hullPerGrudge * this.nemesis.grudge : 1));
+    const ai = nemesis ? { ...foe.ai, fleeAt: this.nemesisFinal ? 0 : NEMESIS.fleeAt, surrenderChance: this.nemesisFinal ? 0 : 0.1 } : foe.ai;
     // The Brethren's sloops have already been at the blockade frigate.
     const aided = this.encounter.boss && this.tier('brethren') === 'allied';
     return {
@@ -941,7 +1133,7 @@ export class Run {
         ],
         seed: this.rng.int(2 ** 31),
         // A fearsome figurehead makes a wavering captain strike sooner.
-        enemyAI: this.has('figurehead') && foe.ai.surrenderChance > 0 ? { ...foe.ai, surrenderChance: Math.min(1, foe.ai.surrenderChance + 0.1) } : foe.ai,
+        enemyAI: this.has('figurehead') && ai.surrenderChance > 0 ? { ...ai, surrenderChance: Math.min(1, ai.surrenderChance + 0.1) } : ai,
         playerCondition: this.condition,
         allowEscape: !this.encounter.boss,
         boss: this.encounter.boss,
@@ -992,9 +1184,10 @@ export class Run {
       lines.push('She will raise the alarm. The fleet closes in.');
     }
 
+    if (enc.nemesis) lines.push(...this.settleNemesis(o.kind, o.won));
     if (!enc.boss) {
-      // Her flag remembers how you treated her, and its friends and enemies hear of it.
-      const d = (OUTCOME_STANDING[o.kind] ?? 0) - (enc.aggressor ? (enc.betrayal ? BETRAYAL : AGGRESSION) : 0);
+      // Her flag remembers how you treated her, and its friends and enemies hear of it (Crane's quarrel is his own).
+      const d = enc.nemesis ? 0 : (OUTCOME_STANDING[o.kind] ?? 0) - (enc.aggressor ? (enc.betrayal ? BETRAYAL : AGGRESSION) : 0);
       if (d) lines.push(...this.shift(foe.power, d, true));
       const job = this.commission;
       if (o.won && job?.kind === 'hunt' && job.target === foe.power) lines.push(...this.fulfil(job));
@@ -1125,9 +1318,9 @@ export class Run {
    * Pick an event that fits the voyage right now: right pool, conditions met, not already seen this voyage
    * if anything fresh is left, and never a unique one twice. Rarer events are drawn less often.
    */
-  drawEvent(pool: EventPool): SeaEventDef | null {
+  drawEvent(pool: EventPool, exclude?: Set<string>): SeaEventDef | null {
     const ok = SEA_EVENTS.filter(
-      (e) => (e.pool ?? 'encounter') === pool && this.unmet(e.needs) === null && !(e.unique && this.seenEvents.includes(e.id)),
+      (e) => (e.pool ?? 'encounter') === pool && this.unmet(e.needs) === null && !(e.unique && this.seenEvents.includes(e.id)) && !exclude?.has(e.id),
     );
     const fresh = ok.filter((e) => !this.seenEvents.includes(e.id));
     const list = fresh.length ? fresh : ok;
@@ -1450,6 +1643,7 @@ export class Run {
     this.begin(enc);
     enc.fittings = this.stockFittings();
     enc.hands = this.hiringHall();
+    enc.dice = { rival: DICE_RIVALS[name] ?? 'a one-eyed stranger', played: 0, hand: null };
     // Foundries and arsenals stock more guns than the chart's armoury list: one more, or the heaviest.
     const special = this.speciality;
     const extra = special === 'heavy' ? ['pdr18', 'carronade'] : special === 'armoury' ? ARMOURY.filter((id) => !stock.includes(id)) : [];
@@ -1541,6 +1735,134 @@ export class Run {
 
   leavePort(): void {
     if (this.status === 'port') this.status = 'chart';
+  }
+
+  // --- Tavern: rumours and dice ---------------------------------------------------
+
+  /** What a round for the house costs here. */
+  rumourPrice(): number {
+    return this.price(RUMOUR_PRICE);
+  }
+
+  canBuyRumour(): boolean {
+    return this.inPort && this.encounter.kind === 'port' && !this.encounter.rumours && !this.portFeud && this.gold >= this.rumourPrice();
+  }
+
+  /**
+   * Stand a round and listen: sails in the next few columns are named for what they are, unknown waters for the tale
+   * waiting there, and now and then an old salt marks a wreck on your chart. Once a visit. Returns what you heard.
+   */
+  buyRumour(): string[] {
+    if (!this.canBuyRumour() || this.encounter.kind !== 'port') return [];
+    const price = this.rumourPrice();
+    this.gold -= price;
+    const here = this.node.col;
+    const ahead = this.chart.nodes.filter((n) => n.col > here && n.col <= here + RUMOUR_REACH);
+    const taken = new Set(this.chart.nodes.map((n) => n.rumour).filter((x): x is string => !!x));
+    const sails: string[] = [];
+    const tales: string[] = [];
+    for (const n of ahead) {
+      if (n.kind === 'battle' && !n.nemesis && n.enemy && !n.scouted) {
+        n.scouted = true;
+        sails.push(enemy(n.enemy).ship.className.toLowerCase());
+      }
+      if (n.kind === 'event' && !n.story && !n.rumour) {
+        const ev = this.drawEvent('encounter', taken);
+        if (ev) {
+          n.rumour = ev.id;
+          taken.add(ev.id);
+          tales.push(ev.title);
+        }
+      }
+    }
+    const lines = [`You stand a round (−${price} gold), and the talk turns to the waters ahead.`];
+    if (sails.length) lines.push(`Sails seen: ${sails.join(', ')}.`);
+    if (tales.length) lines.push(`Tales told: ${tales.join('; ')}.`);
+    const open = ahead.filter((n) => n.kind === 'empty' && !n.story);
+    if (open.length && this.rng.chance(RUMOUR_WRECK_CHANCE)) {
+      const w = this.rng.pick(open);
+      w.kind = 'event';
+      w.rumour = 'rumour-wreck';
+      lines.push('An old salt, well into his cups, marks a Spanish wreck on your chart and swears her strongbox is still aboard.');
+    }
+    if (!this.nemesis.done && ahead.some((n) => n.nemesis)) lines.push(`And Silas Crane has been in, asking after you. ${NEMESIS.ship} is cruising the waters ahead.`);
+    if (lines.length === 1) lines.push('Nobody knows anything worth the rum.');
+    this.encounter.rumours = lines;
+    return lines;
+  }
+
+  /** This port's dice table (set up on the way in; made fresh for a save from before there were tables). */
+  get diceTable(): DiceTable | null {
+    if (this.encounter.kind !== 'port') return null;
+    return (this.encounter.dice ??= { rival: DICE_RIVALS[this.encounter.name] ?? 'a one-eyed stranger', played: 0, hand: null });
+  }
+
+  /** Whether a dice move can be made now: sit down with a stake, roll again, or stand. */
+  canDice(act: 'stake' | 'roll' | 'stand', stake = 0): boolean {
+    const t = this.inPort ? this.diceTable : null;
+    if (!t) return false;
+    const live = !!t.hand && !t.hand.result;
+    if (act !== 'stake') return live;
+    return !live && t.played < DICE_HANDS && DICE_STAKES.includes(stake) && this.gold >= stake;
+  }
+
+  /** Make a dice move. Returns what happened, in a line. */
+  dice(act: 'stake' | 'roll' | 'stand', stake = 0): string | null {
+    if (!this.canDice(act, stake)) return null;
+    const t = this.diceTable!;
+    if (act === 'stake') {
+      this.gold -= stake;
+      t.played++;
+      t.hand = { stake, you: [this.die(), this.die()], rival: [] };
+      return `You put down ${stake} gold and roll ${t.hand.you.join(' and ')}: ${diceTotal(t.hand.you)}.`;
+    }
+    const h = t.hand!;
+    if (act === 'roll') {
+      const die = this.die();
+      h.you.push(die);
+      const total = diceTotal(h.you);
+      if (total > DICE_TARGET) {
+        h.result = 'bust';
+        return `A ${die}: ${total}. Bust! ${t.rival} sweeps up your ${h.stake} gold.`;
+      }
+      // Exactly fifteen: nothing to gain by rolling on.
+      if (total === DICE_TARGET) return `A ${die}: fifteen! ${this.standDice(t, h)}`;
+      return `A ${die}: ${total}.`;
+    }
+    return this.standDice(t, h);
+  }
+
+  private die(): number {
+    return 1 + this.rng.int(6);
+  }
+
+  /** You stand: your rival rolls until he beats you or busts. */
+  private standDice(t: DiceTable, h: DiceHand): string {
+    const you = diceTotal(h.you);
+    h.rival = [this.die(), this.die()];
+    while (diceTotal(h.rival) < you) h.rival.push(this.die());
+    const his = diceTotal(h.rival);
+    const rolled = `${t.rival} rolls ${h.rival.join(', ')}: ${his}.`;
+    if (his > DICE_TARGET) {
+      const perfect = you === DICE_TARGET;
+      h.result = perfect ? 'perfect' : 'win';
+      const won = h.stake * (perfect ? 2 : 1);
+      this.gold += h.stake + won;
+      // A rival cleaned out by a perfect hand may pay in paper.
+      const map = perfect && !this.flags.has('map-half') && !this.flags.has('map-whole') && !this.flags.has('treasure');
+      if (map) {
+        this.flags.add('map-half');
+        this.placeLeads();
+      }
+      return `${rolled} Bust! You win ${won} gold.${map ? ` Short of coin, ${t.rival} throws in half of an old sea chart.` : ''}`;
+    }
+    if (his === you) {
+      h.result = 'push';
+      this.gold += h.stake;
+      return `${rolled} A tie: stakes back.`;
+    }
+    h.result = 'lose';
+    return `${rolled} He beats you, and takes your ${h.stake} gold.`;
   }
 
   // --- Chandler: provisions and fittings ------------------------------------------
@@ -1723,6 +2045,7 @@ export class Run {
       sectorId: this.sectorId,
       wind: this.wind,
       captain: this.captain.id,
+      nemesis: this.nemesis,
     });
   }
 
@@ -1763,6 +2086,7 @@ export class Run {
     run.commission = s.commission ?? null;
     run.recent = s.recent ?? [];
     run.wind = s.wind ?? Math.PI;
+    run.nemesis = s.nemesis ?? { grudge: 0, met: 0, last: 'first', done: false };
     return run;
   }
 }
@@ -1788,6 +2112,11 @@ export function describeCommission(c: Commission): string {
   return c.kind === 'hunt'
     ? `Take or sink a ship of ${power(c.target!).short} for ${power(c.patron).short}: ${c.gold} gold.`
     : `Carry ${power(c.patron).short}’s letters from ${c.port} to any other port: ${c.gold} gold.`;
+}
+
+/** What a hand of dice adds up to. */
+export function diceTotal(dice: number[]): number {
+  return dice.reduce((a, b) => a + b, 0);
 }
 
 /** A sailor's rank in a skill from their record (0, 1 Veteran, 2 Expert). */

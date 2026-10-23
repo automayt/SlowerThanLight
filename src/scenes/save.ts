@@ -62,6 +62,7 @@ function checkRun(run: Run): void {
     if (node.enemy) enemy(node.enemy);
     for (const id of node.stock ?? []) weapon(id);
     if (node.story) seaEvent(node.story);
+    if (node.rumour) seaEvent(node.rumour);
   }
   if (run.encounter.kind === 'port') {
     for (const id of run.encounter.stock) weapon(id);

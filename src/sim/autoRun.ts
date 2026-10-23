@@ -1,5 +1,5 @@
 import { STEP, type Battle } from './Battle';
-import { Run, type BattleReport, type HailId, type UpgradeId } from './Run';
+import { diceTotal, Run, type BattleReport, type HailId, type UpgradeId } from './Run';
 import type { SystemId } from './types';
 
 export interface AutoRunOptions {
@@ -49,6 +49,11 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
         (run.isLateral(n) ? (n.kind === 'port' && (hurt || hungry) ? 1 : -4) : 0) +
         (n.kind === 'port' && (hurt || hungry) ? 5 : 0) +
         (n.kind === 'battle' && hurt ? -2 : 0) +
+        // Crane is a hard fight: leave him be when hurt. A wreck from a tavern rumour is worth the detour.
+        (n.nemesis && hurt ? -3 : 0) +
+        (n.rumour === 'rumour-wreck' ? 1 : 0) +
+        // The shoals are worth the risk with a sound hull, not with a battered one.
+        (run.isReef(n) ? (run.condition.hull >= run.fit.hull * 0.7 ? 0.5 : -3) : 0) +
         // Keep out of a foul wind, take a fair one.
         ({ foul: -1.5, beam: 0, fair: 0.5 } as const)[run.pointOfSail(run.node, n)] +
         run.rng.next();
@@ -98,6 +103,12 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
       if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
       // Victuals first: enough for the rest of the sector and a little over.
       while (run.provisions < 10 && run.buyProvisions(1));
+      // A round for the house when the purse allows, and a careful hand of Bones when it is fat.
+      if (run.gold > 60) run.buyRumour();
+      if (run.gold > 80 && run.dice('stake', 10)) {
+        while (run.canDice('roll') && diceTotal(run.diceTable!.hand!.you) < 13) run.dice('roll');
+        run.dice('stand');
+      }
       if (opts.diplomacy) {
         run.takeCommission();
         if (run.gold > 120) run.gift();
