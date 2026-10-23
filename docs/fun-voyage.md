@@ -62,3 +62,12 @@ What feels flat:
 - Every new choice is a `VoyageCommand` (`rumour`, `dice`), replays deterministically, and all new state sits in
   optional `RunSave` fields or in the saved chart and port encounter.
 - `autoRun` buys rumours, plays a careful hand of Bones, weighs reefs by hull, and fights Crane like any ship.
+
+## Balance (`npx tsx scripts/balance.ts 160 voyages`, 40 voyages per ship and captain)
+
+- Before: mean win 50.4% across ships and captains (range 23–75%).
+- After: mean win 48.9% (range 20–75%).
+- AutoRun meets Crane in about half of all voyages and usually beats him on the first meeting. He dies with
+  about 6% of voyages.
+- He runs at 55% hull, but escaping takes him a while, so a determined captain can catch him. He only gets
+  heavier guns by escaping (scaled by `min(sector, grudge)`), and +10% hull for each escape.

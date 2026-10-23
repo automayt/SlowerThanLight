@@ -1115,7 +1115,8 @@ export class Run {
     const foe = this.currentEnemy();
     // Deeper sectors field better-found ships; the blockade frigate has her own fit.
     const nemesis = !!this.encounter.nemesis;
-    const scaled = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : this.sector);
+    // Crane refits only with what he gains by getting away from you: heavier guns for each escape, up to the sector's.
+    const scaled = scaleEnemy(foe.ship, this.encounter.boss ? BOSS_TIER : nemesis ? Math.min(this.sector, this.nemesis.grudge) : this.sector);
     // Crane at the helm, and more timber for every time he got away.
     const ship = nemesis ? { ...scaled, crew: scaled.crew.map((c, i) => (i === 0 ? { ...c, name: `Captain ${NEMESIS.captain}` } : c)) } : scaled;
     const hull = Math.round(ship.hull * DIFFICULTY[this.difficulty].enemyHull * (nemesis ? 1 + NEMESIS.hullPerGrudge * this.nemesis.grudge : 1));
