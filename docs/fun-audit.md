@@ -33,3 +33,28 @@ The numbers come from headless AI voyages. `npx tsx scripts/audit.ts 30` gives 4
 6. **A fifth ship as a late renown unlock.** *Fun:* a long-term goal. *Cost:* high, because it needs portrait art, a layout and balance passes. Deferred.
 
 Items 1–4 are implemented on branch `fun-audit`. Before-and-after numbers are at the end of this file.
+
+## What was built, and the numbers after
+
+- **Item fixes** (`src/data/weapons.ts`, `src/data/fittings.ts`, plus spars and lockers wired in `Run`):
+  - The mortar went from −14 to **−1** in the free-gun test, so it is no longer a trap.
+  - Lockers went from +0.6 to **+7.2**.
+  - Gun Drill is still the best fitting (+12, down from +16), but now costs 85.
+  - The swivel nerf barely moved its free-gun number (+26 → +23). The test shows the real driver is a fourth gun that needs no hands: even a 9-pdr scores +18. The swivel now costs more than the 9-pdr.
+  - The 18-pdr stays at −10 for the AI, because it needs gun-deck refits first. Players can plan for that; the AI does not.
+- **Rare fittings** (beyond sector 1, a 25% chance per port and 50% in Bridgetown; each replaces one ordinary offer):
+  - Live-Oak Doubling (+2): light balls glance off her sides, but −5% evasion.
+  - The Red Flag (+8): +30% melee and enemy guns load 10% slower, but no ship will strike to you.
+  - Double-Shotted Guns (+7): guns load 20% faster, but chain and grape load 25% slower.
+  - New common fitting, Shot Furnace: hot shot loads 30% faster. It stacks with lockers and drill. The AI never uses hot shot, so headless runs score it 0.
+- **Hardships** (`src/data/challenges.ts`, a picker on ship select, H key): The Admiralty's Wrath (+30%), An Empty Purse (+15%), Short Rations (+20%), and A Leaky Old Tub (+30%). The shares add together. With none chosen, the voyage is unchanged.
+- **Ship's log** (`src/sim/chronicle.ts`, `Run.log`, the right-hand column of the voyage-end screen): the blockade, richest prize, closest call, hottest broadsides, longest fight, prizes in company, rare finds and battle record.
+
+**Voyage win rates** (`npm run balance 200 voyages`, 50 voyages per cell):
+
+| | Before | After |
+|---|---|---|
+| Mean of the 20 ship × style cells | 51.3% | 53.1% |
+| Range | 22–76% | 22–84% |
+
+The Sea Wolf boarder rose from 76% to 84%, about 1.4 standard deviations at 50 runs. Watch it. All other cells moved within noise.

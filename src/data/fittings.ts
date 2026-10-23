@@ -63,7 +63,7 @@ export const FITTINGS: Record<string, FittingDef> = {
   oak: {
     id: 'oak',
     name: 'Live-Oak Doubling',
-    short: 'Rare · light balls glance off · −5% evasion',
+    short: 'Rare · light balls glance off; −5% evasion',
     blurb: 'A second skin of Carolina live oak: balls from light guns (1 damage) often glance off her sides. She sits deep and slow: −5% evasion.',
     price: 90,
     rare: true,
@@ -72,7 +72,7 @@ export const FITTINGS: Record<string, FittingDef> = {
   redflag: {
     id: 'redflag',
     name: 'The Red Flag',
-    short: 'Rare · crew fight 30% harder, foes shaken · none will strike',
+    short: 'Rare · +30% melee, foes shaken; none strike',
     blurb: 'No quarter asked or given. Your crew fight 30% harder hand to hand and enemy gun crews load 10% slower in dread of you, but no ship will strike her colours to you: take her by boarding, or sink her.',
     price: 55,
     rare: true,
@@ -81,7 +81,7 @@ export const FITTINGS: Record<string, FittingDef> = {
   doubleshot: {
     id: 'doubleshot',
     name: 'Double-Shotted Guns',
-    short: 'Rare · guns load 20% faster · chain, grape 25% slower',
+    short: 'Rare · guns 20% faster; chain, grape slower',
     blurb: 'Two balls and a double charge in every gun, by a gunner who learned his trade at Malaga: every gun loads 20% faster, but fiddly chain and grape load 25% slower.',
     price: 100,
     rare: true,

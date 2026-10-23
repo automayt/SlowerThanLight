@@ -1621,9 +1621,9 @@ export class Run {
     const out: string[] = [];
     const n = this.speciality === 'chandler' ? 4 : 3;
     while (out.length < n && pool.length) out.push(pool.splice(this.rng.int(pool.length), 1)[0]);
-    // Now and then, beyond the first sector, something rare: more often on chandlers' row.
+    // Now and then, beyond the first sector, something rare in place of the last of them: more often on chandlers' row.
     const rare = RARE_FITTING_IDS.filter((id) => !this.has(id));
-    if (this.sector > 0 && rare.length && this.rng.chance(this.speciality === 'chandler' ? RARE_CHANCE_CHANDLER : RARE_CHANCE)) out.push(this.rng.pick(rare));
+    if (this.sector > 0 && rare.length && this.rng.chance(this.speciality === 'chandler' ? RARE_CHANCE_CHANDLER : RARE_CHANCE)) out.splice(Math.min(out.length, n - 1), 1, this.rng.pick(rare));
     return out;
   }
 
