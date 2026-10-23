@@ -3,6 +3,7 @@ import { buildDoors, type Door } from './pathfinding';
 import type { RoomDef, ShipDef, ShotType, Side, SystemId, Vec, WeaponDef } from './types';
 import { HANDS_SYSTEMS } from './types';
 import { rank, SEAMANSHIP_EVASION, type SkillXp } from './Skills';
+import { freshOrders, SAIL_ESCAPE, SAIL_EVASION, SAIL_EVASION_CAP, type ShipOrders } from './Orders';
 
 /** Water level (0..100) at which a room's system stops working. */
 export const SWAMP_LEVEL = 50;
@@ -155,6 +156,14 @@ export class Ship {
   pumpRate = 1;
   /** Running from the fight (a bow chaser loads faster at her). */
   running = false;
+  /** The captain's orders: how long each still runs and when it can be given again (see Orders.ts). */
+  orders: ShipOrders = freshOrders();
+  /** Percent off every gun's inaccuracy (a long-gun captain's practised crews). */
+  aimBonus = 0;
+  /** Her captain keeps the range: harder to grapple while her sails are whole. */
+  keepsRange = false;
+  /** Her captain closes to board: easier for her to grapple. */
+  closesIn = false;
   /** Bounding size in tiles. */
   readonly width: number;
   readonly height: number;
@@ -401,6 +410,7 @@ export class Ship {
     if (sails <= 0) return 0;
     let ev = sails * 6 + this.def.speedBonus + (this.level('helm') - 1) * 4 + rank(this.stationed('helm'), 'seamanship') * SEAMANSHIP_EVASION;
     if (this.isManned('sails')) ev += 5;
+    if (this.orders.sail.active > 0) return Math.max(0, Math.min(SAIL_EVASION_CAP, ev + SAIL_EVASION));
     return Math.max(0, Math.min(60, ev));
   }
 
@@ -411,6 +421,7 @@ export class Ship {
     if (sails <= 0) return 0;
     let rate = 0.8 + sails * 0.5 + this.def.speedBonus * 0.03;
     if (this.isManned('sails')) rate *= 1.2;
+    if (this.orders.sail.active > 0) rate *= SAIL_ESCAPE;
     return Math.max(0.2, rate);
   }
 

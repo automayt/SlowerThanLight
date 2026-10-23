@@ -1,7 +1,9 @@
 import { canGrapple } from './Boarding';
 import { changeShot } from './Combat';
 import { destination, orderMove } from './Crew';
+import type { OrderId } from './Orders';
 import { findRoute } from './pathfinding';
+import { TEMPERS, type TemperDef, type TemperId } from './Temper';
 import type { Rng } from './rng';
 import type { Crew, Ship } from './Ship';
 import type { SystemId } from './types';
@@ -19,6 +21,8 @@ export interface AIOptions {
   boardWith?: number;
   /** Which of the ship's work this captain does (all of it when unset): an AI mate covers only the roles no player holds. */
   duties?: Partial<Record<Duty, boolean>>;
+  /** How this captain fights (see Temper.ts): picked from the battle's seed when unset. */
+  temper?: TemperId;
 }
 
 /** The parts of running a ship: deckhands and gun power, gunnery, crew orders, boarding parties. */
@@ -29,6 +33,9 @@ export interface BoardingActions {
   board(crew: Crew[], room: string): number;
   recall(crew: Crew): boolean;
   inTransit(): boolean;
+  /** Give one of the captain's orders (see Orders.ts), if it can be given now. */
+  order?(id: OrderId): boolean;
+  canOrder?(id: OrderId): boolean;
 }
 
 /** Seconds before a captain first thinks about boarding, and between parties. */
@@ -45,12 +52,18 @@ export type AIDecision = 'none' | 'escape' | 'surrender';
 
 const TARGET_WEIGHT: Partial<Record<SystemId, number>> = { guns: 3, helm: 2, sails: 2, bulwarks: 2, pumps: 1, surgeon: 1 };
 
+/** Fraction loaded at which a gun counts as about to fire (for timing orders). */
+const ABOUT_TO_FIRE = 0.85;
+/** Weight of balls about to land on her (damage × shots) that makes an AI captain crowd on sail to dodge them. */
+const DODGE_THREAT = 4;
+
 /** Simple captain that runs one ship: hands, crew, targeting, fleeing and surrender. */
 export class ShipAI {
   fleeing = false;
   private think = 0;
   private surrenderRolled = false;
-  private boardCooldown = FIRST_BOARDING;
+  private boardCooldown: number;
+  readonly temper: TemperDef | undefined;
 
   constructor(
     readonly ship: Ship,
@@ -58,7 +71,16 @@ export class ShipAI {
     readonly rng: Rng,
     readonly opts: AIOptions,
     readonly actions?: BoardingActions,
-  ) {}
+  ) {
+    this.temper = opts.temper ? TEMPERS[opts.temper] : undefined;
+    this.boardCooldown = this.temper?.board?.first ?? FIRST_BOARDING;
+  }
+
+  /** Whether this captain does a part of the ship's work (an AI mate does only the duties it was given). */
+  private on(duty: Duty): boolean {
+    const d = this.opts.duties;
+    return d ? !!d[duty] : true;
+  }
 
   update(dt: number): AIDecision {
     const ship = this.ship;
@@ -75,12 +97,36 @@ export class ShipAI {
     this.boardCooldown -= dt;
     if (this.think > 0) return 'none';
     this.think = 0.5;
-    const d = this.opts.duties;
-    if (d?.hands ?? true) this.manageHands();
-    if (d?.guns ?? true) this.manageGuns();
-    if (d?.crew ?? true) this.manageCrew();
-    if (d?.boarding ?? true) this.manageBoarding();
+    if (this.on('hands')) this.manageHands();
+    if (this.on('guns')) this.manageGuns();
+    if (this.on('crew')) this.manageCrew();
+    if (this.on('boarding')) this.manageBoarding();
+    this.manageOrders();
     return 'none';
+  }
+
+  /**
+   * The captain's orders: rake her as a volley is about to go off, crowd on sail to dodge one about to land (or to
+   * get away), and cold steel once her people are fighting hand to hand. A mate gives only the orders of its duties,
+   * never the captain's own (crowding on sail).
+   */
+  private manageOrders(): void {
+    const act = this.actions;
+    if (!act?.order || !act.canOrder) return;
+    const ship = this.ship;
+    const foe = this.opponent;
+    const aboutToFire = (from: Ship, at: Ship) => from.guns.filter((g) => g.powered && g.target && at.rooms.has(g.target) && g.charge / g.def.loadTime >= ABOUT_TO_FIRE);
+    if (this.on('guns') && act.canOrder('rake')) {
+      const aimed = ship.guns.filter((g) => g.powered && g.target && foe.rooms.has(g.target)).length;
+      if (aimed && aboutToFire(ship, foe).length >= Math.max(1, Math.ceil(aimed / 2))) act.order('rake');
+    }
+    if (!this.opts.duties && act.canOrder('sail')) {
+      const threat = aboutToFire(foe, ship).reduce((n, g) => n + g.def.damage * g.def.shots, 0);
+      if (this.fleeing || threat >= DODGE_THREAT) act.order('sail');
+    }
+    if (this.on('crew') && act.canOrder('steel')) {
+      if ([...ship.crew, ...foe.crew].some((c) => c.side === ship.side && c.task === 'fight')) act.order('steel');
+    }
   }
 
   private manageHands(): void {
@@ -155,10 +201,24 @@ export class ShipAI {
       changeShot(breaker, 'chain');
       breaker.target = bulwarks;
     }
-    for (const g of this.ship.guns) {
-      if (g === chaser || g === breaker) continue;
+    // Her captain's temper: some guns loaded with his favourite shot, and laid on the stations he favours.
+    const t = this.temper;
+    const free = this.ship.guns.filter((g) => g !== chaser && g !== breaker);
+    const shotGuns = t?.shot ? free.filter((x) => !x.def.fixedShot).slice(-t.shot.guns) : [];
+    for (const g of shotGuns) changeShot(g, t!.shot!.type);
+    const aimers = new Set(t?.aim ? (shotGuns.length ? shotGuns : free.slice(0, t.aimGuns ?? free.length)) : []);
+    const favoured = (t?.aim ?? [])
+      .map((id) => this.opponent.system(id))
+      .filter((s) => s && s.damage < s.max)
+      .map((s) => s!.room);
+    let k = 0;
+    for (const g of free) {
       if (focusRoom) {
         g.target = focusRoom;
+        continue;
+      }
+      if (favoured.length && aimers.has(g)) {
+        g.target = favoured[k++ % favoured.length];
         continue;
       }
       if (g.target && this.opponent.rooms.has(g.target)) continue;
@@ -236,6 +296,7 @@ export class ShipAI {
     }
 
     const size = this.opts.boardWith ?? 0;
+    const style = this.temper?.board;
     if (!size || this.fleeing || abroad.length || actions.inTransit() || this.boardCooldown > 0) return;
     if (!canGrapple(this.ship, foe)) return;
     const own = this.ship.own();
@@ -248,10 +309,10 @@ export class ShipAI {
     if (party.length < size) return;
     // Only board when the party can stand up to her whole crew rallying against it.
     const strength = (cs: Crew[]) => cs.reduce((n, c) => n + c.melee * (c.hp / 100), 0);
-    if (strength(party) < BOARD_ODDS * strength(foe.own())) return;
+    if (strength(party) < (style?.odds ?? BOARD_ODDS) * strength(foe.own())) return;
     const target = SABOTAGE_ORDER.map((id) => foe.system(id)?.room).find((r) => r !== undefined);
     if (!target) return;
-    if (actions.board(party, target)) this.boardCooldown = BOARDING_COOLDOWN;
+    if (actions.board(party, target)) this.boardCooldown = style?.every ?? BOARDING_COOLDOWN;
   }
 
   /** The nearest opponent system room still worth wrecking. */

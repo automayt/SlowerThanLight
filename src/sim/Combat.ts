@@ -1,5 +1,7 @@
+import { rollCrit } from './Crits';
 import type { BattleEvent } from './events';
 import { ignite } from './Hazards';
+import { RAKE_ACCURACY, RAKE_CRIT, RAKE_DAMAGE, SAIL_RELOAD } from './Orders';
 import { GUNNERY_RELOAD, rank, train } from './Skills';
 import type { Rng } from './rng';
 import type { GunState, Ship } from './Ship';
@@ -98,6 +100,8 @@ export interface Projectile {
   inaccuracy: number;
   /** A mortar shell: drops over bulwarks, hits on a fixed chance. */
   lob?: boolean;
+  /** Fired under "Rake her!": cannot glance off, and likelier to land a critical hit. */
+  rake?: boolean;
   /** Seconds since the volley was fired. */
   t: number;
   /** Seconds before this ball leaves the muzzle. */
@@ -150,8 +154,11 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
   const crewed = crew.length === 0 ? UNCREWED_RELOAD : crew.length === 1 ? 1.15 : 1.3;
   // Without steerage she can't turn to bring her broadside to bear.
   const bearing = ship.level('helm') > 0 && ship.isManned('helm') ? 1 : NO_HELM_RELOAD;
-  const rate = (crewed + (gunner ? rank(gunner, 'gunnery') * GUNNERY_RELOAD : 0)) * bearing * ship.reloadRate;
+  // With hands aloft crowding on sail, the guns are served slower.
+  const aloft = ship.orders.sail.active > 0 ? SAIL_RELOAD : 1;
+  const rate = (crewed + (gunner ? rank(gunner, 'gunnery') * GUNNERY_RELOAD : 0)) * bearing * ship.reloadRate * aloft;
   const hold = broadsideHolding(ship, target);
+  const rake = ship.orders.rake.active > 0;
   ship.guns.forEach((g, i) => {
     if (!g.powered || !working) {
       g.charge = Math.max(0, g.charge - dt * 3);
@@ -166,9 +173,10 @@ export function updateGuns(ship: Ship, target: Ship, dt: number, out: Projectile
         gun: i,
         shot: g.shot,
         room: g.target,
-        damage: g.def.damage,
-        inaccuracy: g.def.inaccuracy,
+        damage: g.def.damage + (rake ? RAKE_DAMAGE : 0),
+        inaccuracy: g.def.inaccuracy - ship.aimBonus - (rake ? RAKE_ACCURACY : 0),
         ...(g.def.lob ? { lob: true } : {}),
+        ...(rake ? { rake: true } : {}),
         t: 0,
         delay: s * VOLLEY_GAP,
       });
@@ -205,7 +213,7 @@ export function updateProjectiles(
         events.push({ t: 'block', side: target.side, room: p.room });
         continue;
       }
-      const hull = applyHit(target, p.room, p.shot, p.damage, rng, events);
+      const hull = applyHit(target, p.room, p.shot, p.damage, rng, events, p.rake);
       stats[p.from].hits++;
       stats[p.from].hullDamage += hull;
     } else {
@@ -215,14 +223,14 @@ export function updateProjectiles(
   return flying;
 }
 
-/** Apply one ball striking a room. Returns hull damage dealt. */
-export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: number, rng: Rng, events: BattleEvent[]): number {
+/** Apply one ball striking a room (a raking ball never glances off, and crits more often). Returns hull damage dealt. */
+export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: number, rng: Rng, events: BattleEvent[], rake = false): number {
   const fx = SHOT_EFFECTS[shot];
   const room = target.room(roomId);
   const sysId = room.def.system;
 
   // Light round and hot shot often glance off a heavy ship's sides; chain and grape fly above them.
-  if ((shot === 'round' || shot === 'hot') && damage <= target.armour && rng.chance(DEFLECT_CHANCE)) {
+  if (!rake && (shot === 'round' || shot === 'hot') && damage <= target.armour && rng.chance(DEFLECT_CHANCE)) {
     events.push({ t: 'hit', side: target.side, room: roomId, hull: 0, shot, deflected: true });
     return 0;
   }
@@ -244,5 +252,5 @@ export function applyHit(target: Ship, roomId: string, shot: ShotType, damage: n
     room.breachProgress = 0;
     events.push({ t: 'breach', side: target.side, room: roomId });
   }
-  return hull;
+  return hull + rollCrit(target, roomId, shot, rng, events, rake ? RAKE_CRIT : 1);
 }

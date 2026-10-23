@@ -3,6 +3,8 @@ import { gunLoadRate, type Battle } from '../sim/Battle';
 import { SHOT_EFFECTS } from '../sim/Combat';
 import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
+import { ORDER_IDS, ORDERS, type OrderId } from '../sim/Orders';
+import { TEMPERS } from '../sim/Temper';
 import type { GunState, Ship } from '../sim/Ship';
 import { SHOT_TYPES, SYSTEM_NAMES, type ShotType, type SystemId } from '../sim/types';
 import { crewTextures } from './CrewArt';
@@ -106,6 +108,11 @@ function heading(scene: Phaser.Scene, x: number, y: number, text: string, size =
   return scene.add.text(x, y, text, { fontFamily: TITLE_FONT, fontSize: `${size}px`, color: COLORS.gold, fontStyle: 'bold' });
 }
 const CARD_W = 158;
+/** The captain's orders row, between the two top panels under the clock. */
+const ORDER_W = 104;
+const ORDER_Y = 42;
+const ORDER_LABEL: Record<OrderId, string> = { rake: 'Rake her!', sail: 'Crowd sail', steel: 'Cold steel' };
+const ENEMY_ORDER_LABEL: Record<OrderId, string> = { rake: 'RAKING', sail: 'CROWDING SAIL', steel: 'COLD STEEL' };
 
 interface GunCard {
   bg: Phaser.GameObjects.Rectangle;
@@ -143,6 +150,10 @@ export class Hud {
   private logDirty = true;
   private readonly pauseBtn: Button;
   private readonly speedBtn: Button;
+  private readonly orderBtns = new Map<OrderId, Button>();
+  /** Her captain's temper, and any order of hers in force. */
+  private readonly temperText: Phaser.GameObjects.Text;
+  private readonly enemyOrdersText: Phaser.GameObjects.Text;
   private readonly hintBox: Phaser.GameObjects.Container;
   private readonly hintG: Phaser.GameObjects.Graphics;
   private readonly hintText: Phaser.GameObjects.Text;
@@ -186,10 +197,33 @@ export class Hud {
     this.pauseBtn.label.setX(46);
     this.speedBtn.label.setX(50);
 
+    // --- Top centre, under the clock: the captain's orders ---
+    ORDER_IDS.forEach((id, i) => {
+      const def = ORDERS[id];
+      const b = new Button(scene, SCREEN.w / 2 - (ORDER_IDS.length * (ORDER_W + 4) - 4) / 2 + i * (ORDER_W + 4), ORDER_Y, ORDER_W, 24, ORDER_LABEL[id], () => cb.order({ t: 'order', order: id }), {
+        size: 12,
+        tip: `${def.name} (${def.key})
+${def.blurb}
+Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.`,
+      });
+      b.add(keycap(scene, ORDER_W - 3, 12, def.key).setOrigin(1, 0.5));
+      b.label.setX((ORDER_W - 14) / 2);
+      this.orderBtns.set(id, b);
+    });
+
     // --- Top: enemy status ---
     panel(scene, SCREEN.w - 478, 8, 470, 66);
     this.enemyTitle = heading(scene, SCREEN.w - 468, 14, 'HULL', 15);
     this.enemyStats = scene.add.text(SCREEN.w - 468, 50, '', textStyle(13));
+    const temper = TEMPERS[battle.temper];
+    this.temperText = scene.add
+      .text(SCREEN.w - 14, 78, `Her captain: ${temper.name} · ${temper.short}`, textStyle(12, COLORS.gold, { fontStyle: 'italic', backgroundColor: '#0b1622cc', padding: { x: 6, y: 2 } }))
+      .setOrigin(1, 0)
+      .setDepth(HUD_DEPTH.panels);
+    this.enemyOrdersText = scene.add
+      .text(SCREEN.w - 14, 100, '', textStyle(12, COLORS.textWarn, { fontStyle: 'bold', backgroundColor: '#0b1622cc', padding: { x: 6, y: 2 } }))
+      .setOrigin(1, 0)
+      .setDepth(HUD_DEPTH.panels);
 
     // --- Left: crew list ---
     heading(scene, 12, 88, 'CREW');
@@ -327,7 +361,8 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
       shot: { x: card0 + CARD_W / 2, y: BOTTOM_Y - 3, dir: 'down' },
       // Low enough on the first crew row to clear the opening banner.
       crew: { x: 180, y: 134, dir: 'left' },
-      pause: { x: SCREEN.w / 2 - 63, y: 39, dir: 'up' },
+      // Below the orders row, pointing up toward the clock.
+      pause: { x: SCREEN.w / 2 - 63, y: ORDER_Y + 30, dir: 'up' },
       hands: { x: 140, y: BOTTOM_Y - 3, dir: 'down' },
     };
   }
@@ -365,6 +400,11 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     if (this.hintId !== id) return;
     this.hintId = null;
     this.hintBox.setVisible(false);
+  }
+
+  /** Give an order from its hotkey, as a click on its button would (false if it cannot be given now). */
+  pressOrder(id: OrderId): boolean {
+    return this.orderBtns.get(id)?.press() ?? false;
   }
 
   /** Headline something for a few seconds, above the standing alerts. */
@@ -417,6 +457,19 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
     this.broadsideBtn.setText(player.broadside ? 'Broadside: ON' : 'Broadside: off').setOn(player.broadside);
+
+    // The captain's orders: in force (lit, counting down), making ready (dim, with a bar filling), or ready.
+    for (const [id, btn] of this.orderBtns) {
+      const o = player.orders[id];
+      const def = ORDERS[id];
+      btn.setOn(o.active > 0).setEnabled(battle.canOrder('player', id));
+      btn.setText(o.active > 0 ? `${ORDER_LABEL[id]} ${Math.ceil(o.active)}s` : o.cooldown > 0 ? `${ORDER_LABEL[id]} ${Math.ceil(o.cooldown)}s` : ORDER_LABEL[id]);
+      const ready = 1 - o.cooldown / def.cooldown;
+      drawBar(g, btn.x + 3, ORDER_Y + 26, ORDER_W - 6, 3, ready, o.cooldown > 0 ? 0x6a9ac0 : 0x7fdc6a);
+    }
+    const hers = ORDER_IDS.filter((id) => enemy.orders[id].active > 0).map((id) => `${ENEMY_ORDER_LABEL[id]} ${Math.ceil(enemy.orders[id].active)}s`);
+    this.enemyOrdersText.setText(hers.length ? `⚑ Her orders: ${hers.join(' · ')}` : '').setVisible(hers.length > 0 && !battle.outcome);
+    this.temperText.setVisible(!battle.outcome);
 
     // Crew list: your people wherever they are, aboard, crossing, or on her deck.
     const mine = battle.crewOf('player');

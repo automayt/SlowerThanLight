@@ -1,3 +1,5 @@
+import type { CritKind } from './Crits';
+import type { OrderId } from './Orders';
 import type { ShotType, Side } from './types';
 
 /** Things that happened during a tick, for the renderer and combat log. `side` is the ship affected. */
@@ -20,4 +22,8 @@ export type BattleEvent =
   /** Our consort goes down. */
   | { t: 'consortSunk'; side: Side; name: string }
   /** `side` is the side sending boarders. */
-  | { t: 'board'; side: Side; count: number; room: string };
+  | { t: 'board'; side: Side; count: number; room: string }
+  /** `side` gives one of the captain's orders (see Orders.ts). */
+  | { t: 'order'; side: Side; order: OrderId }
+  /** A critical hit on `side`'s ship (see Crits.ts); `name` is whoever it struck down, if anyone in particular. */
+  | { t: 'crit'; side: Side; room: string; kind: CritKind; name?: string };
