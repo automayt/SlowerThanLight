@@ -1,6 +1,7 @@
 import type { Battle, Outcome } from './Battle';
 import type { CombatStats, Projectile } from './Combat';
 import type { BattleEvent } from './events';
+import type { ShipOrders } from './Orders';
 import type { Crew, Ship } from './Ship';
 import type { ShotType, Side, SystemId } from './types';
 
@@ -35,6 +36,7 @@ interface ShipSnapshot {
   broadside: boolean;
   boardingNets: boolean;
   escape: number;
+  orders: ShipOrders;
   rooms: { id: string; flames: number[]; burn: number; water: number; breach: boolean; breachProgress: number; sabotage: number }[];
   systems: { id: SystemId; max: number; damage: number; hands: number; wanted: number; repair: number }[];
   guns: { powered: boolean; wanted: boolean; charge: number; target: string | null; shot: ShotType }[];
@@ -52,6 +54,7 @@ function shipSnapshot(s: Ship): ShipSnapshot {
     broadside: s.broadside,
     boardingNets: s.boardingNets,
     escape: s.escape,
+    orders: { rake: { ...s.orders.rake }, sail: { ...s.orders.sail }, steel: { ...s.orders.steel } },
     rooms: [...s.rooms.values()].map((r) => ({ id: r.def.id, flames: [...r.flames], burn: r.burn, water: r.water, breach: r.breach, breachProgress: r.breachProgress, sabotage: r.sabotage })),
     systems: [...s.systems.values()].map((x) => ({ id: x.id, max: x.max, damage: x.damage, hands: x.hands, wanted: x.wanted, repair: x.repair })),
     guns: s.guns.map((g) => ({ powered: g.powered, wanted: g.wanted, charge: g.charge, target: g.target, shot: g.shot })),
@@ -95,6 +98,7 @@ export function applySnapshot(b: Battle, s: BattleSnapshot, events: BattleEvent[
     ship.broadside = x.broadside;
     ship.boardingNets = x.boardingNets;
     ship.escape = x.escape;
+    if (x.orders) for (const id of Object.keys(x.orders) as (keyof ShipOrders)[]) Object.assign(ship.orders[id], x.orders[id]);
     for (const r of x.rooms) {
       const room = ship.rooms.get(r.id);
       if (!room) continue;

@@ -28,12 +28,23 @@ export function grappleSpeed(ship: Ship): number {
   return ship.level('sails') + ship.def.speedBonus / 5;
 }
 
+/** How hard a ship is to lay alongside: her speed, and more if her captain keeps the range while her sails are whole. */
+export function evadeSpeed(ship: Ship): number {
+  const sails = ship.system('sails');
+  return grappleSpeed(ship) + (ship.keepsRange && sails && sails.damage === 0 ? 1 : 0);
+}
+
+/** How well a ship closes to grapple: her speed, and more if her captain means to board. */
+export function closeSpeed(ship: Ship): number {
+  return grappleSpeed(ship) + (ship.closesIn ? 1 : 0);
+}
+
 /**
  * Whether `from` can lay alongside `to` and grapple: she must be no faster than you,
  * or nobody must be at her helm to steer away.
  */
 export function canGrapple(from: Ship, to: Ship): boolean {
-  return grappleSpeed(to) <= grappleSpeed(from) || !to.isManned('helm');
+  return evadeSpeed(to) <= closeSpeed(from) || !to.isManned('helm');
 }
 
 /** How hard one fighter hits hand to hand: their ship's fighting stock and their brawling rank. */
@@ -52,8 +63,11 @@ export function roomParties(ship: Ship, roomId: string): { own: Crew[]; boarders
   return { own: here.filter((c) => c.side === ship.side), boarders: here.filter((c) => c.side !== ship.side) };
 }
 
-/** Hand-to-hand fighting in every contested room, and sabotage by unopposed boarders. */
-export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): void {
+/**
+ * Hand-to-hand fighting in every contested room, and sabotage by unopposed boarders.
+ * `fury` scales how hard each side fights (Cold steel!).
+ */
+export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[], fury: Partial<Record<Side, number>> = {}): void {
   if (!ship.crew.some((c) => c.side !== ship.side)) return;
   for (const room of ship.rooms.values()) {
     const { own, boarders } = roomParties(ship, room.def.id);
@@ -66,7 +80,7 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[]): v
         [boarders, own, 1],
       ] as const) {
         const target = foes.reduce((a, b) => (b.hp < a.hp ? b : a));
-        const strength = attackers.reduce((sum, c) => sum + meleeStrength(c), 0);
+        const strength = attackers.reduce((sum, c) => sum + meleeStrength(c) * (fury[c.side] ?? 1), 0);
         hits.set(target, (hits.get(target) ?? 0) + strength * MELEE_DPS * bonus * dt);
       }
       for (const [c, dmg] of hits) c.hp -= dmg;

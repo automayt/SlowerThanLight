@@ -4,7 +4,9 @@ import { orderMove, updateCrew } from './Crew';
 import { ShipAI, type AIOptions, type Duty } from './EnemyAI';
 import type { BattleEvent } from './events';
 import { isSinking, updateHazards } from './Hazards';
+import { ORDERS, SAIL_RELOAD, STEEL_MELEE, tickOrders, type OrderId } from './Orders';
 import { Rng } from './rng';
+import { pickTemper, TEMPERS, type TemperId } from './Temper';
 import { GUNNERY_RELOAD, rank, train } from './Skills';
 import { Ship, type Crew, type ShipCondition } from './Ship';
 import type { ShipDef, ShotType, Side, SystemId } from './types';
@@ -89,7 +91,8 @@ export function gunLoadRate(ship: Ship): number {
   const best = crew.reduce((n, c) => Math.max(n, rank(c, 'gunnery')), 0);
   const crewed = crew.length === 0 ? UNCREWED_RELOAD : crew.length === 1 ? 1.15 : 1.3;
   const bearing = ship.level('helm') > 0 && ship.isManned('helm') ? 1 : NO_HELM_RELOAD;
-  return (crewed + (crew.length ? best * GUNNERY_RELOAD : 0)) * bearing * ship.reloadRate;
+  const aloft = ship.orders.sail.active > 0 ? SAIL_RELOAD : 1;
+  return (crewed + (crew.length ? best * GUNNERY_RELOAD : 0)) * bearing * ship.reloadRate * aloft;
 }
 
 /**
@@ -135,6 +138,8 @@ export class Battle {
   holdingFire = false;
   /** Crew aboard each ship when the battle began. */
   readonly crewAtStart: Record<Side, number>;
+  /** How the enemy captain fights (see Temper.ts). */
+  readonly temper: TemperId;
   time = 0;
   paused = false;
   outcome: Outcome | null = null;
@@ -175,18 +180,21 @@ export class Battle {
     this.player.pumpRate = opts.playerPumps ?? 1;
     if (opts.enemyHull !== undefined) this.enemy.hull = Math.max(1, Math.min(this.enemy.hull, opts.enemyHull));
     this.crewAtStart = { player: this.player.crew.length, enemy: this.enemy.crew.length };
-    const actions = (side: Side) => ({
-      board: (crew: Crew[], room: string) => this.board(side, crew, room),
-      recall: (crew: Crew) => this.recall(side, crew),
-      inTransit: () => this.transit.some((t) => t.crew.side === side),
-    });
-    this.enemyAI = new ShipAI(
-      this.enemy,
-      this.player,
-      this.rng,
-      { fleeAt: 0.3, surrenderChance: 0.35, surrenderAt: 0.25, ...opts.enemyAI },
-      actions('enemy'),
-    );
+    const actions = (side: Side) => this.actionsFor(side);
+    // Her captain's temper shades how readily she runs, strikes and boards, and how she handles her ship.
+    this.temper = opts.enemyAI?.temper ?? pickTemper(enemyDef.id, this.seed);
+    const t = TEMPERS[this.temper];
+    const ai: AIOptions = { fleeAt: 0.3, surrenderChance: 0.35, surrenderAt: 0.25, ...opts.enemyAI, temper: this.temper };
+    ai.fleeAt = Math.min(1, ai.fleeAt + (t.fleeAt ?? 0));
+    if (ai.surrenderChance > 0) ai.surrenderChance = Math.min(0.95, ai.surrenderChance + (t.surrender ?? 0));
+    ai.surrenderAt += t.surrenderAt ?? 0;
+    if (t.noBoarding) ai.boardWith = 0;
+    else if (t.board) ai.boardWith = Math.max(ai.boardWith ?? 0, t.board.size);
+    this.enemy.keepsRange = !!t.keepsRange;
+    this.enemy.closesIn = !!t.closesIn;
+    this.enemy.aimBonus = t.aimBonus ?? 0;
+    if (t.shotRate) this.enemy.shotRate = { ...t.shotRate };
+    this.enemyAI = new ShipAI(this.enemy, this.player, this.rng, ai, actions('enemy'));
     this.boardingActions = this.actionsFor('player');
     this.playerAI = opts.autoPlayer
       ? new ShipAI(
@@ -205,6 +213,8 @@ export class Battle {
       board: (crew: Crew[], room: string) => this.board(side, crew, room),
       recall: (crew: Crew) => this.recall(side, crew),
       inTransit: () => this.transit.some((t) => t.crew.side === side),
+      order: (id: OrderId) => this.giveOrder(side, id),
+      canOrder: (id: OrderId) => this.canOrder(side, id),
     };
   }
 
@@ -258,6 +268,8 @@ export class Battle {
   step(dt: number): void {
     if (this.outcome) return;
     this.time += dt;
+    tickOrders(this.player.orders, dt);
+    tickOrders(this.enemy.orders, dt);
 
     const enemyMove = this.enemyAI.update(dt);
     if (enemyMove === 'surrender') return this.finish('surrender');
@@ -267,12 +279,13 @@ export class Battle {
 
     this.updateTransit(dt);
     const grappled = this.grappled;
+    const fury = { player: this.player.orders.steel.active > 0 ? STEEL_MELEE : 1, enemy: this.enemy.orders.steel.active > 0 ? STEEL_MELEE : 1 };
     for (const [ship, foe] of [
       [this.player, this.enemy],
       [this.enemy, this.player],
     ] as const) {
       updateCrew(ship, dt);
-      updateBoarding(ship, dt, this.events);
+      updateBoarding(ship, dt, this.events, fury);
       updateHazards(ship, dt, this.rng, this.events);
       // The enemy only starts making sail once it decides to run, and nobody gets away while grappled.
       const sailing = (ship === this.player && this.allowEscape) || (ship === this.enemy && this.enemyAI.fleeing);
@@ -476,6 +489,33 @@ export class Battle {
   aimGun(index: number, roomId: string | null): void {
     const g = this.player.guns[index];
     if (g && (roomId === null || this.enemy.rooms.has(roomId))) g.target = roomId;
+  }
+
+  /**
+   * Whether one side's captain can give an order now: it must be off its cooldown, and fit the moment (guns manned
+   * to rake her, a manned helm and sails and no grapple to crowd on sail, a grapple for cold steel).
+   */
+  canOrder(side: Side, id: OrderId): boolean {
+    const ship = this.ships[side];
+    if (this.outcome || ship.orders[id].cooldown > 0) return false;
+    switch (id) {
+      case 'rake':
+        return ship.guns.some((g) => g.powered);
+      case 'sail':
+        return !this.grappled && ship.isManned('helm') && ship.level('helm') > 0 && ship.level('sails') > 0;
+      case 'steel':
+        return this.grappled;
+    }
+  }
+
+  /** Give one of the captain's orders (see Orders.ts). Returns whether it was given. */
+  giveOrder(side: Side, id: OrderId): boolean {
+    if (!this.canOrder(side, id)) return false;
+    const o = this.ships[side].orders[id];
+    o.active = ORDERS[id].duration;
+    o.cooldown = ORDERS[id].cooldown;
+    this.events.push({ t: 'order', side, order: id });
+    return true;
   }
 
   /** Hold the guns and fire them together once all are loaded. */

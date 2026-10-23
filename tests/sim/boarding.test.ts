@@ -184,7 +184,8 @@ describe('boarding AI', () => {
     let repelled = false;
     for (let seed = 1; seed <= 6 && !(boarded && repelled); seed++) {
       const foe = enemy('privateer');
-      const b = new Battle(playerShip('gull'), foe.ship, { seed, autoPlayer: true, enemyAI: foe.ai });
+      // A steady captain (a long-gun one never boards).
+      const b = new Battle(playerShip('gull'), foe.ship, { seed, autoPlayer: true, enemyAI: { ...foe.ai, temper: 'steady' } });
       for (let t = 0; t < 120 && !b.outcome; t += 0.05) {
         b.step(0.05);
         if (b.player.boarders().length) boarded = true;

@@ -1,5 +1,6 @@
 import type { Battle } from './Battle';
 import type { Duty } from './EnemyAI';
+import type { OrderId } from './Orders';
 import type { EventResult, HailId, HailResult, Run, UpgradeId } from './Run';
 import type { ShotType, Side, SystemId } from './types';
 
@@ -37,6 +38,8 @@ export type BattleCommand =
   | { t: 'gunPower'; gun: number }
   | { t: 'hands'; system: SystemId; delta: number }
   | { t: 'broadside'; on: boolean }
+  /** One of the captain's orders (see Orders.ts): each belongs to the role whose work it is. */
+  | { t: 'order'; order: OrderId }
   | { t: 'escape' }
   | { t: 'pause'; on: boolean }
   | { t: 'speed'; speed: number };
@@ -57,8 +60,13 @@ export function battleRole(cmd: BattleCommand): Role | null {
       return 'captain';
     case 'pause':
       return null;
+    case 'order':
+      return ORDER_ROLES[cmd.order];
   }
 }
+
+/** Who gives each of the captain's orders: the gunner rakes her, the captain crowds on sail, the bosun leads the cold steel. */
+export const ORDER_ROLES: Record<OrderId, Role> = { rake: 'gunner', sail: 'captain', steel: 'bosun' };
 
 /** Carry out a battle order. Returns whether it did anything. */
 export function applyBattle(b: Battle, cmd: BattleCommand): boolean {
@@ -78,6 +86,8 @@ export function applyBattle(b: Battle, cmd: BattleCommand): boolean {
     case 'broadside':
       b.setBroadside(cmd.on);
       return true;
+    case 'order':
+      return b.giveOrder('player', cmd.order);
     case 'escape':
       return b.escape();
     case 'pause':

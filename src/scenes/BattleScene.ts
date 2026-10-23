@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
+import { BOARDED_CRIES, BOARDING_CRIES, CRIT_TELLING, ENEMY_ORDER_LOG, ENEMY_ORDER_WARNING, ENEMY_SHOUTS, FALLEN_CRIES, FIRE_CRIES, GOOD_HIT_CHEERS, ORDER_LOG, pickLine } from '../render/barks';
 import { BattleFx, WIND } from '../render/fx';
 import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
@@ -15,6 +16,9 @@ import type { BattleReport, Run } from '../sim/Run';
 import { BOARD_TIME, grappleSpeed, partyStrength } from '../sim/Boarding';
 import { SHOT_EFFECTS, TRAVEL_TIME } from '../sim/Combat';
 import type { BattleEvent } from '../sim/events';
+import { ORDER_IDS, ORDERS } from '../sim/Orders';
+import type { Crew } from '../sim/Ship';
+import { TEMPERS } from '../sim/Temper';
 import { SHOT_TYPES, SYSTEM_NAMES, type Side } from '../sim/types';
 import { bumpProfile, saveRun } from './save';
 
@@ -61,6 +65,8 @@ export class BattleScene extends Phaser.Scene {
   /** Moments that unlock first-battle hints. */
   private wasHit = false;
   private volleyLanded = false;
+  /** When each ship's crew last shouted, so barks don't pile up. */
+  private lastBark: Record<Side, number> = { player: 0, enemy: 0 };
 
   constructor() {
     super('Battle');
@@ -77,6 +83,7 @@ export class BattleScene extends Phaser.Scene {
     this.speed = (this.registry.get('battle-speed') as number | undefined) ?? 1;
     this.wasHit = false;
     this.volleyLanded = false;
+    this.lastBark = { player: 0, enemy: 0 };
   }
 
   create(): void {
@@ -132,6 +139,10 @@ export class BattleScene extends Phaser.Scene {
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
     this.hud.addLog(`${e.def.name} bears down on you. Run out the guns!`, COLORS.gold);
     this.hud.addLog('Click a gun card, then an enemy room to aim. Space pauses.');
+    // Her captain's temper: what to expect, and his hail as the ships close.
+    const temper = TEMPERS[battle.temper];
+    this.hud.addLog(`Her captain is ${temper.blurb}.`, COLORS.textWarn);
+    this.time.delayedCall(1700, () => this.bark('enemy', pickLine(temper.hails), this.officer('enemy'), true));
     if (battle.enemyRuns) {
       this.hud.addLog('She means to run: cripple her Sails or Helm before she escapes.', COLORS.textWarn);
       this.hud.flash('SHE MEANS TO RUN: CRIPPLE HER SAILS OR HELM', 7000);
@@ -150,6 +161,7 @@ export class BattleScene extends Phaser.Scene {
     });
     kb.on('keydown-B', () => this.order({ t: 'broadside', on: !battle.player.broadside }));
     kb.on('keydown-F', () => this.toggleSpeed());
+    for (const id of ORDER_IDS) kb.on(`keydown-${ORDERS[id].key}`, () => !battle.outcome && this.hud.pressOrder(id));
     kb.on('keydown-M', () => toggleMute(this.game));
     playLoop(this, 'waves', 0.25);
     stopLoop(this, 'creak');
@@ -626,6 +638,7 @@ export class BattleScene extends Phaser.Scene {
         if (ours) this.cameras.main.shake(110 + 40 * ev.hull, Math.min(0.008, 0.0018 + 0.0014 * ev.hull));
         else if (ev.hull >= 3) this.cameras.main.shake(90, 0.0015);
         const name = view.ship.room(ev.room).def.name;
+        if (!ours && ev.hull >= 3 && Math.random() < 0.35) this.bark('player', pickLine(GOOD_HIT_CHEERS), this.officer('player'));
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
         if (ours) this.hud.addLog(`We're hit in the ${name}${kind}${ev.hull ? `, ${ev.hull} hull` : ''}!`);
         else this.hud.addLog(`Hit their ${name}${kind}${ev.hull ? `, ${ev.hull} hull` : ''}.`);
@@ -651,7 +664,10 @@ export class BattleScene extends Phaser.Scene {
         playSfx(this, 'fire', 0.9);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y + 2, 'FIRE!', '#ffb050');
-        if (ours) this.hud.addLog(`Fire in the ${view.ship.room(ev.room).def.name}!`);
+        if (ours) {
+          this.hud.addLog(`Fire in the ${view.ship.room(ev.room).def.name}!`);
+          this.bark('player', pickLine(FIRE_CRIES), this.inRoom('player', ev.room));
+        }
         break;
       }
       case 'breach': {
@@ -665,13 +681,39 @@ export class BattleScene extends Phaser.Scene {
         playSfx(this, 'boarders', 0.5);
         this.time.delayedCall(250, () => playSfx(this, 'musket', 0.4));
         const target = this.viewFor(ev.side === 'player' ? 'enemy' : 'player').ship.room(ev.room).def.name;
-        if (ev.side === 'player') this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
-        else this.hud.addLog(`BOARDERS! ${ev.count} of them coming over the side for our ${target}!`, COLORS.textWarn);
+        if (ev.side === 'player') {
+          this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
+          this.bark('player', pickLine(BOARDING_CRIES), this.officer('player'), true);
+        } else {
+          this.hud.addLog(`BOARDERS! ${ev.count} of them coming over the side for our ${target}!`, COLORS.textWarn);
+          this.bark('player', pickLine(BOARDED_CRIES), this.officer('player'), true);
+          if (this.battle.canOrder('player', 'steel')) this.hud.addLog(`Give the order for Cold steel! (${ORDERS.steel.key}) to help our people throw them back.`, COLORS.gold);
+        }
         break;
       }
       case 'death':
         this.hud.addLog(ours ? `${ev.name} has fallen.` : `Enemy ${ev.name} is down.`);
-        if (ours) this.hud.flash(`${ev.name.toUpperCase()} HAS FALLEN`);
+        if (ours) {
+          this.hud.flash(`${ev.name.toUpperCase()} HAS FALLEN`);
+          this.bark('player', pickLine(FALLEN_CRIES, { name: ev.name.split(' ').pop() ?? ev.name }), this.officer('player'));
+        }
+        break;
+      case 'order': {
+        const def = ORDERS[ev.order];
+        if (ours) {
+          this.bark('player', def.shout, this.officer('player'), true);
+          this.hud.addLog(ORDER_LOG[ev.order], COLORS.gold);
+          playSfx(this, ev.order === 'sail' ? 'sail' : ev.order === 'steel' ? 'musket' : 'bell', 0.45);
+        } else {
+          this.bark('enemy', ENEMY_SHOUTS[ev.order], this.officer('enemy'), true);
+          this.hud.addLog(ENEMY_ORDER_LOG[ev.order], COLORS.textWarn);
+          this.hud.flash(ENEMY_ORDER_WARNING[ev.order], 2600);
+          playSfx(this, ev.order === 'sail' ? 'sail' : 'bell', 0.3);
+        }
+        break;
+      }
+      case 'crit':
+        this.onCrit(ev);
         break;
       case 'log':
         this.hud.addLog(ev.text);
@@ -700,6 +742,94 @@ export class BattleScene extends Phaser.Scene {
         this.hud.addLog(ev.text, COLORS.textWarn);
         break;
     }
+  }
+
+  /** A critical hit: a blast or a burst of splinters, a hard jolt, a headline over the room, the log and a cry. */
+  private onCrit(ev: Extract<BattleEvent, { t: 'crit' }>): void {
+    const ours = ev.side === 'player';
+    const view = this.viewFor(ev.side);
+    const tell = CRIT_TELLING[ev.kind];
+    const c = view.roomCenter(ev.room);
+    const room = view.ship.room(ev.room).def.name;
+    if (ev.kind === 'magazine' || ev.kind === 'powder') {
+      this.fxs.explosion(c.x, c.y);
+      if (ev.kind === 'magazine') {
+        this.time.delayedCall(160, () => this.fxs.explosion(c.x + TILE * 0.6, c.y - TILE * 0.3));
+        this.time.delayedCall(320, () => this.fxs.explosion(c.x - TILE * 0.5, c.y + TILE * 0.2));
+        this.cameras.main.flash(160, 255, 220, 170);
+      }
+      playSfx(this, 'explosion', ev.kind === 'magazine' ? 0.7 : 0.45);
+    } else {
+      this.fxs.impact(c.x - 8, c.y, false, true);
+      this.fxs.impact(c.x + 8, c.y - 6, false, true);
+      playSfx(this, ev.kind === 'waterline' ? 'breach' : 'hit-wood', 0.6);
+    }
+    if (ev.kind === 'mast') {
+      view.tearSail();
+      view.tearSail();
+    }
+    const heavy = ev.kind === 'magazine';
+    this.cameras.main.shake(heavy ? 520 : 300, ours ? (heavy ? 0.012 : 0.007) : heavy ? 0.009 : 0.004);
+    this.critText(c.x, c.y - 30, tell.title, ours ? '#ff5a46' : '#ffd060');
+    const vars = { room, name: ev.name ?? 'The helmsman' };
+    const line = (ours ? tell.ours : tell.theirs).replace(/\{(\w+)\}/g, (_, k: string) => vars[k as keyof typeof vars] ?? '');
+    this.hud.addLog(`CRITICAL! ${line}`, ours ? COLORS.textWarn : COLORS.textGood);
+    if (ours) {
+      this.hud.flash(tell.title, 2600);
+      this.bark('player', pickLine(tell.cry, vars), this.inRoom('player', ev.room) ?? this.officer('player'), true);
+    } else this.bark('player', pickLine(tell.cheer, vars), this.officer('player'), true);
+  }
+
+  /** A big headline that pops over a room and drifts up. */
+  private critText(x: number, y: number, text: string, color: string): void {
+    const t = this.add
+      .text(Phaser.Math.Clamp(x, 170, SCREEN.w - 170), y, text, { fontFamily: TITLE_FONT, fontSize: '24px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 5 })
+      .setOrigin(0.5)
+      .setDepth(13)
+      .setScale(0.4);
+    this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: y - 40, alpha: 0, delay: 1300, duration: 700, onComplete: () => t.destroy() });
+  }
+
+  /** Who speaks for a ship: whoever has the wheel, or else anyone of hers aboard. */
+  private officer(side: Side): Crew | null {
+    const ship = this.battle.ships[side];
+    return ship.stationed('helm') ?? ship.own()[0] ?? null;
+  }
+
+  /** One of a ship's own people in a room, if any. */
+  private inRoom(side: Side, room: string): Crew | null {
+    return this.battle.ships[side].own().find((c) => c.room === room) ?? null;
+  }
+
+  /**
+   * A shout in a speech bubble over a crew member's head (or over the ship). One ship's crew don't talk over each
+   * other: a bark within a moment of the last is dropped unless it matters (`force`).
+   */
+  private bark(side: Side, text: string, who: Crew | null, force = false): void {
+    const now = this.time.now;
+    if (this.battle.outcome || (!force && now - this.lastBark[side] < 1800)) return;
+    this.lastBark[side] = now;
+    const view = this.viewFor(side);
+    const at = who && view.ship.crew.includes(who) ? view.toScreen(who.pos) : view.roomCenter([...view.ship.rooms.keys()][0]);
+    const fill = side === 'player' ? 0xf4ead0 : 0xd9e2ef;
+    const t = this.add
+      .text(0, 0, text, textStyle(13, '#1d1408', { fontStyle: 'bold italic', backgroundColor: side === 'player' ? '#f4ead0' : '#d9e2ef', padding: { x: 7, y: 4 }, wordWrap: { width: 220 }, align: 'center' }))
+      .setOrigin(0.5, 1)
+      .setDepth(13)
+      .setAlpha(0);
+    const x = Phaser.Math.Clamp(at.x, t.width / 2 + 8, SCREEN.w - t.width / 2 - 8);
+    const y = Math.max(t.height + 70, at.y - 26);
+    t.setPosition(x, y + 8);
+    const tail = this.add
+      .triangle(0, 0, 0, 0, 12, 0, 6, 9, fill)
+      .setOrigin(0.5, 0)
+      .setDepth(13)
+      .setAlpha(0);
+    tail.setPosition(Phaser.Math.Clamp(at.x, x - t.width / 2 + 10, x + t.width / 2 - 10), y - 1);
+    this.tweens.add({ targets: [t, tail], alpha: 1, duration: 140 });
+    this.tweens.add({ targets: t, y, duration: 180, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: [t, tail], alpha: 0, delay: 1900, duration: 400, onComplete: () => (t.destroy(), tail.destroy()) });
   }
 
   private burst(x: number, y: number, color: number, radius: number, duration: number): void {
