@@ -31,7 +31,7 @@ export const NEMESIS_HAILS: Record<'first' | 'fled' | 'ran' | 'paid' | 'missed',
 
 /** Rival captains at the dice tables, by port: they play Bones for coin. */
 export const DICE_RIVALS: Record<string, string> = {
-  Nassau: 'Calico Meg',
+  Nassau: 'Calico Tom',
   'Port Royal': 'Lieutenant Hobb (off duty)',
   'Saint-Pierre': 'Capitaine Lafitte',
   Bridgetown: 'Josiah Pratt, sugar factor',

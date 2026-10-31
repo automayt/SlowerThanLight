@@ -18,14 +18,15 @@ export function viewRect(scene: Phaser.Scene): Phaser.Geom.Rectangle {
 function shadeTexture(scene: Phaser.Scene): string {
   const key = 'backdrop:shade';
   if (scene.textures.exists(key)) return key;
-  const tex = scene.textures.createCanvas(key, 4, 256)!;
+  // Six wide, not four: a power-of-two texture wraps, and its clear edge would pick up a dark line from the far end.
+  const tex = scene.textures.createCanvas(key, 6, 256)!;
   const ctx = tex.getContext();
   const grd = ctx.createLinearGradient(0, 0, 0, 256);
   grd.addColorStop(0, 'rgba(0,0,0,0)');
   grd.addColorStop(0.55, 'rgba(0,0,0,0.55)');
   grd.addColorStop(1, 'rgba(0,0,0,0.9)');
   ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, 4, 256);
+  ctx.fillRect(0, 0, 6, 256);
   tex.refresh();
   return key;
 }
