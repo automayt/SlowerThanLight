@@ -8,11 +8,15 @@ DEST = os.path.join(HERE, "..", "..", "public", "art")
 MAN = os.path.join(DEST, "manifest.json")
 
 
+# Figures painted at half length need a closer crop to read as head and shoulders.
+ZOOM = {"portrait-captain-bosun": 0.62, "portrait-tavern": 0.66}
+
+
 def finalize(name):
     im = Image.open(os.path.join(RAW, name + ".png")).convert("RGB")
     w, h = im.size
     # Head and shoulders: the middle 82% of the width, from just under the top, at 4:5.
-    cw = round(w * 0.82); ch = round(cw * 1.25)
+    cw = round(w * ZOOM.get(name, 0.82)); ch = round(cw * 1.25)
     x = (w - cw) // 2; y = min(round(h * 0.02), h - ch)
     im = im.crop((x, y, x + cw, y + ch)).resize((320, 400), Image.LANCZOS)
     out = os.path.join(DEST, name + ".jpg")

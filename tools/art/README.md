@@ -9,3 +9,9 @@ Painted illustrations in `public/art/` were made with a local ComfyUI (http://12
 - `prompts.json` records every prompt tried per image.
 
 New event art: name it `event-<event id>.jpg`; the event scene picks it up automatically.
+
+Portraits (`public/art/portrait-*.jpg`, 320x400, loaded up front; see `src/data/portraits.ts`):
+
+- `gen_portraits.py jobs_portraits.json [name ...]` uses the same Flux + LoRA recipe with a head-and-shoulders style suffix at 768x960.
+- `finish_portraits.py [name ...]` crops to 4:5, saves a small JPEG and adds it to the manifest.
+- Events without a painting fall back to `event-fallback-sea|aboard|weather.jpg` (`jobs_chart.json`).
