@@ -70,12 +70,12 @@ const LANTERNS: [number, number][] = [
 /** The milestone pieces painted over the cove (tools/art/finish_hub.py prints these offsets). */
 const OVERLAYS: Partial<Record<MilestoneDef['id'], { key: string; x: number; y: number }>> = {
   jetty: { key: 'art:hub-jetty', x: 1004, y: 429 },
-  careening: { key: 'art:hub-careen', x: 1027, y: 236 },
+  careening: { key: 'art:hub-careen', x: 1014, y: 219 },
 };
 /** The tar-pot fire in the careening yard, the flagstaff and the beacon on the headland. */
-const TAR_FIRE = { x: 1150, y: 410 };
-const STAFF = { x: 1232, top: 118, foot: 330 };
-const BEACON = { x: 1180, y: 236 };
+const TAR_FIRE = { x: 1220, y: 393 };
+const STAFF = { x: 1240, top: 68, foot: 236 };
+const BEACON = { x: 1172, y: 214 };
 
 const NUMBER_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'];
 const BEST = {
@@ -170,7 +170,6 @@ export class HarbourScene extends Phaser.Scene {
       const key = `art:${file.replace(/\.\w+$/, '')}`;
       if (!this.textures.exists(key)) this.load.image(key, `art/${file}`);
     }
-    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, () => undefined);
   }
 
   create(): void {
@@ -323,6 +322,11 @@ export class HarbourScene extends Phaser.Scene {
         made.push(...this.flagstaff());
         break;
       case 'beacon': {
+        // An iron brazier on three legs, high on the hill above the yard.
+        const tripod = this.add.graphics().setDepth(-7.1);
+        tripod.lineStyle(2, 0x120c06, 1).lineBetween(BEACON.x - 9, BEACON.y + 22, BEACON.x, BEACON.y + 4).lineBetween(BEACON.x + 9, BEACON.y + 22, BEACON.x, BEACON.y + 4).lineBetween(BEACON.x, BEACON.y + 22, BEACON.x, BEACON.y + 4);
+        tripod.fillStyle(0x1a1008, 1).fillRect(BEACON.x - 8, BEACON.y, 16, 6);
+        made.push(tripod);
         const b = this.add.image(BEACON.x, BEACON.y, glow).setDepth(-7).setBlendMode(Phaser.BlendModes.ADD).setScale(2.4).setTint(0xffa040);
         const core = this.add.image(BEACON.x, BEACON.y, glow).setDepth(-7).setBlendMode(Phaser.BlendModes.ADD).setScale(0.7).setTint(0xfff0b0);
         flicker(b, 0.9);
@@ -361,11 +365,11 @@ export class HarbourScene extends Phaser.Scene {
     made.push(g);
     const flags: (Ensign | 'france')[] = [chosenColours(), ...(profile().allies ?? []).map((p) => POWER_ENSIGN[p])];
     flags.slice(0, 5).forEach((f, i) => {
-      const img = this.add.image(STAFF.x, STAFF.top + 6 + i * 34, flagTexture(this, f)).setOrigin(1, 0.42).setDepth(-6.5).setScale(0.62);
+      const img = this.add.image(STAFF.x, STAFF.top + 6 + i * 30, flagTexture(this, f)).setOrigin(1, 0.42).setDepth(-6.5).setScale(0.62);
       this.tweens.add({ targets: img, scaleY: 0.56, scaleX: 0.6, duration: 700 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       made.push(img);
     });
-    const hit = this.add.rectangle(STAFF.x - 40, STAFF.top - 6, 50, 6 + flags.length * 34, 0, 0).setOrigin(0).setDepth(-6).setInteractive();
+    const hit = this.add.rectangle(STAFF.x - 40, STAFF.top - 6, 50, 6 + flags.length * 30, 0, 0).setOrigin(0).setDepth(-6).setInteractive();
     const allies = profile().allies ?? [];
     addTip(hit, allies.length ? `Allied colours: ${allies.map((p) => POWERS[p].name).join(', ')}.` : 'Your colours. Powers you end a voyage allied with will fly theirs beside them.');
     made.push(hit);
@@ -518,9 +522,10 @@ export class HarbourScene extends Phaser.Scene {
 
     const locked = this.ships[i]?.locked;
     if (locked) {
-      keep(this.add.rectangle(c.x, c.y, c.w, c.h, 0x05090d, 0.6).setOrigin(0).setDepth(7));
-      keep(this.add.image(c.x + c.w / 2, c.y + c.h / 2 - 30, padlock(this)).setScale(2).setDepth(7));
-      keep(this.add.text(c.x + c.w / 2, c.y + c.h / 2 + 10, `Not yet yours\n${locked}`, textStyle(15, COLORS.text, { align: 'center', wordWrap: { width: c.w - 60 } })).setOrigin(0.5, 0).setDepth(7));
+      // Her particulars stay readable; the lock lies across her draught.
+      keep(this.add.rectangle(strip.x, strip.y, strip.w, strip.h, 0x05090d, 0.78).setOrigin(0).setDepth(7));
+      keep(this.add.image(strip.x + 40, strip.y + strip.h / 2, padlock(this)).setScale(1.6).setDepth(7));
+      keep(this.add.text(strip.x + 76, strip.y + strip.h / 2, `Not yet yours.\n${locked}`, textStyle(15, COLORS.text, { wordWrap: { width: strip.w - 96 }, lineSpacing: 3 })).setOrigin(0, 0.5).setDepth(7));
     }
     for (const o of this.card as (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha)[]) if ('setAlpha' in o) {
       const a = o.alpha;
@@ -1034,7 +1039,8 @@ export class HarbourScene extends Phaser.Scene {
   }
 
   private refreshHeader(): void {
-    const r = profile().renown;
+    // While a voyage's renown is still arriving, the header shows the total from before it.
+    const r = this.shown;
     const next = nextMilestone(r);
     this.header.setText(`Renown ${r}${next ? `  ·  ${next.name} at ${next.renown}` : '  ·  the most famous cove in the Caribbean'}`);
   }

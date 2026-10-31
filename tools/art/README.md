@@ -9,3 +9,9 @@ Painted illustrations in `public/art/` were made with a local ComfyUI (http://12
 - `prompts.json` records every prompt tried per image.
 
 New event art: name it `event-<event id>.jpg`; the event scene picks it up automatically.
+
+The hideout (scenes/HarbourScene.ts) is layered: `gen_hub.py jobs_hub.json` paints the cove and the wall as plates
+and the ships and captains as cutouts (FLUX, then RMBG-2.0 background removal); `jobs_hub3.json` inpaints the
+renown milestones (a second jetty, a careening yard) into crops of the cove. `finish_hub.py` crops, trims and lists
+them (`cove=`, `wall=`, `cut=`, `overlay=`, which prints the overlay's offset for HarbourScene's OVERLAYS).
+`hub-*` files are listed in the manifest but loaded by the hideout itself, not at boot.
