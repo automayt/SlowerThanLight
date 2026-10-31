@@ -129,15 +129,21 @@ export function bleed(scene: Phaser.Scene, obj: Phaser.GameObjects.GameObject | 
 
 const near = (a: number, b: number) => Math.abs(a - b) < 0.5;
 
-/** Whether an object is a full-screen layer: at the origin, from its top-left corner, the design area's exact size. */
+/**
+ * Whether an object is a full-screen layer: the design area's exact size, placed over it from its top-left corner
+ * (origin 0) or its middle (origin 0.5).
+ */
 function fullScreen(o: Phaser.GameObjects.GameObject): o is Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image {
   if (!(o instanceof Phaser.GameObjects.Rectangle || o instanceof Phaser.GameObjects.Image) || o.parentContainer) return false;
-  return near(o.x, 0) && near(o.y, 0) && o.originX === 0 && o.originY === 0 && near(o.displayWidth, SCREEN.w) && near(o.displayHeight, SCREEN.h);
+  if (!near(o.displayWidth, SCREEN.w) || !near(o.displayHeight, SCREEN.h) || o.originX !== o.originY) return false;
+  if (o.originX === 0) return near(o.x, 0) && near(o.y, 0);
+  return o.originX === 0.5 && near(o.x, SCREEN.w / 2) && near(o.y, SCREEN.h / 2);
 }
 
 function stretch(o: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image): Fit {
   return (r) => {
-    if (o instanceof Phaser.GameObjects.Rectangle) {
+    if (o.originX === 0.5) o.setPosition(r.centerX, r.centerY).setDisplaySize(r.width, r.height);
+    else if (o instanceof Phaser.GameObjects.Rectangle) {
       o.setPosition(r.x, r.y).setSize(r.width, r.height);
       const hit = o.input?.hitArea as Phaser.Geom.Rectangle | undefined;
       if (hit) hit.setTo(0, 0, r.width, r.height);
