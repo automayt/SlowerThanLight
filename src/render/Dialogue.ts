@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { currentTextSpeed, textSpeedFactor } from './prefs';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 import { Button, gild } from './ui';
 
@@ -19,15 +20,19 @@ export class Typer {
   /** A breath after a sentence, in ms. */
   private hold = 0;
   private timer: Phaser.Time.TimerEvent | null;
+  /** Letters a second. */
+  private readonly cps: number;
   done = false;
 
   constructor(
     scene: Phaser.Scene,
     private readonly target: Phaser.GameObjects.Text,
     text: string,
-    private readonly cps = 60,
+    cps = 60,
     private readonly onDone?: () => void,
   ) {
+    // The player's text speed (in the options) scales every typer; "instant" writes it all on the first tick.
+    this.cps = cps * textSpeedFactor(currentTextSpeed());
     this.full = target.getWrappedText(text).join('\n');
     target.setText('');
     this.timer = scene.time.addEvent({ delay: 16, loop: true, callback: () => this.tick(16) });

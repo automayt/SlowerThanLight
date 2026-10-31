@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { coop } from '../net/CoopClient';
 import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
+import { escHandled } from '../render/escape';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, gild, goldText, panel, Sea, waxSeal } from '../render/ui';
 import { awardRenown, bumpProfile, clearSave, hangPainting, recordVoyage } from './save';
@@ -123,7 +124,7 @@ export class RunEndScene extends Phaser.Scene {
       : new Button(this, cx - 250, y, 230, 44, 'Home to the Hideout', () => this.scene.start('Harbour', { shipId: run.def.id, arrival }), { size: 18, hint: 'Enter' });
     const home = new Button(this, cx + 20, y, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18, hint: 'Esc' });
     this.input.keyboard!.once('keydown-ENTER', () => again.press());
-    this.input.keyboard!.once('keydown-ESC', () => home.press());
+    this.input.keyboard!.once('keydown-ESC', () => (escHandled(), home.press()));
   }
 
   update(time: number): void {

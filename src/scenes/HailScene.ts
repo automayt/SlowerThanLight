@@ -7,7 +7,7 @@ import { paintedBackdrop, shade } from '../render/backdrop';
 import { cameo, captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, Typer } from '../render/Dialogue';
 import { ledgerOpen, openLedger, standingBar } from '../render/Ledger';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
-import { playLoop, playSfx } from '../render/sound';
+import { playSfx, setMood } from '../render/sound';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, goldText, panel, Sea } from '../render/ui';
 import { tierName } from '../sim/Diplomacy';
@@ -63,8 +63,9 @@ export class HailScene extends Phaser.Scene {
     this.buttons = [];
     this.typers = [];
     this.sheet = [];
-    playLoop(this, 'waves', 0.22);
     const enc = run.encounter;
+    // Crane, or a ship that means you harm: the chart's uneasy music.
+    if (enc.nemesis || enc.boss) setMood(this, { tense: true });
     const foe = enemy(enc.enemy);
     const flag = power(foe.power);
 

@@ -8,6 +8,7 @@ import fellCaps from '@fontsource/im-fell-english-sc/files/im-fell-english-sc-la
 import loraFigures from '@fontsource/lora/files/lora-latin-400-normal.woff2?url';
 import loraItalicFigures from '@fontsource/lora/files/lora-latin-400-italic.woff2?url';
 import Phaser from 'phaser';
+import { installOptions, OPTIONS } from './render/options';
 import { installScreen, scaleConfig } from './render/screen';
 import { toggleMute } from './render/sound';
 import { FONT_FACES } from './render/theme';
@@ -17,6 +18,7 @@ import { EventScene } from './scenes/EventScene';
 import { HailScene } from './scenes/HailScene';
 import { CoopLobbyScene } from './scenes/CoopLobbyScene';
 import { LogbookScene } from './scenes/LogbookScene';
+import { OptionsScene } from './scenes/OptionsScene';
 import { PortScene } from './scenes/PortScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { ResultScene } from './scenes/ResultScene';
@@ -55,10 +57,12 @@ function start(): void {
     scale: scaleConfig('game'),
     // `?timer` drives the loop with setTimeout, for embedded/headless browsers that throttle requestAnimationFrame.
     fps: { forceSetTimeOut: params.has('timer'), target: 60 },
-    scene: [PreloadScene, TitleScene, HarbourScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene, CoopLobbyScene],
+    scene: [PreloadScene, TitleScene, HarbourScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene, CoopLobbyScene, OptionsScene],
   });
 
   installScreen(game, 'game');
+  // Esc opens the options over any screen that does not use the key itself.
+  installOptions(game);
   // Screens change behind a sail sweeping across (see transitions.ts). M mutes on every screen; the battle binds its own.
   game.events.once('ready', () => {
     for (const scene of game.scene.scenes) {
@@ -66,7 +70,7 @@ function start(): void {
         if (scene.scene.key !== 'Battle') scene.input.keyboard?.on('keydown-M', () => toggleMute(game));
       });
     }
-    installTransitions(game);
+    installTransitions(game, [OPTIONS]);
   });
 
   if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;

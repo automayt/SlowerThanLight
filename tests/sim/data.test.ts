@@ -6,16 +6,18 @@ import { PORT_NAMES, PORT_TAGLINES, RECRUIT_NAMES, SEA_EVENTS, SECTORS } from '.
 import { WEAPONS } from '../../src/data/weapons';
 import { VOYAGE_FLAGS } from '../../src/data/nemesis';
 import { MAX_GUNS, SYSTEM_CAP } from '../../src/sim/Run';
+import { SOUND_NAMES } from '../../src/render/audio/mix';
 import type { EventEffect, ShipDef, SystemId } from '../../src/sim/types';
 
 // File names under public/ (globs list them without loading anything) and the two manifests the game reads.
 const artFiles = Object.keys(import.meta.glob('../../public/art/*.*')).map((p) => p.split('/').pop()!);
 const audioFiles = Object.keys(import.meta.glob('../../public/audio/*.*')).map((p) => p.split('/').pop()!);
-const manifests = import.meta.glob<{ files: string[]; music?: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
+const manifests = import.meta.glob<{ files: string[]; music?: string[]; ambience?: string[] }>('../../public/*/manifest.json', { eager: true, import: 'default' });
 const artManifest = manifests['../../public/art/manifest.json'].files;
 // Sound effects load up front; music beds (listed apart) stream in later.
 const audioMusic = manifests['../../public/audio/manifest.json'].music ?? [];
-const audioManifest = [...manifests['../../public/audio/manifest.json'].files, ...audioMusic];
+const audioAmbience = manifests['../../public/audio/manifest.json'].ambience ?? [];
+const audioManifest = [...manifests['../../public/audio/manifest.json'].files, ...audioMusic, ...audioAmbience];
 
 const SYSTEM_IDS = Object.keys(SYSTEM_CAP) as SystemId[];
 const effects = SEA_EVENTS.flatMap((e) => e.choices.flatMap((c) => c.outcomes.map((o) => o.effect)));
@@ -132,15 +134,24 @@ describe('event story flags', () => {
 describe('art and sound', () => {
   it('every file in a manifest exists, and nothing on disk is left out of one', () => {
     for (const f of artManifest) expect(artFiles, `art/${f}`).toContain(f);
-    for (const f of audioManifest) expect(audioFiles, `audio/${f}`).toContain(f);
+    // A sound the game asks for may be listed before its recording is made: it plays nothing until then.
+    const awaited = new Set([...SOUND_NAMES.effects, ...SOUND_NAMES.beds].map((n) => `${n}.ogg`));
+    for (const f of audioManifest) if (!awaited.has(f)) expect(audioFiles, `audio/${f}`).toContain(f);
     for (const f of artFiles) if (f !== 'manifest.json') expect(artManifest, `art/${f} is not in the manifest`).toContain(f);
     for (const f of audioFiles) if (f !== 'manifest.json') expect(audioManifest, `audio/${f} is not in the manifest`).toContain(f);
+  });
+
+  it('every sound the game asks for is in the audio manifest (an effect may be there as variants: cannon-1, cannon-2)', () => {
+    const listed = (name: string) => audioManifest.some((f) => new RegExp(`^${name}(-\\d+)?\\.ogg$`).test(f));
+    for (const n of SOUND_NAMES.effects) expect(listed(n), n).toBe(true);
+    for (const n of SOUND_NAMES.beds) expect([...audioMusic, ...audioAmbience], n).toContain(`${n}.ogg`);
+    for (const f of audioAmbience) expect(f.startsWith('amb-'), f).toBe(true);
   });
 
   it('the music director has a bed for the title, the chart, port and battle, and none is also loaded up front', () => {
     for (const bed of ['shanty', 'music-sea', 'music-port', 'music-battle']) expect(audioMusic, bed).toContain(`${bed}.ogg`);
     const sfx = manifests['../../public/audio/manifest.json'].files;
-    for (const f of audioMusic) expect(sfx, `${f} would load on the loading screen`).not.toContain(f);
+    for (const f of [...audioMusic, ...audioAmbience]) expect(sfx, `${f} would load on the loading screen`).not.toContain(f);
   });
 
   it('every enemy and player ship has a picture, and the backdrops and textures the scenes use exist', () => {

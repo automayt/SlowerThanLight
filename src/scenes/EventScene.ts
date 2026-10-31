@@ -4,7 +4,7 @@ import { WEATHER_EVENTS } from '../data/events/weather';
 import { EVENT_SPEAKERS, portraitFor } from '../data/portraits';
 import { paintedBackdrop, shade } from '../render/backdrop';
 import { cameo, captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, SPECIAL_COLOR, Typer } from '../render/Dialogue';
-import { playLoop } from '../render/sound';
+import { playSfx } from '../render/sound';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, goldText, Sea } from '../render/ui';
@@ -71,8 +71,7 @@ export class EventScene extends Phaser.Scene {
     this.dialogue = null;
     const ev = run.currentEvent();
     recordDiscovery(ev.id);
-    playLoop(this, 'waves', 0.22);
-    playLoop(this, 'creak', 0.2);
+    this.time.delayedCall(400, () => playSfx(this, 'page', 0.35));
 
     // The painting over the whole window, drawing the eye in; the open sea if there is none at all.
     const art = paintedBackdrop(this, eventArt(this, ev.id));
@@ -228,6 +227,10 @@ export class EventScene extends Phaser.Scene {
     // The outcome in the orders' column, in ink, with what it changed below.
     const said = this.add.text(OPTS.x, 0, result.effect.text, textStyle(18, INK, { wordWrap: { width: OPTS.w }, lineSpacing: 5, fontStyle: 'italic' }));
     const saidH = Typer.measure(said, result.effect.text);
+    // Gold: the clink of it, and a find worth the name (treasure, a wreck's strongbox) gets the discovery sting.
+    const found = Math.max(0, ...result.changes.map((c) => Number(/^\+(\d+) gold/.exec(c)?.[1] ?? 0)));
+    if (found > 0) this.time.delayedCall(300, () => playSfx(this, 'coins', 0.5));
+    if (found >= 60) this.time.delayedCall(700, () => playSfx(this, 'discovery', 0.5));
     const changes = result.changes.length ? this.add.text(OPTS.x, 0, result.changes.join('\n'), textStyle(15, '#3b2410', { wordWrap: { width: OPTS.w }, lineSpacing: 4, fontStyle: 'bold' })) : null;
     const need = saidH + (changes ? 14 + changes.height : 0) + 16 + 46;
     const inner = BAND.bottom - this.bandTop - BAND.pad * 2;

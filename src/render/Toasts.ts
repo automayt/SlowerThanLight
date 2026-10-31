@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { IconName } from './icons';
+import { escHandled } from './escape';
 import { COLORS, SCREEN, TYPE, inkStyle } from './theme';
 import { Button, panel, ribbon, Slip } from './ui';
 
@@ -230,7 +231,7 @@ export class LogBook {
     const wheel = (_p: unknown, _o: unknown, _dx: number, dy: number) => this.setScroll(this.scroll + dy * 0.6);
     scene.input.on('wheel', wheel);
     const keys = scene.input.keyboard;
-    const esc = () => this.close();
+    const esc = () => (escHandled(), this.close());
     keys?.once('keydown-ESC', esc);
     this.objects.push({ destroy: () => (scene.input.off('wheel', wheel), keys?.off('keydown-ESC', esc)) } as unknown as Phaser.GameObjects.GameObject);
   }

@@ -8,7 +8,9 @@ import { weapon } from '../data/weapons';
 import { setRun } from '../render/RunBar';
 import { paintEnsign, setPlayerColours, shipGeometry, type Ensign } from '../render/ShipArt';
 import { ShipView } from '../render/ShipView';
+import { OptionsButton } from '../render/options';
 import { playSfx } from '../render/sound';
+import { escHandled } from '../render/escape';
 import { CAPS_FONT, COLORS, SCREEN, TITLE_FONT, textStyle, titleStyle } from '../render/theme';
 import { addTip, Button, drawBar, frame, goldText, panel, SoundButton, tooltip } from '../render/ui';
 import { DIFFICULTY, Run, type Difficulty } from '../sim/Run';
@@ -192,6 +194,8 @@ export class HarbourScene extends Phaser.Scene {
     // Small controls along the top right, out of the painting's way.
     const top = 14;
     let bx = SCREEN.w - 20 - 38;
+    new OptionsButton(this, bx, top, 38);
+    bx -= 46;
     new SoundButton(this, bx, top, 38);
     bx -= 132;
     const home = new Button(this, bx, top, 124, 38, '← Title', () => this.scene.start('Title'), { size: 15, hint: 'Esc' });
@@ -238,6 +242,7 @@ export class HarbourScene extends Phaser.Scene {
       else this.launch.press();
     });
     kb.on('keydown-ESC', () => {
+      escHandled();
       if (this.busy) return;
       if (this.sheet.length) this.closeSheet();
       else home.press();
@@ -1017,6 +1022,7 @@ export class HarbourScene extends Phaser.Scene {
     playSfx(this, 'cheer', 0.25);
     let gone = false;
     const go = () => {
+      escHandled();
       if (gone) return;
       gone = true;
       this.input.off('pointerdown', go);

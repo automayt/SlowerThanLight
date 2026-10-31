@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import { bleed, visibleRect } from '../render/screen';
-import { applySound, installMusicDirector, soundKey } from '../render/sound';
+import { applySound, installAudio, preloadSfx } from '../render/sound';
 import { CAPS_FONT, COLORS, SCREEN, textStyle, titleStyle } from '../render/theme';
 import { preloadKit } from '../render/ui';
 
 interface Manifest {
   files: string[];
-  /** Audio only: music beds, which the music director streams in after the first screen is up. */
+  /** Audio only: music beds and ambience loops, which the audio director fetches as screens want them. */
   music?: string[];
+  ambience?: string[];
 }
 
 /**
@@ -20,6 +21,11 @@ export class PreloadScene extends Phaser.Scene {
   private shown = 0;
   private loaded = false;
   private leaving = false;
+  /** The sound effects come in alongside the loader's files (see preloadSfx), and count toward the progress. */
+  private sfx = 1;
+  private sfxDone = true;
+  /** The loader's own progress. */
+  private files = 0;
 
   constructor() {
     super('Preload');
@@ -30,8 +36,15 @@ export class PreloadScene extends Phaser.Scene {
     this.shown = 0;
     this.loaded = false;
     this.leaving = false;
+    this.sfx = 1;
+    this.sfxDone = true;
     this.loadingScreen();
-    this.load.on('progress', (p: number) => (this.progress = p));
+    this.files = 0;
+    const show = () => this.showProgress();
+    this.load.on('progress', (p: number) => {
+      this.files = p;
+      show();
+    });
     // Loaded as text: without a manifest the dev server answers with index.html, which must not crash the JSON parser.
     this.load.on('filecomplete-text-art-manifest', (_key: string, _type: string, data: string) => {
       const files = parseManifest(data);
@@ -40,8 +53,21 @@ export class PreloadScene extends Phaser.Scene {
     });
     this.load.text('art-manifest', 'art/manifest.json');
     this.load.on('filecomplete-text-audio-manifest', (_key: string, _type: string, data: string) => {
-      for (const file of parseManifest(data, AUDIO)) this.load.audio(soundKey(file), `audio/${file}`);
+      // Fetched and decoded outside Phaser's loader, so a file the manifest lists but the folder lacks is skipped quietly.
+      this.sfx = 0;
+      this.sfxDone = false;
+      const done = () => {
+        this.sfxDone = true;
+        show();
+      };
+      void preloadSfx(this.game, parseManifest(data, AUDIO), (k) => {
+        this.sfx = k;
+        show();
+      }).then(done, done);
+      // Never hold the title for long over sound: whatever is still coming arrives in the background.
+      setTimeout(done, 8000);
       this.registry.set('music-files', parseManifest(data, AUDIO, 'music'));
+      this.registry.set('ambience-files', parseManifest(data, AUDIO, 'ambience'));
     });
     this.load.text('audio-manifest', 'audio/manifest.json');
     // The UI kit's painted wood, parchment and icons.
@@ -50,10 +76,15 @@ export class PreloadScene extends Phaser.Scene {
 
   create(): void {
     applySound(this.game);
-    installMusicDirector(this.game, (this.registry.get('music-files') as string[] | undefined) ?? []);
+    installAudio(this.game, (this.registry.get('music-files') as string[] | undefined) ?? [], (this.registry.get('ambience-files') as string[] | undefined) ?? []);
     // The ship makes her landfall at the end of the line, then the title sweeps in.
     this.loaded = true;
-    this.progress = 1;
+    this.files = 1;
+    this.showProgress();
+  }
+
+  private showProgress(): void {
+    this.progress = this.sfxDone ? this.files : Math.min(this.files, 0.3 + 0.7 * this.sfx);
   }
 
   /**
@@ -118,7 +149,7 @@ export class PreloadScene extends Phaser.Scene {
       course.lineBetween(LINE.x1 - 4, LINE.y - 4, LINE.x1 + 4, LINE.y + 4).lineBetween(LINE.x1 + 4, LINE.y - 4, LINE.x1 - 4, LINE.y + 4);
       drawShip(ship, x, LINE.y - 4 + Math.sin(t * 2.2) * 1.5, Math.sin(t * 1.6) * 0.05, t);
 
-      if (this.loaded && !this.leaving && this.shown >= 1) {
+      if (this.loaded && this.sfxDone && !this.leaving && this.shown >= 1) {
         this.leaving = true;
         this.time.delayedCall(250, () => this.scene.start('Title'));
       }

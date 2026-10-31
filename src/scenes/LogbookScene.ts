@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SEA_EVENTS } from '../data/voyage';
 import { placeArt } from '../render/art';
 import { playSfx } from '../render/sound';
+import { escHandled } from '../render/escape';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import type { EventRarity, SeaEventDef } from '../sim/types';
@@ -84,7 +85,7 @@ export class LogbookScene extends Phaser.Scene {
 
     const back = new Button(this, 48, SCREEN.h - 66, 160, 40, '← Back', () => this.scene.start('Title'), { size: 16, hint: 'Esc' });
     const kb = this.input.keyboard!;
-    kb.on('keydown-ESC', () => (this.overlay.length ? this.closeOverlay() : back.press()));
+    kb.on('keydown-ESC', () => (escHandled(), this.overlay.length ? this.closeOverlay() : back.press()));
     kb.on('keydown-ENTER', () => this.overlay.length && this.closeOverlay());
     kb.on('keydown-LEFT', () => !this.overlay.length && prev.press());
     kb.on('keydown-RIGHT', () => !this.overlay.length && next.press());

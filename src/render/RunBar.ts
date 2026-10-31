@@ -4,6 +4,7 @@ import { SYSTEM_NAMES, type SystemId } from '../sim/types';
 import { icon } from './icons';
 import { openLedger } from './Ledger';
 import { COLORS, SCREEN, TYPE, textStyle, titleStyle } from './theme';
+import { OptionsButton } from './options';
 import { Button, drawBar, panel, SoundButton, tipZone } from './ui';
 
 /** The scene that holds the current voyage. Scenes share it through the game registry. */
@@ -87,7 +88,8 @@ export class RunBar {
     this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(D);
     this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(D);
     tipZone(scene, 1020, 12, SCREEN.w - 1040, 50, () => `${fleetDistance(run)}. The Navy follows your wake: keep ahead of it, and leave the sector by its far side.`).setDepth(D);
-    new SoundButton(scene, 972, 23, 30).setDepth(D);
+    new OptionsButton(scene, 972, 23, 30).setDepth(D);
+    new SoundButton(scene, 884, 23, 30).setDepth(D);
     // How the powers regard you, a click or the L key away on every screen that shows this strip.
     new Button(scene, 922, 21, 34, 34, '', () => openLedger(scene, run), { icon: 'flag', tip: 'Standing at sea (L)' }).setDepth(D);
     scene.input.keyboard?.on('keydown-L', () => openLedger(scene, run));

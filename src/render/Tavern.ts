@@ -4,6 +4,7 @@ import { voyage } from '../net/voyage';
 import { DICE_HANDS, DICE_STAKES, DICE_TARGET, diceTotal, type Run } from '../sim/Run';
 import { portraitFor } from '../data/portraits';
 import { Dialogue } from './Dialogue';
+import { escHandled } from './escape';
 import { COLORS, SCREEN, TYPE, inkStyle, titleStyle } from './theme';
 import { Button, panel, ribbon } from './ui';
 
@@ -156,6 +157,7 @@ export class Tavern {
 
   close(): void {
     if (this.closed) return;
+    escHandled();
     this.closed = true;
     const items = [...this.frame, ...this.objects];
     // After this click finishes dispatching.

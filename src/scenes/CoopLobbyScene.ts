@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PLAYER_SHIPS } from '../data/ships';
 import { coop, endCoop, startCoop } from '../net/CoopClient';
 import type { CrewState } from '../net/protocol';
+import { escHandled } from '../render/escape';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, goldText, panel, Sea } from '../render/ui';
 import { ROLE_BLURBS, ROLE_NAMES, ROLES, type Role } from '../sim/commands';
@@ -45,7 +46,7 @@ export class CoopLobbyScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => this.typed(e));
 
     new Button(this, BOX.x + 40, BOX.y + BOX.h - 60, 180, 40, '← Title', () => this.leaveCoop(), { size: 16, hint: 'Esc' });
-    this.input.keyboard!.on('keydown-ESC', () => !this.editing && this.leaveCoop());
+    this.input.keyboard!.on('keydown-ESC', () => (escHandled(), !this.editing && this.leaveCoop()));
     this.off = link.on(() => this.draw());
     this.events.once('shutdown', () => this.off?.());
     this.draw();
@@ -71,7 +72,10 @@ export class CoopLobbyScene extends Phaser.Scene {
     if (e.key === 'Enter') {
       this.editing = false;
       coop()?.setName(this.draft);
-    } else if (e.key === 'Escape') this.editing = false;
+    } else if (e.key === 'Escape') {
+      escHandled();
+      this.editing = false;
+    }
     else if (e.key === 'Backspace') this.draft = this.draft.slice(0, -1);
     else if (e.key.length === 1 && this.draft.length < 20) this.draft += e.key;
     this.draw();

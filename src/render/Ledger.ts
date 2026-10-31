@@ -3,6 +3,7 @@ import { POWER_IDS, power, relation } from '../data/powers';
 import { STANDING_MAX, STANDING_MIN, TIERS, tierName, type TierId } from '../sim/Diplomacy';
 import { describeCommission, type Run } from '../sim/Run';
 import type { PowerId } from '../sim/types';
+import { escHandled } from './escape';
 import { COLORS, SCREEN, TYPE, inkOf, inkStyle, titleStyle } from './theme';
 import { Button, divider, panel, ribbon } from './ui';
 
@@ -107,6 +108,7 @@ export class Ledger {
 
   close(): void {
     if (this.closed) return;
+    escHandled();
     this.closed = true;
     const items = this.objects;
     // After this click finishes dispatching.

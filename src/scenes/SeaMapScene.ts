@@ -4,7 +4,7 @@ import { seaEvent } from '../data/voyage';
 import { enemy } from '../data/enemies';
 import { power } from '../data/powers';
 import { NEMESIS } from '../data/nemesis';
-import { playLoop, playSfx, stopLoop } from '../render/sound';
+import { playSfx, setMood } from '../render/sound';
 import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
@@ -217,9 +217,13 @@ export class SeaMapScene extends Phaser.Scene {
     const run = (this.run = currentRun(this));
     saveRun(run);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
-    stopLoop(this, 'shanty');
-    playLoop(this, 'waves', 0.25);
-    playLoop(this, 'creak', 0.2);
+    // The chart unrolls as you come to it (not when it is merely redrawn after a quiet jump); a new sector's is news.
+    const sector = `${run.seed}:${run.sector}`;
+    if (!this.registry.get('fresh-jump')) playSfx(this, 'chart', 0.45);
+    if (this.registry.get('chart-sector') !== sector) {
+      if (run.sector > 0) this.time.delayedCall(500, () => playSfx(this, 'discovery', 0.55));
+      this.registry.set('chart-sector', sector);
+    }
     this.parchment();
     this.fleetG = this.add.graphics().setDepth(-0.5);
     // The squadron hunting you: three of the King's ships at the front of the tide.
@@ -291,6 +295,7 @@ export class SeaMapScene extends Phaser.Scene {
     }
     this.refreshChart();
     this.skyAndWeather();
+    setMood(this, this.weather());
     // A click or key while the ship is under way hurries her along (the course is already set).
     onAnyInput(this, () => this.sailing?.tween?.setTimeScale(4));
     NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.chooseNode(this.reach[i])));
@@ -793,6 +798,21 @@ export class SeaMapScene extends Phaser.Scene {
     }
   }
 
+  /** How near the fleet's storm is: 1 when it is on you, 0 three columns or more astern. */
+  private stormNear(): number {
+    const gap = this.run.node.col - this.run.navy;
+    return Phaser.Math.Clamp(1 - (gap - 0.5) / 2.5, 0, 1);
+  }
+
+  /** The weather and the danger, for the music and the ambience: the storm, the wind it brings, Crane, a battered hull. */
+  private weather(): { tense: boolean; wind: number; storm: number } {
+    const run = this.run;
+    const storm = this.stormNear();
+    const night = DAYLIGHT[run.jumps % DAYLIGHT.length].name === 'night';
+    const battered = run.condition.hull / Math.max(1, run.fit.hull) < 0.35;
+    return { tense: !!this.crane || storm > 0.6 || battered, wind: Math.min(1, 0.3 + 0.5 * storm + (night ? 0.1 : 0)), storm: storm * storm };
+  }
+
   private arrive(node: SeaNode): void {
     const run = this.run;
     playSfx(this, 'quill', 0.5);
@@ -918,6 +938,9 @@ export class SeaMapScene extends Phaser.Scene {
     });
     if (time > this.flash.at) {
       this.flash = { at: time + 2600 + Math.random() * 4800, power: 1, y: top + 30 + Math.random() * (bottom - top - 60), seed: Math.random() * 100 };
+      // Its thunder, later and softer the further off the storm is.
+      const near = this.stormNear();
+      if (near > 0.05) this.time.delayedCall(250 + (1 - near) * 1600, () => playSfx(this, 'thunder', { volume: 0.12 + 0.4 * near, x: wall }));
     }
     if (this.flash.power > 0.03) {
       const p = this.flash.power;

@@ -6,6 +6,7 @@ import { tierName } from '../sim/Diplomacy';
 import { describeCommission, type Run } from '../sim/Run';
 import { openLedger, standingBar } from './Ledger';
 import { playSfx } from './sound';
+import { escHandled } from './escape';
 import { COLORS, SCREEN, inkOf, inkStyle, titleStyle } from './theme';
 import { Button, panel, ribbon } from './ui';
 import { voyage } from '../net/voyage';
@@ -127,6 +128,7 @@ export class PortEnvoy {
 
   close(): void {
     if (this.closed) return;
+    escHandled();
     this.closed = true;
     const items = [...this.frame, ...this.objects];
     // After this click finishes dispatching.

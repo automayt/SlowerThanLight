@@ -8,7 +8,7 @@ import { TRAITS } from '../data/traits';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, goldText, panel, Sea } from '../render/ui';
-import { playLoop, playSfx } from '../render/sound';
+import { playSfx, setMood } from '../render/sound';
 import { weapon } from '../data/weapons';
 import { FITTINGS } from '../data/fittings';
 import { HULL_PRICE, MAX_GUNS, type Run } from '../sim/Run';
@@ -53,6 +53,9 @@ interface BuyOptions {
 }
 
 /** A friendly port: repairs and crew, shipwright upgrades, and an armoury, or rest while the fleet closes in. */
+/** What a purchase sounds like after the coins. */
+const WORK_SOUND: Partial<Record<VoyageCommand['t'], string>> = { upgrade: 'hammer', repairHull: 'hammer', buyGun: 'hammer', fitting: 'hammer', rest: 'heal' };
+
 export class PortScene extends Phaser.Scene {
   private run!: Run;
   private sea!: Sea;
@@ -75,8 +78,9 @@ export class PortScene extends Phaser.Scene {
     this.hall = null;
     this.tavern = null;
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
-    playLoop(this, 'waves', 0.22);
-    playLoop(this, 'creak', 0.2);
+    // The cable runs out as she comes to anchor, and the gulls find her.
+    playSfx(this, 'anchor', 0.5);
+    this.time.delayedCall(900, () => playSfx(this, 'gulls', 0.35));
     this.bar = new RunBar(this, run);
     this.dyn = [];
     const name = run.encounter.kind === 'port' ? run.encounter.name : 'Port';
@@ -117,6 +121,7 @@ export class PortScene extends Phaser.Scene {
     const welcome = run.encounter.kind === 'port' ? (run.encounter.welcome ?? []) : [];
     if (welcome.length) this.say(welcome.join('  '));
     const leave = () => {
+      playSfx(this, 'anchor', 0.4);
       playSfx(this, 'sail', 0.45);
       run.leavePort();
       this.registry.set('chart-note', `You weigh anchor and stand out of ${name}.`);
@@ -131,7 +136,9 @@ export class PortScene extends Phaser.Scene {
       if (cmd.t === 'rumour' || cmd.t === 'dice') {
         const gold = this.run.gold;
         const out = applyVoyage(this.run, cmd);
-        playSfx(this, this.run.gold > gold ? 'coins' : 'click', 0.5);
+        // Dice across the table, or a round of tankards; and the clink of anything won.
+        playSfx(this, cmd.t === 'dice' ? ['dice', 'click'] : ['tankard', 'coins'], 0.5);
+        if (this.run.gold > gold) this.time.delayedCall(350, () => playSfx(this, 'coins', 0.5));
         this.tavern?.say(cmd.t === 'dice' && out.t === 'text' ? out.text : null);
         return this.later();
       }
@@ -139,6 +146,7 @@ export class PortScene extends Phaser.Scene {
         const who = applyVoyage(this.run, cmd);
         if (who.t === 'text' && who.text) {
           playSfx(this, 'coins', 0.5);
+          this.time.delayedCall(250, () => playSfx(this, 'recruit', 0.5));
           this.say(`${who.text} signs the articles.`);
         }
         this.hall?.refresh();
@@ -170,7 +178,13 @@ export class PortScene extends Phaser.Scene {
 
   private openTavern(): void {
     if (this.tavern || this.hall || this.envoy) return;
-    this.tavern = new Tavern(this, this.run, () => (this.tavern = null));
+    this.tavern = new Tavern(this, this.run, () => {
+      this.tavern = null;
+      setMood(this, { tavern: false });
+    });
+    // The tavern's own music and murmur while it is open.
+    setMood(this, { tavern: true });
+    playSfx(this, 'tankard', 0.4);
   }
 
   private openHall(): void {
@@ -210,7 +224,12 @@ export class PortScene extends Phaser.Scene {
     this.fns.set(JSON.stringify(o.cmd), () => {
       const gold = this.run.gold;
       o.fn();
-      if (this.run.gold !== gold) playSfx(this, 'coins', 0.5);
+      if (this.run.gold !== gold) {
+        playSfx(this, 'coins', 0.5);
+        // The carpenters at work on what was bought, or the surgeon on the crew resting.
+        const work = WORK_SOUND[o.cmd.t];
+        if (work) this.time.delayedCall(220, () => playSfx(this, work, 0.45));
+      }
       this.later();
     });
     const b = new Button(this, x, y, w, 40, label, () => voyage(this, o.cmd, label), { size: 14, tip }).setEnabled(o.enabled);

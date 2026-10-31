@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { trait } from '../data/traits';
 import { voyage } from '../net/voyage';
 import type { Run } from '../sim/Run';
+import { escHandled } from './escape';
 import { COLORS, SCREEN, TYPE, inkStyle, titleStyle } from './theme';
 import { Button, divider, panel, ribbon } from './ui';
 
@@ -68,6 +69,7 @@ export class HiringHall {
 
   close(): void {
     if (this.closed) return;
+    escHandled();
     this.closed = true;
     const items = [...this.frame, ...this.objects];
     // After this click finishes dispatching.

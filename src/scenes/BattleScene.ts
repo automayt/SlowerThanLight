@@ -5,10 +5,14 @@ import { BattleCamera } from '../render/battleCamera';
 import { BattleFx, WIND } from '../render/fx';
 import { FullscreenButton } from '../render/fullscreen';
 import { CREW_KEYS, Hud } from '../render/Hud';
-import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
+import { battleMood } from '../render/audio/battleMood';
+import { BattleSounds } from '../render/audio/battleSounds';
+import { OptionsButton } from '../render/options';
+import { playSfx, setMood, toggleMute } from '../render/sound';
 import { currentRun, setRun } from '../render/RunBar';
 import { shipGeometry } from '../render/ShipArt';
 import { ShipView, type AimMark } from '../render/ShipView';
+import { escHandled } from '../render/escape';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
 import { coop, type CoopClient } from '../net/CoopClient';
@@ -71,6 +75,9 @@ export class BattleScene extends Phaser.Scene {
   private volleyLanded = false;
   /** When each ship's crew last shouted, so barks don't pile up. */
   private lastBark: Record<Side, number> = { player: 0, enemy: 0 };
+  /** What the fight sounds like, and where (see render/audio). */
+  private sounds!: BattleSounds;
+  private boss = false;
 
   constructor() {
     super('Battle');
@@ -114,6 +121,8 @@ export class BattleScene extends Phaser.Scene {
     });
     this.fx = this.add.graphics().setDepth(10);
     this.fxs = new BattleFx(this);
+    this.sounds = new BattleSounds(this, battle, (side) => this.viewFor(side));
+    this.boss = run.encounter.kind === 'battle' && (run.encounter.boss || !!run.encounter.nemesis);
     this.atmosphere();
     this.events.once('shutdown', () => {
       this.playerView.destroy();
@@ -141,6 +150,8 @@ export class BattleScene extends Phaser.Scene {
     });
     // Between the turn controls and her hull panel, where the HUD leaves a gap.
     new FullscreenButton(this, 769, 10, 26).setDepth(51);
+    // The options beside the log button, in the sea below her (the top bar has no room left).
+    new OptionsButton(this, SCREEN.w - 8 - 108 - 6 - 38, 674, 38).setDepth(51);
     if (link) this.hud.addLog(`You stand as ${link.roles.map((r) => ROLE_NAMES[r]).join(' and ') || 'a hand with no station'}. ${crewRoles(link)}`, COLORS.gold);
     this.crewIds = p.crew.map((c) => c.id);
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
@@ -170,9 +181,10 @@ export class BattleScene extends Phaser.Scene {
     kb.on('keydown-F', () => this.toggleSpeed());
     for (const id of ORDER_IDS) kb.on(`keydown-${ORDERS[id].key}`, () => !battle.outcome && this.hud.pressOrder(id));
     kb.on('keydown-M', () => toggleMute(this.game));
-    playLoop(this, 'waves', 0.25);
-    stopLoop(this, 'creak');
+    // Esc cancels an aim or a selection; with nothing to cancel, it opens the options.
     kb.on('keydown-ESC', () => {
+      if (this.aimingGun === null && !this.selected.size) return;
+      escHandled();
       this.aimingGun = null;
       this.selected.clear();
     });
@@ -335,6 +347,8 @@ export class BattleScene extends Phaser.Scene {
       b.update((delta / 1000) * b.speed);
     }
     for (const ev of b.drainEvents()) this.onEvent(ev);
+    this.sounds.update(time / 1000);
+    setMood(this, battleMood(b, this.boss));
     this.offerHints();
 
     // Drop selections of crew who died.
@@ -615,13 +629,13 @@ export class BattleScene extends Phaser.Scene {
   private onEvent(ev: BattleEvent): void {
     const view = this.viewFor(ev.side);
     const ours = ev.side === 'player';
+    this.sounds.event(ev);
     if (ev.t === 'hit' || ev.t === 'block' || ev.t === 'miss') {
       if (ours) this.wasHit = true;
       else this.volleyLanded = true;
     }
     switch (ev.t) {
       case 'shot': {
-        playSfx(this, 'cannon', ours ? 0.55 : 0.4);
         const m = view.muzzle(ev.gun);
         this.fxs.muzzle(m.x, m.y, m.dx, m.dy);
         view.recoil(m.dy, ev.gun);
@@ -636,14 +650,12 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'hit': {
         if (ev.deflected) {
-          playSfx(this, 'hit-wood', 0.25);
           const g = view.roomCenter(ev.room);
           this.fxs.glance(g.x, g.y);
           this.floatText(g.x, g.y - 6, 'GLANCED OFF', '#d8d4cc');
           if (!ours) this.hud.addLog(`A ball glances off her stout sides. Try heavier guns, chain or grape.`);
           break;
         }
-        playSfx(this, 'hit-wood', ours ? 0.6 : 0.4);
         const c = view.roomCenter(ev.room);
         const jx = (Math.random() - 0.5) * TILE * 0.6;
         const jy = (Math.random() - 0.5) * TILE * 0.6;
@@ -666,7 +678,6 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'block': {
-        playSfx(this, 'hit-wood', 0.2);
         view.flashBlock();
         const c = view.roomCenter(ev.room);
         this.burst(c.x, c.y, 0xf0dca0, 12, 260);
@@ -675,14 +686,12 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'miss': {
-        playSfx(this, 'splash', 0.35);
         const c = view.roomCenter(ev.room);
         this.splash(c.x + (Math.random() - 0.5) * TILE * 2, c.y + (Math.random() < 0.5 ? -1 : 1) * TILE * (2.4 + Math.random()));
         this.floatText(c.x, c.y, 'MISS', '#cfe8ff');
         break;
       }
       case 'fire': {
-        playSfx(this, 'fire', 0.9);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y + 2, 'FIRE!', '#ffb050');
         if (ours) {
@@ -692,15 +701,12 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'breach': {
-        playSfx(this, 'breach', ours ? 0.55 : 0.35);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y + 20, 'HOLED!', '#7fc4ff');
         if (ours) this.hud.addLog(`We're holed in the ${view.ship.room(ev.room).def.name}, she's taking water!`);
         break;
       }
       case 'board': {
-        playSfx(this, 'boarders', 0.5);
-        this.time.delayedCall(250, () => playSfx(this, 'musket', 0.4));
         const target = this.viewFor(ev.side === 'player' ? 'enemy' : 'player').ship.room(ev.room).def.name;
         if (ev.side === 'player') {
           this.hud.addLog(`${ev.count > 1 ? `${ev.count} of your crew swing` : 'Your boarder swings'} across for her ${target}!`, COLORS.gold);
@@ -724,12 +730,10 @@ export class BattleScene extends Phaser.Scene {
         if (ours) {
           this.bark('player', def.shout, this.officer('player'), true);
           this.hud.addLog(ORDER_LOG[ev.order], COLORS.gold);
-          playSfx(this, ev.order === 'sail' ? 'sail' : ev.order === 'steel' ? 'musket' : 'bell', 0.45);
         } else {
           this.bark('enemy', ENEMY_SHOUTS[ev.order], this.officer('enemy'), true);
           this.hud.addLog(ENEMY_ORDER_LOG[ev.order], COLORS.textWarn);
           this.hud.flash(ENEMY_ORDER_WARNING[ev.order], 2600);
-          playSfx(this, ev.order === 'sail' ? 'sail' : 'bell', 0.3);
         }
         break;
       }
@@ -741,23 +745,19 @@ export class BattleScene extends Phaser.Scene {
         break;
       case 'consort': {
         // Our consort's broadside comes in from beyond her far side.
-        playSfx(this, 'cannon', 0.35);
         const c = view.roomCenter(ev.room);
         this.floatText(c.x, c.y - 40, ev.name.toUpperCase(), '#9be37f');
         this.hud.addLog(`${ev.name} fires into her!`, COLORS.textGood);
         break;
       }
       case 'consortHit':
-        playSfx(this, 'hit-wood', 0.3);
         this.hud.addLog(`${this.battle.enemy.def.name} fires into ${ev.name} (hull ${ev.hull}/${ev.maxHull}).`, COLORS.textWarn);
         break;
       case 'consortSunk':
-        playSfx(this, 'sink', 0.5);
         this.hud.flash(`${ev.name.toUpperCase()} IS SUNK`, 3500);
         this.hud.addLog(`${ev.name} goes down with her prize crew!`, COLORS.textWarn);
         break;
       case 'rally':
-        playSfx(this, 'bell', 0.6);
         this.cam.shake(400, 0.005);
         this.hud.flash('THE COMMODORE RALLIES HIS CREW', 4500);
         this.hud.addLog(ev.text, COLORS.textWarn);
@@ -779,11 +779,9 @@ export class BattleScene extends Phaser.Scene {
         this.time.delayedCall(320, () => this.fxs.explosion(c.x - TILE * 0.5, c.y + TILE * 0.2));
         this.cam.flash(160, 255, 220, 170);
       }
-      playSfx(this, 'explosion', ev.kind === 'magazine' ? 0.7 : 0.45);
     } else {
       this.fxs.impact(c.x - 8, c.y, false, true);
       this.fxs.impact(c.x + 8, c.y - 6, false, true);
-      playSfx(this, ev.kind === 'waterline' ? 'breach' : 'hit-wood', 0.6);
     }
     if (ev.kind === 'mast') {
       view.tearSail();
@@ -914,7 +912,8 @@ export class BattleScene extends Phaser.Scene {
     // A sting for how it ended: the crew's cheer and a fanfare, the low note of defeat, or the groan of a hull going down.
     if (o.won) {
       this.time.delayedCall(600, () => playSfx(this, 'cheer', 0.55));
-      this.time.delayedCall(1300, () => playSfx(this, 'fanfare', 0.6));
+      // She strikes her colours, or is taken as a prize: their own stings, the fanfare if those are not to hand.
+      this.time.delayedCall(1300, () => playSfx(this, o.kind === 'surrender' ? ['strike', 'fanfare'] : o.kind === 'captured' ? ['prize', 'fanfare'] : 'fanfare', 0.6));
     } else if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') this.time.delayedCall(1100, () => playSfx(this, 'defeat', 0.6));
     if (o.kind === 'enemySunk' || o.kind === 'sunk' || o.kind === 'defeat') this.time.delayedCall(400, () => playSfx(this, 'sink', 0.6));
     if (o.kind === 'escaped' || o.kind === 'enemyEscaped') playSfx(this, 'sail', 0.5);

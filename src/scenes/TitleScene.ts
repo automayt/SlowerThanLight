@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
 import { coop, endCoop } from '../net/CoopClient';
 import { stopCoopDirector } from './CoopDirector';
+import { escHandled } from '../render/escape';
 import { CAPS_FONT, COLORS, SCREEN, TITLE_FONT, textStyle, titleStyle } from '../render/theme';
 import { placeArt } from '../render/art';
-import { playLoop, stopLoop } from '../render/sound';
 import { setRun } from '../render/RunBar';
 import { Button, divider, frame, goldText, Sea, SoundButton } from '../render/ui';
 import { Run } from '../sim/Run';
 import { setPlayerColours } from '../render/ShipArt';
 import { chosenColours, disableSaving, loadRun, sceneFor } from './save';
 import { FullscreenButton } from '../render/fullscreen';
+import { OptionsButton } from '../render/options';
 
 export class TitleScene extends Phaser.Scene {
   private sea!: Sea;
@@ -83,6 +84,7 @@ export class TitleScene extends Phaser.Scene {
     entrance.push(
       new SoundButton(this, 20, SCREEN.h - 58, 38),
       new FullscreenButton(this, 66, SCREEN.h - 58, 38),
+      new OptionsButton(this, 112, SCREEN.h - 58, 38),
       new Button(this, cx - 85, SCREEN.h - 58, 170, 38, 'How to Play', () => this.showHelp(), { size: 16, hint: 'H' }),
       new Button(this, cx - 285, SCREEN.h - 58, 190, 38, 'Sail Together', () => this.scene.start('CoopLobby'), { size: 16, hint: 'T', tip: 'Co-op: crew one ship with friends on your network.' }),
       new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 }),
@@ -92,11 +94,9 @@ export class TitleScene extends Phaser.Scene {
       o.setY(y + 18).setAlpha(0);
       this.tweens.add({ targets: o, y, alpha: 1, duration: 600, delay: 1300 + i * 90, ease: 'Cubic.easeOut' });
     });
-    playLoop(this, 'shanty', 0.35);
-    stopLoop(this, 'creak');
 
     const kb = this.input.keyboard!;
-    kb.on('keydown-ESC', () => this.closeHelp());
+    kb.on('keydown-ESC', () => this.help.length && (escHandled(), this.closeHelp()));
     kb.on('keydown-H', () => (this.help.length ? this.closeHelp() : this.showHelp()));
     kb.on('keydown-T', () => !this.help.length && this.scene.start('CoopLobby'));
     kb.on('keydown-ENTER', () => {

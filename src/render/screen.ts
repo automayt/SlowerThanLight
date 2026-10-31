@@ -256,25 +256,39 @@ export function toggleFullscreen(): void {
 const MOTION_KEY = 'stl:reduced-motion';
 const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
-function savedCalm(): boolean {
+/** The player's own choice ('1' less motion, '0' full motion), or null to follow the system setting. */
+function savedMotion(): boolean | null {
   try {
-    return localStorage.getItem(MOTION_KEY) === '1' || new URLSearchParams(location.search).has('calm');
+    const v = localStorage.getItem(MOTION_KEY);
+    return v === '1' ? true : v === '0' ? false : null;
+  } catch {
+    return null;
+  }
+}
+function calmParam(): boolean {
+  try {
+    return new URLSearchParams(location.search).has('calm');
   } catch {
     return false;
   }
 }
-let calm = savedCalm();
+let chosen = savedMotion();
+const calm = calmParam();
 
-/** The player asked for less motion: the system setting, `?calm` in the address, or the saved flag (see setReducedMotion). */
+/**
+ * The player asked for less motion: their choice in the options (see setReducedMotion) if they made one, otherwise
+ * `?calm` in the address or the system's reduced-motion setting.
+ */
 export function reducedMotion(): boolean {
-  return calm || !!motionQuery?.matches;
+  return chosen ?? (calm || !!motionQuery?.matches);
 }
 
-export function setReducedMotion(on: boolean): void {
-  calm = on;
+/** Remember the player's choice; null forgets it, and the system setting decides again. */
+export function setReducedMotion(on: boolean | null): void {
+  chosen = on;
   try {
-    if (on) localStorage.setItem(MOTION_KEY, '1');
-    else localStorage.removeItem(MOTION_KEY);
+    if (on === null) localStorage.removeItem(MOTION_KEY);
+    else localStorage.setItem(MOTION_KEY, on ? '1' : '0');
   } catch {
     // Storage blocked: the setting lasts for this visit.
   }

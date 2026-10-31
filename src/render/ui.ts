@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ICON_ATLAS, iconFrame, type IconName } from './icons';
-import { cycleVolume, isMuted, isSoft, playSfx, SOUND_CHANGED } from './sound';
+import { isMuted, isSoft, playHover, playSfx, SOUND_CHANGED, toggleMute } from './sound';
 import { bleed, toDesign } from './screen';
 import { COLORS, SCREEN, textStyle, titleStyle, TYPE } from './theme';
 
@@ -47,6 +47,17 @@ export interface ButtonOptions {
   tip?: string;
   /** A painted icon before the label (or alone, centred, when the label is empty). */
   icon?: IconName;
+  /**
+   * The sound of a press: by default 'cancel' for a way back (Esc, "←", "Close"), 'confirm' for the main choice
+   * (Enter), otherwise 'click'. Null for none.
+   */
+  sound?: 'click' | 'confirm' | 'cancel' | null;
+}
+
+/** The press sound a button gets unless it says otherwise. */
+function pressSound(text: string, opts: ButtonOptions): string[] {
+  const kind = opts.sound !== undefined ? opts.sound : opts.hint === 'Esc' || /^(←|close\b|back\b|cancel\b)/i.test(text.trim()) ? 'cancel' : opts.hint === 'Enter' ? 'confirm' : 'click';
+  return kind === null ? [] : kind === 'click' ? ['click'] : [kind, 'click'];
 }
 
 /** A plaque of oiled walnut in a brass rim: lit gold on hover, sunk when pressed, gilt when on, grey when disabled. */
@@ -71,11 +82,14 @@ export class Button extends Phaser.GameObjects.Container {
   /** The room the label has between the icon and the keycap, and the size it was asked for. */
   private readonly labelRoom: number;
   private readonly labelSize: number;
+  /** What a press sounds like (the first of these that is loaded). */
+  private readonly sound: string[];
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string, private readonly onClick: () => void, opts: ButtonOptions = {}) {
     super(scene, x, y);
     this.baseColor = opts.color ?? COLORS.button;
     this.tip = opts.tip ?? null;
+    this.sound = pressSound(text, opts);
     this.bg = scene.add.rectangle(0, 0, w, h, this.baseColor).setOrigin(0).setStrokeStyle(1, COLORS.panelEdge);
     this.add(this.bg);
     if (painted(scene)) {
@@ -127,6 +141,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.bg.on('pointerover', (p: Phaser.Input.Pointer) => {
       this.hover = true;
       this.refresh();
+      if (this.enabled) playHover(scene);
       if (this.tip) tooltip(scene).show(this.tip, p.x, p.y);
     });
     this.bg.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -138,8 +153,10 @@ export class Button extends Phaser.GameObjects.Container {
       if (this.tip) tooltip(scene).hide();
     });
     this.bg.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!p.rightButtonDown()) this.press();
-      else if (this.enabled && opts.onRightClick) {
+      // A button that cannot be pressed says so, softly.
+      if (!p.rightButtonDown()) {
+        if (!this.press() && this.visible) playSfx(scene, 'cancel', 0.2);
+      } else if (this.enabled && opts.onRightClick) {
         playSfx(scene, 'click', 0.35);
         opts.onRightClick();
       }
@@ -154,7 +171,7 @@ export class Button extends Phaser.GameObjects.Container {
   /** Click it, from a key or the pointer: a brief pressed look, the click sound and the action. False if it is disabled. */
   press(): boolean {
     if (!this.enabled || !this.visible) return false;
-    playSfx(this.scene, 'click', 0.35);
+    if (this.sound.length) playSfx(this.scene, this.sound, 0.35);
     this.pressed = true;
     this.refresh();
     this.scene.time.delayedCall(110, () => {
@@ -358,12 +375,12 @@ export function keycap(scene: Phaser.Scene, x: number, y: number, key: string, s
   return scene.add.text(x, y, key, textStyle(size, '#e8d6a8', { fontStyle: 'bold', backgroundColor: '#120a04d9', padding: { x: 3, y: 1 } }));
 }
 
-/** The speaker: click to step through loud, soft and off. M toggles mute on every screen. */
+/** The speaker: a quick mute (so is M, on every screen). The levels themselves are in the options (Esc). */
 export class SoundButton extends Button {
   private readonly icon: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, x: number, y: number, size = 34) {
-    super(scene, x, y, size, size, '', () => cycleVolume(scene.game));
+    super(scene, x, y, size, size, '', () => toggleMute(scene.game));
     this.icon = scene.add.graphics();
     this.add(this.icon);
     const redraw = () => this.draw(size);
@@ -375,7 +392,7 @@ export class SoundButton extends Button {
   private draw(size: number): void {
     const muted = isMuted();
     const soft = isSoft();
-    this.setTip(`Sound: ${muted ? 'off' : soft ? 'soft' : 'on'}. Click to change, or press M to mute.`);
+    this.setTip(`Sound ${muted ? 'off' : 'on'}: click or press M to ${muted ? 'turn it on' : 'mute'}. Levels are in the options (Esc).`);
     const g = this.icon.clear();
     const s = size / 34;
     const cy = size / 2;
