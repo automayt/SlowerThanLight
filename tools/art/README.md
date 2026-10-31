@@ -22,3 +22,11 @@ New event art: name it `event-<event id>.jpg`; the event scene picks it up autom
   `TAN_GROUND` so the floor is cut away too.
 - Button plaques, the brass frame, the ribbon and the small drawn icons (fire, wind, hammer…) are painted in code
   (ui.ts, icons.ts), sampling the walnut where it has loaded.
+
+## Hideout
+
+The hideout (scenes/HarbourScene.ts) is layered: `gen_hub.py jobs_hub.json` paints the cove and the wall as plates
+and the ships and captains as cutouts (FLUX, then RMBG-2.0 background removal); `jobs_hub3.json` inpaints the
+renown milestones (a second jetty, a careening yard) into crops of the cove. `finish_hub.py` crops, trims and lists
+them (`cove=`, `wall=`, `cut=`, `overlay=`, which prints the overlay's offset for HarbourScene's OVERLAYS).
+`hub-*` files are listed in the manifest but loaded by the hideout itself, not at boot.

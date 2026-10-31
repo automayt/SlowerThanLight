@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
 import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
-import { ART_SCALE, paintFurls, paintShip, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
+import { ART_SCALE, paintFurls, paintShip, playerColours, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
 import { motionScale } from './screen';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 
@@ -45,7 +45,7 @@ const FLAG_STRIPS = 8;
 const CLOTH = 0xe6dcc0;
 const CLOTH_LIT = 0xf8f2e2;
 const CLOTH_SEAM = 0x9c8c6a;
-const PENNANT: Record<Ensign, number> = { pirate: 0x8e1b14, navy: 0xc8202a, spanish: 0xd9aa48, trade: 0x2a62a8 };
+const PENNANT: Record<Ensign, number> = { pirate: 0x8e1b14, navy: 0xc8202a, spanish: 0xd9aa48, trade: 0x2a62a8, cutlasses: 0x8e1b14, hourglass: 0x8e1b14 };
 /** How full each kind of sail bellies, in tiles. */
 const BELLY: Record<RigKind, number> = { square: 0.5, gaff: 0.42, lateen: 0.5, lug: 0.42 };
 
@@ -139,7 +139,7 @@ export class ShipView {
   ) {
     const opts: ShipViewOptions = typeof showLabelsOrOpts === 'boolean' ? { showLabels: showLabelsOrOpts } : showLabelsOrOpts;
     const showLabels = opts.showLabels ?? true;
-    const flag = opts.flag ?? (ship.side === 'player' ? 'pirate' : 'navy');
+    const flag = opts.flag ?? (ship.side === 'player' ? playerColours() : 'navy');
     const prefix = `shipart:${viewCount++}`;
     const art = paintShip(scene, ship, tile, prefix, flag, flip);
     this.geom = art.geom;

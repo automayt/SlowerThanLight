@@ -4,7 +4,8 @@ import { placeBackdrop } from '../render/art';
 import { currentRun } from '../render/RunBar';
 import { CAPS_FONT, COLORS, SCREEN, textStyle } from '../render/theme';
 import { Button, divider, gild, goldText, panel, Sea, waxSeal } from '../render/ui';
-import { awardRenown, bumpProfile, clearSave, recordVoyage } from './save';
+import { awardRenown, bumpProfile, clearSave, hangPainting, recordVoyage } from './save';
+import type { HarbourArrival } from './HarbourScene';
 import { challenge, challengeRenown } from '../data/challenges';
 import { highlights } from '../sim/chronicle';
 
@@ -21,6 +22,9 @@ export class RunEndScene extends Phaser.Scene {
     clearSave();
     recordVoyage(run);
     const fame = awardRenown(run);
+    // Her painting goes up on the tavern wall at the hideout, which she sails home to.
+    const painting = hangPainting(run, fame.earned);
+    const arrival: HarbourArrival = { painting, before: fame.before, after: fame.total };
     if (run.status === 'won' && !this.registry.get('counted-win')) bumpProfile('wins');
     this.registry.set('counted-win', true);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h);
@@ -116,7 +120,7 @@ export class RunEndScene extends Phaser.Scene {
           link.send({ t: 'leave' });
           this.scene.start('CoopLobby');
         }, { size: 18, hint: 'Enter' })
-      : new Button(this, cx - 250, y, 230, 44, 'New Voyage', () => this.scene.start('ShipSelect', { shipId: run.def.id }), { size: 18, hint: 'Enter' });
+      : new Button(this, cx - 250, y, 230, 44, 'Home to the Hideout', () => this.scene.start('Harbour', { shipId: run.def.id, arrival }), { size: 18, hint: 'Enter' });
     const home = new Button(this, cx + 20, y, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18, hint: 'Esc' });
     this.input.keyboard!.once('keydown-ENTER', () => again.press());
     this.input.keyboard!.once('keydown-ESC', () => home.press());

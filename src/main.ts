@@ -22,7 +22,7 @@ import { PreloadScene } from './scenes/PreloadScene';
 import { ResultScene } from './scenes/ResultScene';
 import { RunEndScene } from './scenes/RunEndScene';
 import { SeaMapScene } from './scenes/SeaMapScene';
-import { ShipSelectScene } from './scenes/ShipSelectScene';
+import { HarbourScene } from './scenes/HarbourScene';
 import { TitleScene } from './scenes/TitleScene';
 
 const params = new URLSearchParams(location.search);
@@ -55,7 +55,7 @@ function start(): void {
     scale: scaleConfig('game'),
     // `?timer` drives the loop with setTimeout, for embedded/headless browsers that throttle requestAnimationFrame.
     fps: { forceSetTimeOut: params.has('timer'), target: 60 },
-    scene: [PreloadScene, TitleScene, ShipSelectScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene, CoopLobbyScene],
+    scene: [PreloadScene, TitleScene, HarbourScene, SeaMapScene, EventScene, HailScene, PortScene, BattleScene, ResultScene, RunEndScene, LogbookScene, CoopLobbyScene],
   });
 
   installScreen(game, 'game');

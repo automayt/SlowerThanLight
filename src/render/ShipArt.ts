@@ -222,7 +222,16 @@ function pattern(ctx: Ctx, img: CanvasImageSource | null, scale: number): Canvas
 }
 
 /** The colours a ship flies at her stern. */
-export type Ensign = 'pirate' | 'navy' | 'spanish' | 'trade';
+export type Ensign = 'pirate' | 'navy' | 'spanish' | 'trade' | 'cutlasses' | 'hourglass';
+
+/** The colours the player's ships fly unless a view is told otherwise (chosen in the harbour, data/hideout.ts). */
+let playerEnsign: Ensign = 'pirate';
+export function setPlayerColours(flag: Ensign): void {
+  playerEnsign = flag;
+}
+export function playerColours(): Ensign {
+  return playerEnsign;
+}
 
 export interface EnsignArt {
   key: string;
@@ -244,6 +253,8 @@ const LIVERY: Record<Ensign, { band: string; trim: string | null; wash: string |
   navy: { band: '#c8963a', trim: '#1a1208', wash: 'rgba(10,10,14,0.22)' },
   spanish: { band: '#8e2a1c', trim: '#d9aa48', wash: 'rgba(120,30,18,0.2)' },
   trade: { band: '#8a6a3e', trim: null, wash: 'rgba(160,120,70,0.12)' },
+  cutlasses: { band: '#5e1a12', trim: null, wash: 'rgba(8,6,6,0.3)' },
+  hourglass: { band: '#5e1a12', trim: null, wash: 'rgba(8,6,6,0.3)' },
 };
 
 /**
@@ -1212,7 +1223,7 @@ function furledSail(p: Painter, sp: Spar): void {
  * A small ensign streaming astern from a staff at (fx, fy): the Jolly Roger, the red ensign, Spain's Burgundy cross
  * or a merchant's house flag. Painted bow-right, so it flies toward -x; the view mirrors it for the enemy.
  */
-function paintEnsign(ctx: Ctx, fx: number, fy: number, u: number, flag: Ensign): void {
+export function paintEnsign(ctx: Ctx, fx: number, fy: number, u: number, flag: Ensign): void {
   const L = 1.05 * u;
   const H = 0.27 * u;
   /** Flag-local point: t runs 0 (hoist, at the staff) to 1 (fly), v from -1 (top edge) to 1 (bottom edge). */
@@ -1231,7 +1242,7 @@ function paintEnsign(ctx: Ctx, fx: number, fy: number, u: number, flag: Ensign):
     ctx.bezierCurveTo(fx - 0.65 * L, fy + H * 1.55, fx - 0.35 * L, fy + H * 0.55, fx, fy + H);
     ctx.closePath();
   };
-  const field: Record<Ensign, string> = { pirate: '#141414', navy: '#b3261e', spanish: '#efe9da', trade: '#1f4f8a' };
+  const field: Record<Ensign, string> = { pirate: '#141414', navy: '#b3261e', spanish: '#efe9da', trade: '#1f4f8a', cutlasses: '#141414', hourglass: '#141414' };
   outline();
   ctx.save();
   ctx.shadowColor = 'rgba(0,10,20,0.4)';
@@ -1322,6 +1333,64 @@ function paintEnsign(ctx: Ctx, fx: number, fy: number, u: number, flag: Ensign):
           ctx.fill();
         }
       }
+      break;
+    }
+    case 'cutlasses': {
+      // A skull over two crossed cutlasses, curved blades and brass hilts.
+      const blade = (t0: number, v0: number, t1: number, v1: number) => {
+        band(t0, v0, t1, v1, 0.04 * u, '#ece6d6');
+        const h = at(t0, v0);
+        ctx.fillStyle = '#c8a24a';
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, 0.04 * u, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      blade(0.22, 0.95, 0.78, -0.15);
+      blade(0.78, 0.95, 0.22, -0.15);
+      const s = at(0.5, -0.35);
+      const r = 0.1 * u;
+      ctx.fillStyle = '#ece6d6';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(s.x - r * 0.55, s.y + r * 0.4, r * 1.1, r * 0.7);
+      ctx.fillStyle = '#141414';
+      ctx.beginPath();
+      ctx.arc(s.x - r * 0.4, s.y + r * 0.05, r * 0.28, 0, Math.PI * 2);
+      ctx.arc(s.x + r * 0.4, s.y + r * 0.05, r * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'hourglass': {
+      // A white hourglass beside a red heart: your time is running out.
+      const g = at(0.35, 0);
+      const gw = 0.11 * u;
+      const gh = 0.2 * u;
+      ctx.fillStyle = '#ece6d6';
+      ctx.fillRect(g.x - gw * 0.65, g.y - gh - 0.02 * u, gw * 1.3, 0.035 * u);
+      ctx.fillRect(g.x - gw * 0.65, g.y + gh - 0.015 * u, gw * 1.3, 0.035 * u);
+      ctx.beginPath();
+      ctx.moveTo(g.x - gw / 2, g.y - gh);
+      ctx.lineTo(g.x + gw / 2, g.y - gh);
+      ctx.lineTo(g.x + 0.012 * u, g.y);
+      ctx.lineTo(g.x + gw / 2, g.y + gh);
+      ctx.lineTo(g.x - gw / 2, g.y + gh);
+      ctx.lineTo(g.x - 0.012 * u, g.y);
+      ctx.closePath();
+      ctx.fill();
+      const h = at(0.7, 0.05);
+      const hr = 0.06 * u;
+      ctx.fillStyle = '#b8231c';
+      ctx.beginPath();
+      ctx.arc(h.x - hr * 0.55, h.y - hr * 0.3, hr * 0.6, 0, Math.PI * 2);
+      ctx.arc(h.x + hr * 0.55, h.y - hr * 0.3, hr * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(h.x - hr * 1.12, h.y - hr * 0.1);
+      ctx.lineTo(h.x, h.y + hr * 1.2);
+      ctx.lineTo(h.x + hr * 1.12, h.y - hr * 0.1);
+      ctx.closePath();
+      ctx.fill();
       break;
     }
     case 'trade':

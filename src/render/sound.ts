@@ -136,7 +136,7 @@ export function stopLoop(scene: Phaser.Scene, name: string): void {
 /** Which music each scene wants, best first; the first one the manifest lists is used. */
 const SCENE_MUSIC: Record<string, string[]> = {
   Title: ['shanty'],
-  ShipSelect: ['shanty'],
+  Harbour: ['shanty'],
   Logbook: ['shanty'],
   SeaMap: ['music-sea'],
   Event: ['music-sea'],
