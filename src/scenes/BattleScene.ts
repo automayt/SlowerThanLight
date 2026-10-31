@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { crewFrame, crewTextures, CREW_ORIGIN, setEnemyStyle } from '../render/CrewArt';
 import { BOARDED_CRIES, BOARDING_CRIES, CRIT_TELLING, ENEMY_ORDER_LOG, ENEMY_ORDER_WARNING, ENEMY_SHOUTS, FALLEN_CRIES, FIRE_CRIES, GOOD_HIT_CHEERS, ORDER_LOG, pickLine } from '../render/barks';
+import { BattleCamera } from '../render/battleCamera';
 import { BattleFx, WIND } from '../render/fx';
+import { FullscreenButton } from '../render/fullscreen';
 import { CREW_KEYS, Hud } from '../render/Hud';
 import { playLoop, playSfx, stopLoop, toggleMute } from '../render/sound';
 import { currentRun, setRun } from '../render/RunBar';
@@ -42,6 +44,8 @@ export class BattleScene extends Phaser.Scene {
   private enemyView!: ShipView;
   private fx!: Phaser.GameObjects.Graphics;
   private fxs!: BattleFx;
+  /** The world camera (leans in, shakes, draws back) and the fixed one the HUD sits on. */
+  private cam!: BattleCamera;
   private readonly swingers = new Map<number, Phaser.GameObjects.Image>();
   private ambient!: Phaser.GameObjects.Graphics;
   /** Banks of haze drifting downwind across the water. */
@@ -93,6 +97,7 @@ export class BattleScene extends Phaser.Scene {
     const link = coop();
     const battle = (this.battle = link?.battle ?? run.startBattle());
     if (!link) battle.speed = this.speed;
+    this.cam = new BattleCamera(this);
     this.sea = new Sea(this, SCREEN.w, SCREEN.h, 0);
 
     const foe = run.encounter.kind === 'battle' ? run.currentEnemy() : null;
@@ -134,6 +139,8 @@ export class BattleScene extends Phaser.Scene {
       toggleSpeed: () => this.toggleSpeed(),
       order: (cmd) => this.order(cmd),
     });
+    // Between the turn controls and her hull panel, where the HUD leaves a gap.
+    new FullscreenButton(this, 769, 10, 26).setDepth(51);
     if (link) this.hud.addLog(`You stand as ${link.roles.map((r) => ROLE_NAMES[r]).join(' and ') || 'a hand with no station'}. ${crewRoles(link)}`, COLORS.gold);
     this.crewIds = p.crew.map((c) => c.id);
     if (run.encounter.kind === 'battle') this.hud.addLog(run.encounter.text, COLORS.gold);
@@ -235,10 +242,11 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.band.clear();
     if (!drag || !drag.active) return;
-    const x0 = Math.min(drag.x, ptr.x);
-    const x1 = Math.max(drag.x, ptr.x);
-    const y0 = Math.min(drag.y, ptr.y);
-    const y1 = Math.max(drag.y, ptr.y);
+    const at = this.cam.worldPoint(ptr);
+    const x0 = Math.min(drag.x, at.x);
+    const x1 = Math.max(drag.x, at.x);
+    const y0 = Math.min(drag.y, at.y);
+    const y1 = Math.max(drag.y, at.y);
     if (!ptr.event.shiftKey) this.selected.clear();
     for (const view of [this.playerView, this.enemyView]) {
       for (const c of view.ship.crew) {
@@ -252,12 +260,14 @@ export class BattleScene extends Phaser.Scene {
   private onPointerMove(ptr: Phaser.Input.Pointer): void {
     const drag = this.drag;
     if (!drag || !ptr.isDown) return;
-    if (!drag.active && Math.hypot(ptr.x - drag.x, ptr.y - drag.y) > 8) drag.active = true;
+    // Pointers in world coordinates: the camera may be leaning in or drawn back.
+    const at = this.cam.worldPoint(ptr);
+    if (!drag.active && Math.hypot(at.x - drag.x, at.y - drag.y) > 8) drag.active = true;
     if (!drag.active) return;
     const g = this.band;
     g.clear();
-    g.fillStyle(COLORS.select, 0.08).fillRect(Math.min(drag.x, ptr.x), Math.min(drag.y, ptr.y), Math.abs(ptr.x - drag.x), Math.abs(ptr.y - drag.y));
-    g.lineStyle(1.5, COLORS.select, 0.8).strokeRect(Math.min(drag.x, ptr.x), Math.min(drag.y, ptr.y), Math.abs(ptr.x - drag.x), Math.abs(ptr.y - drag.y));
+    g.fillStyle(COLORS.select, 0.08).fillRect(Math.min(drag.x, at.x), Math.min(drag.y, at.y), Math.abs(at.x - drag.x), Math.abs(at.y - drag.y));
+    g.lineStyle(1.5, COLORS.select, 0.8).strokeRect(Math.min(drag.x, at.x), Math.min(drag.y, at.y), Math.abs(at.x - drag.x), Math.abs(at.y - drag.y));
   }
 
   private onPointerDown(ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
@@ -270,7 +280,8 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const enemyRoom = this.enemyView.roomAt(ptr.x, ptr.y);
+    const at = this.cam.worldPoint(ptr);
+    const enemyRoom = this.enemyView.roomAt(at.x, at.y);
     if (this.aimingGun !== null && enemyRoom) {
       this.order({ t: 'aim', gun: this.aimingGun, room: enemyRoom });
       this.aimingGun = null;
@@ -278,7 +289,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // Your crew can be picked out on either ship (boarders stand on the enemy's deck).
-    const crew = [this.playerView.crewAt(ptr.x, ptr.y), this.enemyView.crewAt(ptr.x, ptr.y)].find((c) => c?.side === 'player');
+    const crew = [this.playerView.crewAt(at.x, at.y), this.enemyView.crewAt(at.x, at.y)].find((c) => c?.side === 'player');
     if (crew) {
       if (!ptr.event.shiftKey) this.selected.clear();
       this.selected.add(crew.id);
@@ -286,7 +297,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // An order is given once: the selection is spent, so a later click on her deck (to aim) can't send a boarding party.
-    const room = this.playerView.roomAt(ptr.x, ptr.y);
+    const room = this.playerView.roomAt(at.x, at.y);
     if (room && this.selected.size) {
       if (this.order({ t: 'crew', ids: [...this.selected], room, ship: 'player' })) this.hud.hintDone('crew');
       for (const c of b.player.crew) if (this.selected.has(c.id) && c.waypoints.length) this.playerView.markMove(c.slot);
@@ -304,7 +315,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // Empty water or deck: the start of a drag-select, or a click that clears the selection.
-    this.drag = { x: ptr.x, y: ptr.y, active: false };
+    this.drag = { x: at.x, y: at.y, active: false };
     if (!ptr.event.shiftKey) this.selected.clear();
     this.aimingGun = null;
     // A click on her ship with no gun picked: say so, rather than doing nothing.
@@ -333,8 +344,9 @@ export class BattleScene extends Phaser.Scene {
     for (const c of b.crewOf('enemy')) alive.add(c.id);
 
     const ptr = this.input.activePointer;
-    const hoverEnemy = this.enemyView.roomAt(ptr.x, ptr.y);
-    const hoverPlayer = this.playerView.roomAt(ptr.x, ptr.y);
+    const at = this.cam.worldPoint(ptr);
+    const hoverEnemy = this.enemyView.roomAt(at.x, at.y);
+    const hoverPlayer = this.playerView.roomAt(at.x, at.y);
 
     const targets: AimMark[] = [];
     b.player.guns.forEach((g, i) => {
@@ -364,6 +376,8 @@ export class BattleScene extends Phaser.Scene {
       hoverText: this.hoverText(hoverPlayer, hoverEnemy),
       speed: b.speed,
     });
+
+    this.cam.update(time, delta, b.transit.length > 0 && !b.outcome);
 
     // A co-op battle ends once the server's account of it has arrived.
     if (b.outcome && !this.ending && (!coop() || coop()!.report)) this.endBattle();
@@ -610,7 +624,14 @@ export class BattleScene extends Phaser.Scene {
         playSfx(this, 'cannon', ours ? 0.55 : 0.4);
         const m = view.muzzle(ev.gun);
         this.fxs.muzzle(m.x, m.y, m.dx, m.dy);
-        view.recoil(m.dy);
+        view.recoil(m.dy, ev.gun);
+        // Two guns together are a broadside: the camera leans in toward her.
+        const target = this.viewFor(ours ? 'enemy' : 'player');
+        const tc = target.toScreen({ x: target.ship.width / 2, y: target.ship.height / 2 });
+        this.cam.shot(ev.side, m.x, m.y, tc.x, tc.y);
+        // Its smoke hangs over the water between the ships long after the flash.
+        const k = 0.25 + Math.random() * 0.35;
+        this.fxs.gunHaze(m.x + (tc.x - m.x) * k, m.y + (tc.y - m.y) * k + m.dy * 30);
         break;
       }
       case 'hit': {
@@ -635,8 +656,8 @@ export class BattleScene extends Phaser.Scene {
         const struck = `${ev.hull > 0 ? `-${ev.hull}` : 'HIT'}${sys ? ` ${SYSTEM_NAMES[sys].toUpperCase()}` : ''}`;
         this.floatText(c.x + jx, c.y - 22, struck, ours ? '#ff6a5a' : '#ffd27a');
         // A jolt that grows with the damage: a glancing blow barely, a heavy ball through the side hard.
-        if (ours) this.cameras.main.shake(110 + 40 * ev.hull, Math.min(0.008, 0.0018 + 0.0014 * ev.hull));
-        else if (ev.hull >= 3) this.cameras.main.shake(90, 0.0015);
+        if (ours) this.cam.shake(110 + 40 * ev.hull, Math.min(0.008, 0.0018 + 0.0014 * ev.hull));
+        else if (ev.hull >= 3) this.cam.shake(90, 0.0015);
         const name = view.ship.room(ev.room).def.name;
         if (!ours && ev.hull >= 3 && Math.random() < 0.35) this.bark('player', pickLine(GOOD_HIT_CHEERS), this.officer('player'));
         const kind = ev.shot === 'round' ? '' : ` (${SHOT_EFFECTS[ev.shot].label.toLowerCase()} shot)`;
@@ -737,7 +758,7 @@ export class BattleScene extends Phaser.Scene {
         break;
       case 'rally':
         playSfx(this, 'bell', 0.6);
-        this.cameras.main.shake(400, 0.005);
+        this.cam.shake(400, 0.005);
         this.hud.flash('THE COMMODORE RALLIES HIS CREW', 4500);
         this.hud.addLog(ev.text, COLORS.textWarn);
         break;
@@ -756,7 +777,7 @@ export class BattleScene extends Phaser.Scene {
       if (ev.kind === 'magazine') {
         this.time.delayedCall(160, () => this.fxs.explosion(c.x + TILE * 0.6, c.y - TILE * 0.3));
         this.time.delayedCall(320, () => this.fxs.explosion(c.x - TILE * 0.5, c.y + TILE * 0.2));
-        this.cameras.main.flash(160, 255, 220, 170);
+        this.cam.flash(160, 255, 220, 170);
       }
       playSfx(this, 'explosion', ev.kind === 'magazine' ? 0.7 : 0.45);
     } else {
@@ -769,7 +790,8 @@ export class BattleScene extends Phaser.Scene {
       view.tearSail();
     }
     const heavy = ev.kind === 'magazine';
-    this.cameras.main.shake(heavy ? 520 : 300, ours ? (heavy ? 0.012 : 0.007) : heavy ? 0.009 : 0.004);
+    this.cam.lean(c.x, c.y, heavy ? 0.06 : 0.035);
+    this.cam.shake(heavy ? 520 : 300, ours ? (heavy ? 0.012 : 0.007) : heavy ? 0.009 : 0.004);
     this.critText(c.x, c.y - 30, tell.title, ours ? '#ff5a46' : '#ffd060');
     const vars = { room, name: ev.name ?? 'The helmsman' };
     const line = (ours ? tell.ours : tell.theirs).replace(/\{(\w+)\}/g, (_, k: string) => vars[k as keyof typeof vars] ?? '');
@@ -837,12 +859,14 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: c, scale: 1.8, alpha: 0, duration, onComplete: () => c.destroy() });
   }
 
-  /** A ball into the sea: rings spreading on the water and a spout of spray. */
+  /** A ball into the sea: a column of white water thrown up and falling back, rings spreading, and spray. */
   private splash(x: number, y: number): void {
     for (let i = 0; i < 3; i++) {
       const ring = this.add.ellipse(x, y, 10, 5).setStrokeStyle(2, 0xe8f4f8, 0.8).setDepth(1.5);
       this.tweens.add({ targets: ring, scaleX: 4 + i, scaleY: 4 + i, alpha: 0, delay: i * 120, duration: 800, onComplete: () => ring.destroy() });
     }
+    const foam = this.add.ellipse(x, y, 26, 12, 0xe8f4f8, 0.55).setDepth(1.5);
+    this.tweens.add({ targets: foam, scaleX: 2.2, scaleY: 2, alpha: 0, duration: 1600, ease: 'Quad.easeOut', onComplete: () => foam.destroy() });
     this.fxs.splash(x, y);
   }
 
@@ -860,14 +884,14 @@ export class BattleScene extends Phaser.Scene {
       return { x: c.x + (Math.random() - 0.5) * TILE, y: c.y + (Math.random() - 0.5) * TILE };
     };
     if (blowUp) {
-      this.cameras.main.flash(180, 255, 236, 200);
+      this.cam.flash(180, 255, 236, 200);
       const magazine = view.ship.rooms.has('magazine') ? view.roomCenter('magazine') : somewhere();
       this.fxs.explosion(magazine.x, magazine.y);
       [220, 420, 650, 900, 1200].forEach((ms, i) =>
         this.time.delayedCall(ms, () => {
           const p = somewhere();
           this.fxs.explosion(p.x, p.y);
-          if (i % 2) this.cameras.main.shake(160, 0.004);
+          if (i % 2) this.cam.shake(160, 0.004);
         }),
       );
     }
@@ -926,7 +950,7 @@ export class BattleScene extends Phaser.Scene {
         this.playerView.startFinale('sink', now);
         break;
     }
-    if (o.kind === 'victory' || o.kind === 'defeat') this.cameras.main.shake(500, 0.006);
+    if (o.kind === 'victory' || o.kind === 'defeat') this.cam.shake(500, 0.006);
     this.finaleFx(o.kind === 'victory' ? this.enemyView : o.kind === 'enemySunk' ? this.enemyView : o.kind === 'defeat' || o.kind === 'sunk' ? this.playerView : null, o.kind === 'victory');
     // Let the finale play, then dim the scene and name the outcome.
     this.time.delayedCall(1400, () => {

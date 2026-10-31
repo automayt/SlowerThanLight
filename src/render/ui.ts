@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { cycleVolume, isMuted, isSoft, playSfx, SOUND_CHANGED } from './sound';
+import { bleed, toDesign } from './screen';
 import { COLORS, SCREEN, textStyle, titleStyle } from './theme';
 
 /** Gold edge of a hovered control. */
@@ -200,6 +201,8 @@ export class Tooltip {
   /** Below and right of the pointer, flipped above or left where the screen runs out. */
   move(px: number, py: number): void {
     if (!this.alive) return;
+    // Pointer pixels to the design area the screens are laid out on.
+    ({ x: px, y: py } = toDesign(px, py));
     const { width: w, height: h } = this.text;
     const x = px + 14 + w > SCREEN.w - 6 ? px - 10 - w : px + 14;
     const y = py + 22 + h > SCREEN.h - 6 ? py - 10 - h : py + 22;
@@ -744,38 +747,50 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-/** Animated sea backdrop. Call `draw(time)` each frame. */
+/** Animated sea backdrop. Call `draw(time)` each frame. Made the size of the screen, it reaches the window's edges. */
 export class Sea {
   private readonly g: Phaser.GameObjects.Graphics;
   /** The painted sea, when its texture is loaded; otherwise a drawn gradient with wave marks. */
   private readonly img: Phaser.GameObjects.Image | null = null;
+  /** The area it covers: the whole window and a margin (the battle camera pulls back and shakes). */
+  private area: Phaser.Geom.Rectangle;
 
   /** `dim` darkens the painting so text on top stays readable (0 for the battle, where the sea is the stage). */
-  constructor(scene: Phaser.Scene, private readonly w: number, private readonly h: number, dim = 0.4) {
+  constructor(scene: Phaser.Scene, w: number, h: number, dim = 0.4) {
+    this.area = new Phaser.Geom.Rectangle(0, 0, w, h);
     this.g = scene.add.graphics().setDepth(-10);
     if (scene.textures.exists('art:tex-sea')) {
       this.img = scene.add.image(w / 2, h / 2, 'art:tex-sea').setDepth(-10);
       this.img.setScale(Math.max(w / this.img.width, h / this.img.height) * 1.04);
       if (dim > 0) scene.add.rectangle(0, 0, w, h, 0x061420, dim).setOrigin(0).setDepth(-9.5);
     }
+    if (w === SCREEN.w && h === SCREEN.h) {
+      bleed(scene, this.g, (r) => {
+        const m = Math.max(r.width, r.height) * 0.1;
+        this.area = new Phaser.Geom.Rectangle(r.x - m, r.y - m, r.width + m * 2, r.height + m * 2);
+        if (this.img) this.img.setScale(Math.max(this.area.width / this.img.width, this.area.height / this.img.height) * 1.04);
+      });
+    }
   }
 
   draw(timeMs: number): void {
+    const a = this.area;
     if (this.img) {
       // A slow drift, as if the swell were moving under you.
-      this.img.setPosition(this.w / 2 + Math.sin(timeMs / 4000) * 8, this.h / 2 + Math.cos(timeMs / 5200) * 5);
+      this.img.setPosition(a.centerX + Math.sin(timeMs / 4000) * 8, a.centerY + Math.cos(timeMs / 5200) * 5);
       return;
     }
     const g = this.g;
     const t = timeMs / 1000;
     g.clear();
     g.fillGradientStyle(COLORS.seaLight, COLORS.seaLight, COLORS.seaDeep, COLORS.seaDeep, 1);
-    g.fillRect(0, 0, this.w, this.h);
+    g.fillRect(a.x, a.y, a.width, a.height);
     g.lineStyle(2, COLORS.wave, 0.35);
-    for (let row = 0; row < 14; row++) {
+    const first = Math.floor((a.y - 30) / 52);
+    for (let row = first; row < first + Math.ceil(a.height / 52) + 1; row++) {
       const y = 30 + row * 52;
-      const offset = ((t * (12 + (row % 3) * 6) + row * 47) % 120) - 120;
-      for (let x = offset; x < this.w; x += 120) {
+      const offset = ((t * (12 + (Math.abs(row) % 3) * 6) + row * 47) % 120) - 120;
+      for (let x = offset + 120 * Math.floor((a.x - 36 - offset) / 120); x < a.right; x += 120) {
         g.beginPath();
         g.moveTo(x, y);
         g.lineTo(x + 18, y - 5);

@@ -11,6 +11,7 @@ import { crewTextures } from './CrewArt';
 import { COLORS, SCREEN, textStyle, TITLE_FONT } from './theme';
 import { Button, drawBar, drawPips, panel } from './ui';
 import type { BattleCommand } from '../sim/commands';
+import { toDesign } from './screen';
 
 export interface HudCallbacks {
   selectCrew(id: number, additive: boolean): void;
@@ -591,8 +592,9 @@ Shift+${i + 1} cycles this gun's shot.`, x, BOTTOM_Y - 8));
     // Room info follows the pointer, kept on screen.
     this.hoverText.setText(state.hoverText).setVisible(!!state.hoverText);
     if (state.hoverText) {
-      const x = Math.min(this.pointer.x + 16, SCREEN.w - this.hoverText.width - 6);
-      const y = Math.max(this.pointer.y - 12, this.hoverText.height + 6);
+      const at = toDesign(this.pointer.x, this.pointer.y);
+      const x = Math.min(at.x + 16, SCREEN.w - this.hoverText.width - 6);
+      const y = Math.max(at.y - 12, this.hoverText.height + 6);
       this.hoverText.setPosition(x, y);
     }
   }
