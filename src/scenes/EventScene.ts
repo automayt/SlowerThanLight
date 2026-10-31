@@ -25,7 +25,7 @@ const WEATHER = new Set(WEATHER_EVENTS.map((e) => e.id));
 /** The painting for an event, or a fitting stand-in: a scene below decks, a squall, or the open sea. */
 function eventArt(scene: Phaser.Scene, id: string): string {
   if (scene.textures.exists(`art:event-${id}`)) return `event-${id}`;
-  return ABOARD.has(id) ? 'event-fallback-aboard' : WEATHER.has(id) ? 'event-fallback-weather' : 'event-fallback-sea';
+  return ABOARD.has(id) ? 'fallback-aboard' : WEATHER.has(id) ? 'fallback-weather' : 'fallback-sea';
 }
 
 interface ChoiceRow {
@@ -59,10 +59,8 @@ export class EventScene extends Phaser.Scene {
   preload(): void {
     const run = currentRun(this);
     if (run.encounter.kind !== 'event') return;
-    const id = run.encounter.event;
-    const files = (this.registry.get('art-files') as string[] | undefined) ?? [];
-    if (files.includes(`event-${id}.jpg`)) loadArtOnDemand(this, `event-${id}`);
-    else loadArtOnDemand(this, ABOARD.has(id) ? 'event-fallback-aboard' : WEATHER.has(id) ? 'event-fallback-weather' : 'event-fallback-sea');
+    // The stand-in paintings (fallback-*.jpg) load up front with the other backdrops.
+    loadArtOnDemand(this, `event-${run.encounter.event}`);
   }
 
   create(): void {

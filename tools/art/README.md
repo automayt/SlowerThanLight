@@ -14,4 +14,4 @@ Portraits (`public/art/portrait-*.jpg`, 320x400, loaded up front; see `src/data/
 
 - `gen_portraits.py jobs_portraits.json [name ...]` uses the same Flux + LoRA recipe with a head-and-shoulders style suffix at 768x960.
 - `finish_portraits.py [name ...]` crops to 4:5, saves a small JPEG and adds it to the manifest.
-- Events without a painting fall back to `event-fallback-sea|aboard|weather.jpg` (`jobs_chart.json`).
+- Events without a painting fall back to `fallback-sea|aboard|weather.jpg` (`jobs_chart.json`).

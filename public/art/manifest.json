@@ -161,8 +161,8 @@
     "portrait-crew-11.jpg",
     "portrait-crew-12.jpg",
     "portrait-dice.jpg",
-    "event-fallback-sea.jpg",
-    "event-fallback-aboard.jpg",
-    "event-fallback-weather.jpg"
+    "fallback-sea.jpg",
+    "fallback-aboard.jpg",
+    "fallback-weather.jpg"
   ]
 }
