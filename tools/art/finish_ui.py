@@ -32,7 +32,7 @@ def wood():
     t = np.linspace(0, 1, band)[None, :, None]
     a[:, :band] = a[:, :band] * t + a[:, -band:] * (1 - t)
     a = a[:, : a.shape[1] - band]
-    out = Image.fromarray(a.clip(0, 255).astype(np.uint8)).resize((400, 258), Image.LANCZOS)
+    out = Image.fromarray(a.clip(0, 255).astype(np.uint8)).resize((640, 413), Image.LANCZOS)
     out.save(os.path.join(DEST, "wood.jpg"), "JPEG", quality=84, optimize=True, progressive=True)
     print("wood", out.size, os.path.getsize(os.path.join(DEST, "wood.jpg")))
 
@@ -125,7 +125,7 @@ def icons():
                      "spriteSourceSize": {"x": 0, "y": 0, "w": ICON, "h": ICON}, "sourceSize": {"w": ICON, "h": ICON}}
     sheet.save(os.path.join(DEST, "icons.png"), optimize=True)
     meta = {"image": "icons.png", "size": {"w": sheet.width, "h": sheet.height}, "scale": "1"}
-    with open(os.path.join(DEST, "icons.json"), "w") as f:
+    with open(os.path.join(DEST, "icons.json"), "w", newline="\n") as f:
         json.dump({"frames": frames, "meta": meta}, f, indent=1)
     print("icons", names, os.path.getsize(os.path.join(DEST, "icons.png")))
 

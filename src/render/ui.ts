@@ -67,6 +67,9 @@ export class Button extends Phaser.GameObjects.Container {
   /** Where the label sits when not pressed. */
   private labelY: number;
   private iconY = 0;
+  /** The room the label has between the icon and the keycap, and the size it was asked for. */
+  private readonly labelRoom: number;
+  private readonly labelSize: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string, private readonly onClick: () => void, opts: ButtonOptions = {}) {
     super(scene, x, y);
@@ -115,6 +118,9 @@ export class Button extends Phaser.GameObjects.Container {
       if (!alone) left = ix + size / 2;
     }
     this.label.setX((left + right) / 2);
+    this.labelRoom = right - left - 10;
+    this.labelSize = opts.size ?? 14;
+    this.fitLabel();
     this.setSize(w, h);
     this.bg.setInteractive({ useHandCursor: true });
     this.bg.on('pointerover', (p: Phaser.Input.Pointer) => {
@@ -179,8 +185,18 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   setText(text: string): this {
-    if (this.label.text !== text) this.label.setText(text);
+    if (this.label.text !== text) {
+      this.label.setText(text);
+      this.fitLabel();
+    }
     return this;
+  }
+
+  /** Shrink the label a point at a time until it fits between the icon and the keycap (never below 10px). */
+  private fitLabel(): void {
+    const size = parseInt(String(this.label.style.fontSize), 10);
+    if (size !== this.labelSize && this.label.width * (this.labelSize / size) <= this.labelRoom) this.label.setFontSize(this.labelSize);
+    for (let s = parseInt(String(this.label.style.fontSize), 10); this.label.width > this.labelRoom && s > 10; s--) this.label.setFontSize(s - 1);
   }
 
   /** Show a different icon (a button made with one). */
@@ -453,7 +469,7 @@ export class Panel extends Phaser.GameObjects.Rectangle {
     } else if (painted(scene)) {
       if (scene.textures.exists('ui:wood')) {
         // The grain at a scale that suits a panel, darkened so light text reads on it.
-        this.surface = scene.add.tileSprite(x, y, w, h, 'ui:wood').setOrigin(0).setTileScale(0.8).setTint(0x9a8a7c);
+        this.surface = scene.add.tileSprite(x, y, w, h, 'ui:wood').setOrigin(0).setTileScale(0.72).setTint(0x9a8a7c);
         this.surface.setAlpha(opts.modal ? 1 : 0.92);
         this.parts.push(this.surface);
       } else this.parts.push(scene.add.tileSprite(x, y, w, h, 'ui:grain').setOrigin(0).setAlpha(0.5));
@@ -858,7 +874,7 @@ function paintButtons(textures: Phaser.Textures.TextureManager, wood: HTMLImageE
     ctx.clip();
     if (wood) {
       // The same stretch of grain on every state, so a plaque does not shift when it lights.
-      ctx.drawImage(wood, 40, 30, 150, 92, 4, 4, W - 8, H - 8);
+      ctx.drawImage(wood, 64, 48, 240, 147, 4, 4, W - 8, H - 8);
     } else {
       const g = ctx.createLinearGradient(0, 4, 0, H - 4);
       g.addColorStop(0, '#6a4a2c');
