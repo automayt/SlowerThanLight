@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { trait } from '../data/traits';
 import { voyage } from '../net/voyage';
 import type { Run } from '../sim/Run';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
-import { Button, panel } from './ui';
+import { COLORS, SCREEN, TYPE, inkStyle, titleStyle } from './theme';
+import { Button, divider, panel, ribbon } from './ui';
 
 /**
  * The hiring hall, over the port screen: the sailors looking for a berth, each with a background and a price.
@@ -28,8 +28,10 @@ export class HiringHall {
     const shade = scene.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0.55).setOrigin(0).setDepth(d).setInteractive();
     shade.on('pointerdown', () => this.close());
     const close = new Button(scene, SCREEN.w / 2 - 70, y + this.h - 50, 140, 36, 'Close', () => this.close(), { size: 15, hint: 'Esc' }).setDepth(d + 1);
-    this.frame = [shade, panel(scene, x, y, this.w, this.h, { modal: true }).setDepth(d), close];
-    this.frame.push(scene.add.text(SCREEN.w / 2, y + 18, 'The Hiring Hall', { fontFamily: TITLE_FONT, fontSize: '26px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(d + 1));
+    const sheet = panel(scene, x, y, this.w, this.h, { modal: true, skin: 'parchment' }).setDepth(d);
+    // The sheet swallows clicks: only the shade around it closes the hall.
+    sheet.setInteractive();
+    this.frame = [shade, sheet, close, ribbon(scene, SCREEN.w / 2, y + 2, 'The Hiring Hall', { size: 22, width: 300, depth: d + 2 })];
     scene.input.keyboard?.once('keydown-ESC', () => this.close());
     this.refresh();
   }
@@ -45,19 +47,20 @@ export class HiringHall {
       return o;
     };
     const x = (SCREEN.w - this.w) / 2 + 28;
-    let y = (SCREEN.h - this.h) / 2 + 64;
+    let y = (SCREEN.h - this.h) / 2 + 44;
     const hands = run.encounter.kind === 'port' ? (run.encounter.hands ?? []) : [];
     const full = run.condition.crew.length >= run.maxCrew;
-    add(scene.add.text(x, y, full ? `Every bunk is taken (${run.condition.crew.length}/${run.maxCrew}).` : `Bunks free: ${run.maxCrew - run.condition.crew.length}`, textStyle(13, full ? COLORS.textWarn : COLORS.textDim)));
+    add(scene.add.text(x, y, full ? `Every bunk is taken (${run.condition.crew.length}/${run.maxCrew}).` : `Bunks free: ${run.maxCrew - run.condition.crew.length}`, inkStyle(TYPE.body, full ? COLORS.inkRed : COLORS.inkDim, { fontStyle: 'italic' })));
     y += 26;
-    if (!hands.length) add(scene.add.text(x, y, 'Nobody else is looking for a berth today.', textStyle(14, COLORS.textDim, { fontStyle: 'italic' })));
+    if (!hands.length) add(scene.add.text(x, y, 'Nobody else is looking for a berth today.', inkStyle(14, COLORS.inkDim, { fontStyle: 'italic' })));
     hands.forEach((c, i) => {
       const t = trait(c.trait);
       const price = run.handPrice(c);
-      add(scene.add.text(x, y, `${c.name}, ${t.name}`, { fontFamily: TITLE_FONT, fontSize: '18px', color: COLORS.gold }));
-      add(scene.add.text(x, y + 26, t.blurb, textStyle(13, COLORS.text, { wordWrap: { width: this.w - 230 } })));
+      if (i > 0) add(divider(scene, SCREEN.w / 2, y - 12, this.w - 140, 0x6a4a22, 0.4));
+      add(scene.add.text(x, y, `${c.name}, ${t.name}`, titleStyle(19, COLORS.ink)));
+      add(scene.add.text(x, y + 26, t.blurb, inkStyle(TYPE.body, COLORS.ink, { wordWrap: { width: this.w - 230 } })));
       const why = run.portFeud ? 'Nobody here will sign on with you.' : full ? 'No bunk to spare.' : run.gold < price ? `You are ${price - run.gold} gold short.` : undefined;
-      const b = add(new Button(scene, x + this.w - 56 - 150, y + 6, 150, 36, `Sign on (${price}g)`, () => voyage(scene, { t: 'hire', pick: i }, `Sign on ${c.name}, ${t.name}`), { size: 14, tip: why }));
+      const b = add(new Button(scene, x + this.w - 56 - 150, y + 6, 150, 36, `Sign on · ${price}`, () => voyage(scene, { t: 'hire', pick: i }, `Sign on ${c.name}, ${t.name}`), { size: 14, tip: why ?? `Sign on ${c.name} for ${price} gold.`, icon: 'gold' }));
       b.setEnabled(run.canHire(i));
       y += 86;
     });

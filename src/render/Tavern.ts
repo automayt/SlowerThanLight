@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { TAVERNS } from '../data/nemesis';
 import { voyage } from '../net/voyage';
 import { DICE_HANDS, DICE_STAKES, DICE_TARGET, diceTotal, type Run } from '../sim/Run';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
-import { Button, panel } from './ui';
+import { COLORS, SCREEN, TYPE, inkStyle, titleStyle } from './theme';
+import { Button, panel, ribbon } from './ui';
 
 /** Draw one die: a bone-white square with its pips. */
 function drawDie(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, value: number, dim = false): void {
@@ -49,9 +49,11 @@ export class Tavern {
     shade.on('pointerdown', () => this.close());
     const close = new Button(scene, SCREEN.w / 2 - 70, y + this.h - 50, 140, 36, 'Close', () => this.close(), { size: 15, hint: 'Esc' }).setDepth(d + 1);
     const name = run.encounter.kind === 'port' ? run.encounter.name : '';
-    this.frame = [shade, panel(scene, x, y, this.w, this.h, { modal: true }).setDepth(d), close];
-    this.frame.push(scene.add.text(SCREEN.w / 2, y + 16, TAVERNS[name] ?? 'The Tavern', { fontFamily: TITLE_FONT, fontSize: '28px', color: COLORS.gold }).setOrigin(0.5, 0).setDepth(d + 1));
-    this.frame.push(scene.add.rectangle(SCREEN.w / 2, y + 70, 1, this.h - 140, COLORS.brass, 0.45).setOrigin(0.5, 0).setDepth(d + 1));
+    const sheet = panel(scene, x, y, this.w, this.h, { modal: true, skin: 'parchment' }).setDepth(d);
+    // The sheet swallows clicks: only the shade around it closes the tavern.
+    sheet.setInteractive();
+    this.frame = [shade, sheet, close, ribbon(scene, SCREEN.w / 2, y + 2, TAVERNS[name] ?? 'The Tavern', { size: 22, depth: d + 2 })];
+    this.frame.push(scene.add.rectangle(SCREEN.w / 2, y + 60, 1, this.h - 130, 0x6a4a22, 0.4).setOrigin(0.5, 0).setDepth(d + 1));
     scene.input.keyboard?.once('keydown-ESC', () => this.close());
     this.refresh();
   }
@@ -79,20 +81,20 @@ export class Tavern {
   private rumours(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
     const { scene, run } = this;
     const x = (SCREEN.w - this.w) / 2 + 28;
-    let y = (SCREEN.h - this.h) / 2 + 70;
+    let y = (SCREEN.h - this.h) / 2 + 52;
     const w = this.w / 2 - 56;
-    add(scene.add.text(x, y, 'Rumours', { fontFamily: TITLE_FONT, fontSize: '21px', color: COLORS.gold }));
+    add(scene.add.text(x, y, 'Rumours', titleStyle(22, COLORS.ink)));
     y += 32;
     const heard = run.encounter.kind === 'port' ? run.encounter.rumours : undefined;
     if (heard) {
-      add(scene.add.text(x, y, heard.join('\n\n'), textStyle(14, COLORS.text, { wordWrap: { width: w }, lineSpacing: 3 })));
+      add(scene.add.text(x, y, heard.join('\n\n'), inkStyle(14, COLORS.ink, { wordWrap: { width: w }, lineSpacing: 3 })));
       return;
     }
-    const blurb = add(scene.add.text(x, y, 'Stand the house a round and the talk turns to the waters ahead: what the sails out there are, what tales wait in the unknown waters, and now and then a wreck worth diving on.', textStyle(14, COLORS.textDim, { wordWrap: { width: w }, lineSpacing: 3 })));
+    const blurb = add(scene.add.text(x, y, 'Stand the house a round and the talk turns to the waters ahead: what the sails out there are, what tales wait in the unknown waters, and now and then a wreck worth diving on.', inkStyle(14, COLORS.inkDim, { wordWrap: { width: w }, lineSpacing: 3, fontStyle: 'italic' })));
     y += blurb.height + 18;
     const price = run.rumourPrice();
     const why = run.portFeud ? 'Nobody here will talk to you.' : run.gold < price ? `You are ${price - run.gold} gold short.` : undefined;
-    add(new Button(scene, x, y, 240, 40, `Stand a round (${price}g)`, () => voyage(scene, { t: 'rumour' }, 'Stand a round in the tavern'), { size: 15, tip: why })).setEnabled(run.canBuyRumour());
+    add(new Button(scene, x, y, 240, 40, `Stand a round · ${price}`, () => voyage(scene, { t: 'rumour' }, 'Stand a round in the tavern'), { size: 15, icon: 'gold', tip: why ?? `Stand the house a round for ${price} gold.` })).setEnabled(run.canBuyRumour());
   }
 
   private bones(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
@@ -100,20 +102,20 @@ export class Tavern {
     const table = run.diceTable;
     if (!table) return;
     const x = SCREEN.w / 2 + 28;
-    let y = (SCREEN.h - this.h) / 2 + 70;
+    let y = (SCREEN.h - this.h) / 2 + 52;
     const w = this.w / 2 - 56;
-    add(scene.add.text(x, y, `Bones with ${table.rival}`, { fontFamily: TITLE_FONT, fontSize: '21px', color: COLORS.gold, wordWrap: { width: w } }));
+    add(scene.add.text(x, y, `Bones with ${table.rival}`, titleStyle(22, COLORS.ink, { wordWrap: { width: w } })));
     y += 32;
     const rules = add(
-      scene.add.text(x, y, `Roll two dice, then roll again or stand. Over ${DICE_TARGET} and you bust. He rolls until he beats you or busts; a tie is a push. Exactly ${DICE_TARGET} pays double.`, textStyle(13, COLORS.textDim, { wordWrap: { width: w }, lineSpacing: 2 })),
+      scene.add.text(x, y, `Roll two dice, then roll again or stand. Over ${DICE_TARGET} and you bust. He rolls until he beats you or busts; a tie is a push. Exactly ${DICE_TARGET} pays double.`, inkStyle(TYPE.body, COLORS.inkDim, { wordWrap: { width: w }, lineSpacing: 2 })),
     );
     y += rules.height + 12;
     const hand = table.hand;
     const g = add(scene.add.graphics());
     const row = (label: string, dice: number[], dim: boolean) => {
-      add(scene.add.text(x, y + 12, label, textStyle(14, COLORS.text)));
+      add(scene.add.text(x, y + 12, label, inkStyle(14, COLORS.ink, { fontStyle: 'bold' })));
       dice.forEach((v, i) => drawDie(g, x + 92 + i * 40, y, 32, v, dim));
-      if (dice.length) add(scene.add.text(x + 92 + dice.length * 40 + 6, y + 8, `${diceTotal(dice)}`, { fontFamily: TITLE_FONT, fontSize: '22px', color: diceTotal(dice) > DICE_TARGET ? COLORS.textWarn : COLORS.gold }));
+      if (dice.length) add(scene.add.text(x + 92 + dice.length * 40 + 6, y + 8, `${diceTotal(dice)}`, titleStyle(23, diceTotal(dice) > DICE_TARGET ? COLORS.inkRed : COLORS.inkGold)));
       y += 44;
     };
     if (hand) {
@@ -121,7 +123,7 @@ export class Tavern {
       row('Rival', hand.rival, true);
     }
     if (this.last) {
-      const said = add(scene.add.text(x, y, this.last, textStyle(14, COLORS.gold, { fontStyle: 'italic', wordWrap: { width: w } })));
+      const said = add(scene.add.text(x, y, this.last, inkStyle(14, COLORS.inkGold, { fontStyle: 'italic', wordWrap: { width: w } })));
       y += said.height + 10;
     }
     const live = !!hand && !hand.result;
@@ -131,11 +133,11 @@ export class Tavern {
       return;
     }
     const left = DICE_HANDS - table.played;
-    add(scene.add.text(x, y, left > 0 ? `${left} hand${left > 1 ? 's' : ''} left before your rival calls it a night.` : `${table.rival} has had enough of you for one night.`, textStyle(13, COLORS.textDim)));
+    add(scene.add.text(x, y, left > 0 ? `${left} hand${left > 1 ? 's' : ''} left before your rival calls it a night.` : `${table.rival} has had enough of you for one night.`, inkStyle(TYPE.body, COLORS.inkDim, { fontStyle: 'italic' })));
     y += 26;
     DICE_STAKES.forEach((stake, i) => {
       const why = left <= 0 ? 'The table is closed to you tonight.' : run.gold < stake ? `You are ${stake - run.gold} gold short.` : undefined;
-      add(new Button(scene, x + i * 104, y, 96, 40, `Stake ${stake}`, () => voyage(scene, { t: 'dice', act: 'stake', stake }, `Stake ${stake} gold at Bones`), { size: 14, tip: why })).setEnabled(run.canDice('stake', stake));
+      add(new Button(scene, x + i * 104, y, 96, 40, `${stake}`, () => voyage(scene, { t: 'dice', act: 'stake', stake }, `Stake ${stake} gold at Bones`), { size: 15, icon: 'gold', tip: why ?? `Stake ${stake} gold on a hand of Bones.` })).setEnabled(run.canDice('stake', stake));
     });
   }
 

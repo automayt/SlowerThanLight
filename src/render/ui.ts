@@ -1,35 +1,72 @@
 import Phaser from 'phaser';
+import { ICON_ATLAS, iconFrame, type IconName } from './icons';
 import { cycleVolume, isMuted, isSoft, playSfx, SOUND_CHANGED } from './sound';
-import { COLORS, SCREEN, textStyle, titleStyle } from './theme';
+import { COLORS, SCREEN, textStyle, titleStyle, TYPE } from './theme';
 
 /** Gold edge of a hovered control. */
 const HOVER_EDGE = 0xf2c45a;
 /** Fill of a button in the instant it is pressed. */
-const PRESSED = 0x132331;
+const PRESSED = 0x140c06;
+
+/**
+ * Text is drawn at twice its size and shown at its own, so it stays crisp when the canvas is scaled up to a large
+ * window. Applies to every Text that does not ask for a resolution of its own.
+ */
+export const TEXT_RESOLUTION = 2;
+{
+  const proto = Phaser.GameObjects.TextStyle.prototype as unknown as { setStyle: (...a: unknown[]) => unknown; resolution: number; __crisp?: boolean };
+  if (!proto.__crisp) {
+    proto.__crisp = true;
+    const setStyle = proto.setStyle;
+    proto.setStyle = function (this: { resolution: number }, ...args: unknown[]) {
+      const out = setStyle.apply(this, args);
+      if (!this.resolution) this.resolution = TEXT_RESOLUTION;
+      return out;
+    };
+  }
+}
+
+/**
+ * Queue the kit's painted textures (oiled walnut, parchment, the icon atlas) in a scene's preload(). The kit falls back
+ * to drawn textures for any that fail to load.
+ */
+export function preloadKit(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('ui:wood')) scene.load.image('ui:wood', 'ui/wood.jpg');
+  if (!scene.textures.exists('ui:parchment')) scene.load.image('ui:parchment', 'ui/parchment.png');
+  if (!scene.textures.exists(ICON_ATLAS)) scene.load.atlas(ICON_ATLAS, 'ui/icons.png', 'ui/icons.json');
+}
 
 export interface ButtonOptions {
   size?: number;
   color?: number;
   onRightClick?: () => void;
-  /** Its keyboard shortcut, shown small at the right end ('Enter', 'Esc', '1'). The scene binds the key and calls press(). */
+  /** Its keyboard shortcut, shown as a small keycap at the right end ('Enter', 'Esc', '1'). The scene binds the key and calls press(). */
   hint?: string;
   /** Shown on hover. For a disabled button, say why it is disabled. */
   tip?: string;
+  /** A painted icon before the label (or alone, centred, when the label is empty). */
+  icon?: IconName;
 }
 
-/** A plaque of dark oiled wood with a brass rim: lit gold on hover, sunk when pressed, brass when on, grey when disabled. */
+/** A plaque of oiled walnut in a brass rim: lit gold on hover, sunk when pressed, gilt when on, grey when disabled. */
 export class Button extends Phaser.GameObjects.Container {
   /** The hit area. Under the painted plaque it is clear; without WebGL it is the button. */
   readonly bg: Phaser.GameObjects.Rectangle;
   readonly label: Phaser.GameObjects.Text;
+  /** The icon, when the button was given one. */
+  readonly iconImage: Phaser.GameObjects.Image | null = null;
   private readonly skin: Phaser.GameObjects.NineSlice | null = null;
   private readonly hintText: Phaser.GameObjects.Text | null = null;
+  private readonly hintCap: Phaser.GameObjects.Graphics | null = null;
   private enabled = true;
   private toggled = false;
   private hover = false;
   private pressed = false;
   private tip: string | null;
   private readonly baseColor: number;
+  /** Where the label sits when not pressed. */
+  private labelY: number;
+  private iconY = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string, private readonly onClick: () => void, opts: ButtonOptions = {}) {
     super(scene, x, y);
@@ -44,14 +81,40 @@ export class Button extends Phaser.GameObjects.Container {
       this.bg.setFillStyle(0x000000, 0.001).setStrokeStyle();
       this.add(this.skin);
     }
-    this.label = scene.add.text(w / 2, h / 2, text, textStyle(opts.size ?? 14)).setOrigin(0.5).setShadow(0, 1, '#0a0502', 2, false, true);
+    this.labelY = h / 2;
+    this.label = scene.add
+      .text(w / 2, h / 2, text, textStyle(opts.size ?? 14, COLORS.text))
+      .setOrigin(0.5)
+      .setShadow(0, 1, '#0a0502', 2, false, true);
     this.add(this.label);
+    // Room on the right for the keycap, on the left for the icon; the label centres in what is left.
+    let left = 0;
+    let right = w;
     if (opts.hint) {
-      this.hintText = scene.add.text(w - 8, h / 2, opts.hint, textStyle(12, '#c9b48a')).setOrigin(1, 0.5).setAlpha(0.8);
-      this.add(this.hintText);
-      // The label stays centred in the room the hint leaves.
-      this.label.setX((w - this.hintText.width - 8) / 2);
+      const capSize = Math.max(10, Math.min(12, Math.round(h * 0.42)));
+      this.hintText = scene.add.text(0, h / 2, opts.hint, textStyle(capSize, '#e8d6a8', { fontStyle: 'bold' })).setOrigin(0.5);
+      const cw = Math.max(this.hintText.width + 8, capSize + 6);
+      const ch = capSize + 6;
+      const cx = w - 6 - cw;
+      this.hintCap = scene.add.graphics();
+      this.hintCap.fillStyle(0x000000, 0.45).fillRoundedRect(cx, h / 2 - ch / 2 + 1, cw, ch, 3);
+      this.hintCap.fillStyle(0x120a04, 0.85).fillRoundedRect(cx, h / 2 - ch / 2, cw, ch, 3);
+      this.hintCap.lineStyle(1, COLORS.brass, 0.45).strokeRoundedRect(cx + 0.5, h / 2 - ch / 2 + 0.5, cw - 1, ch - 1, 3);
+      this.hintText.setX(cx + cw / 2);
+      this.add([this.hintCap, this.hintText]);
+      right = cx - 2;
     }
+    if (opts.icon) {
+      const { key, frame } = iconFrame(scene, opts.icon);
+      const size = Math.min(h - 8, 30);
+      const alone = !text;
+      const ix = alone ? (left + right) / 2 : left + 6 + size / 2;
+      this.iconY = h / 2;
+      this.iconImage = scene.add.image(ix, h / 2, key, frame).setDisplaySize(size, size);
+      this.add(this.iconImage);
+      if (!alone) left = ix + size / 2;
+    }
+    this.label.setX((left + right) / 2);
     this.setSize(w, h);
     this.bg.setInteractive({ useHandCursor: true });
     this.bg.on('pointerover', (p: Phaser.Input.Pointer) => {
@@ -120,6 +183,16 @@ export class Button extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /** Show a different icon (a button made with one). */
+  setIcon(name: IconName): this {
+    if (!this.iconImage || this.iconImage.getData('icon') === name) return this;
+    const { key, frame } = iconFrame(this.scene, name);
+    const w = this.iconImage.displayWidth;
+    const h = this.iconImage.displayHeight;
+    this.iconImage.setTexture(key, frame).setDisplaySize(w, h).setData('icon', name);
+    return this;
+  }
+
   /** Change or clear the hover text, updating it in place if it is showing. */
   setTip(tip: string | null): this {
     if (tip === this.tip) return this;
@@ -152,22 +225,30 @@ export class Button extends Phaser.GameObjects.Container {
     }
     if (this.bg.input) this.bg.input.cursor = this.enabled ? 'pointer' : 'default';
     this.label.setAlpha(this.enabled ? 1 : 0.45);
-    this.label.setColor(lit && !this.toggled ? '#fff4d6' : COLORS.text);
-    this.hintText?.setAlpha(this.enabled ? 0.8 : 0.3);
-    // Pressed, the label sinks a pixel.
-    this.label.setY(this.bg.height / 2 + (this.pressed ? 1 : 0));
+    const color = lit && !this.toggled ? '#fff4d6' : this.toggled ? '#fff6e0' : COLORS.text;
+    if (this.label.style.color !== color) this.label.setColor(color);
+    this.hintText?.setAlpha(this.enabled ? 1 : 0.4);
+    this.hintCap?.setAlpha(this.enabled ? 1 : 0.4);
+    this.iconImage?.setAlpha(this.enabled ? 1 : 0.4);
+    // Pressed, the face sinks a pixel.
+    const dy = this.pressed ? 1 : 0;
+    this.label.setY(this.labelY + dy);
+    this.iconImage?.setY(this.iconY + dy);
   }
 }
 
-/** A small note that follows the pointer. One per scene: get it with tooltip(scene). */
+/** A small slip of parchment that follows the pointer. One per scene: get it with tooltip(scene). */
 export class Tooltip {
   private readonly bg: Phaser.GameObjects.Graphics;
+  private readonly paper: Phaser.GameObjects.NineSlice | null;
   private readonly text: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.bg = scene.add.graphics().setDepth(1000).setVisible(false);
+    const paper = painted(scene) && scene.textures.exists('ui:parchment');
+    this.paper = paper ? scene.add.nineslice(0, 0, 'ui:parchment', undefined, 64, 32, 18, 18, 18, 18).setOrigin(0).setDepth(1000).setVisible(false) : null;
     this.text = scene.add
-      .text(0, 0, '', textStyle(13, COLORS.text, { wordWrap: { width: 320 }, lineSpacing: 2, padding: { x: 10, y: 6 } }))
+      .text(0, 0, '', textStyle(TYPE.body, paper ? COLORS.ink : COLORS.text, { wordWrap: { width: 320 }, lineSpacing: 2, padding: { x: 12, y: 8 } }))
       .setDepth(1001)
       .setVisible(false);
   }
@@ -181,19 +262,24 @@ export class Tooltip {
     if (text !== this.text.text || !this.text.visible) {
       this.text.setText(text);
       const { width: w, height: h } = this.text;
-      this.bg
-        .clear()
-        .fillStyle(0x000000, 0.35)
-        .fillRect(3, 4, w, h)
-        .fillStyle(COLORS.panel, 0.97)
-        .fillRect(0, 0, w, h)
-        .lineStyle(1.5, COLORS.panelEdge, 1)
-        .strokeRect(0, 0, w, h)
-        .lineStyle(1, COLORS.brass, 0.25)
-        .strokeRect(3, 3, w - 6, h - 6);
+      this.bg.clear().fillStyle(0x000000, 0.35).fillRect(4, 5, w - 2, h - 2);
+      if (this.paper) {
+        const s = Math.min(18, Math.floor(h / 2), Math.floor(w / 2));
+        this.paper.setSlices(w, h, s, s, s, s);
+        this.paper.setSize(w, h);
+      } else {
+        this.bg
+          .fillStyle(COLORS.panel, 0.97)
+          .fillRect(0, 0, w, h)
+          .lineStyle(1.5, COLORS.panelEdge, 1)
+          .strokeRect(0, 0, w, h)
+          .lineStyle(1, COLORS.brass, 0.25)
+          .strokeRect(3, 3, w - 6, h - 6);
+      }
     }
     this.move(x, y);
     this.bg.setVisible(true);
+    this.paper?.setVisible(true);
     this.text.setVisible(true);
   }
 
@@ -205,12 +291,14 @@ export class Tooltip {
     const y = py + 22 + h > SCREEN.h - 6 ? py - 10 - h : py + 22;
     const at = { x: Math.round(Phaser.Math.Clamp(x, 6, SCREEN.w - w - 6)), y: Math.round(Phaser.Math.Clamp(y, 6, SCREEN.h - h - 6)) };
     this.bg.setPosition(at.x, at.y);
+    this.paper?.setPosition(at.x, at.y);
     this.text.setPosition(at.x, at.y);
   }
 
   hide(): void {
     if (!this.alive) return;
     this.bg.setVisible(false);
+    this.paper?.setVisible(false);
     this.text.setVisible(false);
   }
 }
@@ -237,6 +325,18 @@ export function addTip(obj: Phaser.GameObjects.GameObject, text: string | (() =>
   });
   obj.on('pointermove', (p: Phaser.Input.Pointer) => tooltips.get(scene)?.move(p.x, p.y));
   obj.on('pointerout', () => tooltips.get(scene)?.hide());
+}
+
+/** A clear hit box over a stretch of the screen that shows a tip on hover (for icons and meters, which are not interactive). */
+export function tipZone(scene: Phaser.Scene, x: number, y: number, w: number, h: number, text: string | (() => string)): Phaser.GameObjects.Zone {
+  const zone = scene.add.zone(x, y, w, h).setOrigin(0).setInteractive();
+  addTip(zone, text);
+  return zone;
+}
+
+/** A small keycap, as on the buttons, for a key that has no button of its own. */
+export function keycap(scene: Phaser.Scene, x: number, y: number, key: string, size = 10): Phaser.GameObjects.Text {
+  return scene.add.text(x, y, key, textStyle(size, '#e8d6a8', { fontStyle: 'bold', backgroundColor: '#120a04d9', padding: { x: 3, y: 1 } }));
 }
 
 /** The speaker: click to step through loud, soft and off. M toggles mute on every screen. */
@@ -282,53 +382,81 @@ export class SoundButton extends Button {
   }
 }
 
-/** Draws a row of small square pips: green for working, grey for unused, red for damaged. */
+
+/** Draws a row of small square pips, like lamps in a brass bezel: green for working, dark for unused, red for damaged. */
 export function drawPips(g: Phaser.GameObjects.Graphics, x: number, y: number, on: number, max: number, damaged: number, size = 10, gap = 3): number {
   for (let i = 0; i < max; i++) {
     const px = x + i * (size + gap);
-    const color = i >= max - damaged ? COLORS.pipDamaged : i < on ? COLORS.pipOn : COLORS.pipOff;
-    g.fillStyle(color, 1).fillRect(px, y, size, size);
-    g.lineStyle(1, 0x000000, 0.6).strokeRect(px, y, size, size);
+    const color = i >= max - damaged ? COLORS.pipDamaged : i < on ? COLORS.pipOn : 0x2a2420;
+    g.fillStyle(0x000000, 0.55).fillRoundedRect(px - 1, y - 1, size + 2, size + 2, 2.5);
+    g.fillStyle(color, 1).fillRoundedRect(px, y, size, size, 2);
+    if (i < on || i >= max - damaged) g.fillStyle(0xffffff, 0.28).fillRoundedRect(px + 1.5, y + 1, size - 3, Math.max(1.5, size * 0.3), 1);
+    g.lineStyle(1, i < on ? 0xe8c878 : 0x6a5434, i < on ? 0.55 : 0.5).strokeRoundedRect(px - 0.5, y - 0.5, size + 1, size + 1, 2.5);
   }
   return max * (size + gap);
 }
 
-/** Horizontal fill bar. */
-export function drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number, color: number, back = 0x1a232b): void {
+/** Horizontal fill bar: a dark trough in a fine brass rim, filled with a rounded, lit bar. */
+export function drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, frac: number, color: number, back = 0x15100b): void {
   const fw = Math.max(0, Math.min(1, frac)) * w;
-  g.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, h + 2);
-  g.fillStyle(back, 1).fillRect(x, y, w, h);
-  g.fillStyle(color, 1).fillRect(x, y, fw, h);
-  // A sheen along the top half gives the bar some roundness.
-  if (h >= 4) g.fillStyle(0xffffff, 0.22).fillRect(x, y, fw, Math.ceil(h * 0.4));
-  g.fillStyle(0x000000, 0.18).fillRect(x, y + h - Math.max(1, Math.floor(h * 0.25)), fw, Math.max(1, Math.floor(h * 0.25)));
+  const r = Math.min(3, h / 2);
+  g.fillStyle(0x000000, 0.6).fillRoundedRect(x - 1.5, y - 1.5, w + 3, h + 3, r + 1);
+  g.fillStyle(back, 1).fillRoundedRect(x, y, w, h, r);
+  if (fw >= 1) {
+    g.fillStyle(color, 1).fillRoundedRect(x, y, fw, h, Math.min(r, fw / 2));
+    // A sheen along the top and a shade along the bottom give the bar some roundness.
+    if (h >= 4) g.fillStyle(0xffffff, 0.24).fillRect(x + 1, y + 1, Math.max(0, fw - 2), Math.ceil(h * 0.3));
+    g.fillStyle(0x000000, 0.2).fillRect(x, y + h - Math.max(1, Math.floor(h * 0.25)), fw, Math.max(1, Math.floor(h * 0.25)));
+  }
+  if (h >= 5) g.lineStyle(1, COLORS.brass, 0.35).strokeRoundedRect(x - 1, y - 1, w + 2, h + 2, r + 0.5);
 }
 
 export interface PanelOptions {
   /** A dialog over the rest of the screen: near-opaque, so nothing behind ghosts through. */
   modal?: boolean;
+  /**
+   * 'wood' (the default): oiled walnut in a brass frame, for light text. 'parchment': a sheet of old paper with a
+   * browned, deckled edge, for ink (COLORS.ink, inkStyle).
+   */
+  skin?: 'wood' | 'parchment';
 }
 
 type Part = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Depth & Phaser.GameObjects.Components.Visible & Phaser.GameObjects.Components.AlphaSingle;
 
 /**
- * A framed panel: dark lacquer with a faint grain, a brass rim with corner fittings, and a soft shadow.
- * The rectangle is the fill; the painted parts follow its depth, visibility, alpha and destruction.
+ * A framed panel. The rectangle is the fill; the painted parts (the wood or the paper, the frame) follow its depth,
+ * visibility, alpha, fill alpha and destruction.
  */
 export class Panel extends Phaser.GameObjects.Rectangle {
   readonly keyline: Phaser.GameObjects.Rectangle;
+  readonly skin: 'wood' | 'parchment';
   private readonly parts: Part[];
   private readonly shadow: Phaser.GameObjects.Rectangle;
+  /** The board or the sheet, whose alpha follows the fill's. */
+  private readonly surface: (Part & Phaser.GameObjects.Components.AlphaSingle) | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, opts: PanelOptions = {}) {
-    super(scene, x, y, w, h, COLORS.panel, opts.modal ? 0.97 : 0.9);
+    super(scene, x, y, w, h, COLORS.panel, opts.modal ? 0.97 : 0.92);
     this.setOrigin(0);
+    const paper = opts.skin === 'parchment' && painted(scene) && scene.textures.exists('ui:parchment');
+    this.skin = paper ? 'parchment' : 'wood';
     // Made before the panel joins the display list, so it lies underneath.
-    this.shadow = scene.add.rectangle(x + 4, y + 6, w, h, 0x000000, 0.38).setOrigin(0);
+    this.shadow = paper ? scene.add.rectangle(x + 8, y + 10, w - 8, h - 8, 0x000000, 0.4).setOrigin(0) : scene.add.rectangle(x + 4, y + 6, w, h, 0x000000, 0.38).setOrigin(0);
     scene.add.existing(this);
     this.parts = [];
-    if (painted(scene)) {
-      this.parts.push(scene.add.tileSprite(x, y, w, h, 'ui:grain').setOrigin(0).setAlpha(0.5));
+    if (paper) {
+      super.setFillStyle(0x000000, 0.001);
+      const s = Math.min(PAPER_SLICE, Math.floor(w / 2), Math.floor(h / 2));
+      this.surface = scene.add.nineslice(x, y, 'ui:parchment', undefined, w, h, s, s, s, s).setOrigin(0);
+      this.parts.push(this.surface);
+      this.keyline = scene.add.rectangle(x + 12, y + 12, w - 24, h - 24).setOrigin(0).setStrokeStyle(1, 0x6a4a22, 0.25);
+    } else if (painted(scene)) {
+      if (scene.textures.exists('ui:wood')) {
+        // The grain at a scale that suits a panel, darkened so light text reads on it.
+        this.surface = scene.add.tileSprite(x, y, w, h, 'ui:wood').setOrigin(0).setTileScale(0.8).setTint(0x9a8a7c);
+        this.surface.setAlpha(opts.modal ? 1 : 0.92);
+        this.parts.push(this.surface);
+      } else this.parts.push(scene.add.tileSprite(x, y, w, h, 'ui:grain').setOrigin(0).setAlpha(0.5));
       this.parts.push(scene.add.nineslice(x, y, 'ui:frame', undefined, w, h, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE).setOrigin(0));
       this.keyline = scene.add.rectangle(x + 3, y + 3, w - 6, h - 6).setOrigin(0).setVisible(false);
     } else {
@@ -341,6 +469,14 @@ export class Panel extends Phaser.GameObjects.Rectangle {
       this.shadow.destroy();
       this.parts.forEach((p) => p.destroy());
     });
+  }
+
+  /** A see-through fill lets a painting behind show through the board too. */
+  override setFillStyle(color?: number, alpha = 1): this {
+    if (this.skin === 'parchment') return this;
+    super.setFillStyle(color, alpha);
+    this.surface?.setAlpha(Math.min(1, alpha));
+    return this;
   }
 
   // The parts are still unset while the base constructor runs.
@@ -399,6 +535,134 @@ export function divider(scene: Phaser.Scene, cx: number, y: number, w: number, c
   return g;
 }
 
+export interface RibbonOptions {
+  /** Width of the ribbon, tails included; by default it fits the text. */
+  width?: number;
+  size?: number;
+  depth?: number;
+}
+
+/** A heading on a red silk ribbon with folded, notched tails, centred on its position. */
+export class Ribbon extends Phaser.GameObjects.Container {
+  readonly label: Phaser.GameObjects.Text;
+  private readonly band: Phaser.GameObjects.NineSlice | Phaser.GameObjects.Rectangle;
+  private readonly bandH: number;
+
+  constructor(
+    scene: Phaser.Scene,
+    cx: number,
+    y: number,
+    text: string,
+    private readonly opts: RibbonOptions = {},
+  ) {
+    super(scene, cx, y);
+    ensureKit(scene);
+    const size = opts.size ?? 20;
+    this.bandH = Math.max(RIBBON_H, Math.round(size * 2));
+    // The band is the upper two-thirds of the texture; the label sits in it.
+    this.band =
+      scene.sys.renderer?.type === Phaser.CANVAS
+        ? scene.add.rectangle(0, 0, 100, this.bandH * 0.62, COLORS.ribbon).setStrokeStyle(1, COLORS.brass, 0.7)
+        : scene.add.nineslice(0, this.bandH * 0.06, 'ui:ribbon', undefined, 100, this.bandH, RIBBON_TAIL, RIBBON_TAIL, 0, 0);
+    this.label = scene.add.text(0, -1, '', titleStyle(size, '#fff1d0')).setOrigin(0.5).setShadow(0, 1.5, '#2a0604', 2, false, true);
+    this.add([this.band, this.label]);
+    this.setLabel(text);
+    if (opts.depth !== undefined) this.setDepth(opts.depth);
+    scene.add.existing(this);
+  }
+
+  /** Change the words, widening or narrowing the ribbon to fit unless it was given a width. */
+  setLabel(text: string): this {
+    if (this.label.text === text && this.band.width > 100) return this;
+    this.label.setText(text);
+    const w = Math.max(this.opts.width ?? this.label.width + 2 * RIBBON_TAIL + 30, 2 * RIBBON_TAIL + 20);
+    if (this.band instanceof Phaser.GameObjects.NineSlice) this.band.setSize(w, this.bandH);
+    else this.band.setSize(w - 2 * RIBBON_TAIL + 20, this.bandH * 0.62);
+    this.setSize(w, this.bandH);
+    return this;
+  }
+}
+
+export function ribbon(scene: Phaser.Scene, cx: number, y: number, text: string, opts: RibbonOptions = {}): Ribbon {
+  return new Ribbon(scene, cx, y, text, opts);
+}
+
+export interface SlipOptions {
+  size?: number;
+  color?: string;
+  /** Wrap width of the text. */
+  wrap?: number;
+  /** A small icon before the text. */
+  icon?: IconName;
+  italic?: boolean;
+}
+
+/**
+ * A torn-off slip of parchment with a line of ink on it (and an icon, if given), its top-left at its position: for
+ * toasts, notes and pointer labels. Resizes to fit when its text changes.
+ */
+export class Slip extends Phaser.GameObjects.Container {
+  readonly text: Phaser.GameObjects.Text;
+  readonly iconImage: Phaser.GameObjects.Image | null = null;
+  private readonly paper: Phaser.GameObjects.NineSlice | Phaser.GameObjects.Rectangle;
+  private readonly shade: Phaser.GameObjects.Rectangle;
+  private readonly padX: number;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, text: string, opts: SlipOptions = {}) {
+    super(scene, x, y);
+    const paper = painted(scene) && scene.textures.exists('ui:parchment');
+    const size = opts.size ?? TYPE.body;
+    this.padX = 11;
+    this.shade = scene.add.rectangle(4, 5, 10, 10, 0x000000, 0.35).setOrigin(0);
+    this.paper = paper
+      ? scene.add.nineslice(0, 0, 'ui:parchment', undefined, 40, 30, 14, 14, 12, 12).setOrigin(0)
+      : scene.add.rectangle(0, 0, 40, 30, COLORS.panel, 0.95).setOrigin(0).setStrokeStyle(1.5, COLORS.panelEdge);
+    this.add([this.shade, this.paper]);
+    let tx = this.padX;
+    if (opts.icon) {
+      const { key, frame } = iconFrame(scene, opts.icon);
+      const s = Math.round(size * 1.45);
+      this.iconImage = scene.add.image(this.padX + s / 2 - 2, 0, key, frame).setDisplaySize(s, s);
+      this.add(this.iconImage);
+      tx += s + 3;
+    }
+    this.text = scene.add.text(tx, 6, '', textStyle(size, opts.color ?? (paper ? COLORS.ink : COLORS.text), { wordWrap: opts.wrap ? { width: opts.wrap } : undefined, lineSpacing: 1, fontStyle: opts.italic ? 'italic' : 'normal' }));
+    this.add(this.text);
+    this.setLabel(text);
+    scene.add.existing(this);
+  }
+
+  get paperW(): number {
+    return this.paper.width;
+  }
+
+  get paperH(): number {
+    return this.paper.height;
+  }
+
+  setLabel(text: string): this {
+    if (this.text.text === text && this.paper.width > 40) return this;
+    this.text.setText(text);
+    const w = Math.ceil(this.text.x + this.text.width + this.padX);
+    const h = Math.ceil(this.text.height + 12);
+    if (this.paper instanceof Phaser.GameObjects.NineSlice) {
+      const s = Math.min(12, Math.floor(h / 2));
+      this.paper.setSlices(w, h, 14, 14, s, s);
+      this.paper.setSize(w, h);
+    } else this.paper.setSize(w, h);
+    this.shade.setSize(w - 4, h - 4);
+    this.iconImage?.setY(h / 2);
+    this.setSize(w, h);
+    return this;
+  }
+
+  /** Ink colour of the text (on parchment, use the ink colours). */
+  setInk(color: string): this {
+    if (this.text.style.color !== color) this.text.setColor(color);
+    return this;
+  }
+}
+
 /** A heading in gilt: the Fell face filled with a gold gradient, cut in dark ink, with a soft drop shadow. */
 export function goldText(scene: Phaser.Scene, x: number, y: number, text: string, size: number, extra: Phaser.Types.GameObjects.Text.TextStyle = {}): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, text, titleStyle(size, COLORS.gold, { stroke: '#1a0e05', strokeThickness: Math.max(2, Math.round(size / 10)), ...extra }));
@@ -413,9 +677,11 @@ export function gild(t: Phaser.GameObjects.Text, colors: string[] = ['#fff3c4', 
   return t.setFill(grd);
 }
 
-/** A gold piece of eight, about `size` across. */
+/** A gold piece of eight (the painted heap of doubloons where it has loaded), about `size` across. */
 export function coin(scene: Phaser.Scene, x: number, y: number, size = 18): Phaser.GameObjects.Image {
   ensureKit(scene);
+  const atlas = scene.textures.exists(ICON_ATLAS) && scene.textures.get(ICON_ATLAS).has('gold');
+  if (atlas) return scene.add.image(x, y, ICON_ATLAS, 'gold').setDisplaySize(size * 1.3, size * 1.3);
   return scene.add.image(x, y, 'ui:coin').setScale(size / 40);
 }
 
@@ -513,6 +779,7 @@ export function waxSeal(scene: Phaser.Scene, mark: 'anchor' | 'skull'): string {
   return key;
 }
 
+
 /** Whether to use the painted kit: NineSlice draws only under WebGL, so the canvas renderer keeps the flat look. */
 function painted(scene: Phaser.Scene): boolean {
   if (scene.sys.renderer?.type === Phaser.CANVAS) return false;
@@ -520,51 +787,49 @@ function painted(scene: Phaser.Scene): boolean {
   return true;
 }
 
-const BTN_SLICE = 9;
-const FRAME_SLICE = 22;
+const BTN_SLICE = 12;
+const FRAME_SLICE = 24;
+const PAPER_SLICE = 40;
+const RIBBON_H = 48;
+const RIBBON_TAIL = 40;
 
-/** Paint the kit's textures, once per game: button plaques, the panel frame, the grain and a coin. */
+/** Paint the kit's textures, once per game: button plaques, the panel frame, the grain, a coin and the ribbon. */
 function ensureKit(scene: Phaser.Scene): void {
   const textures = scene.textures;
   if (textures.exists('ui:btn')) return;
-  paintButtons(textures);
+  const wood = textures.exists('ui:wood') ? (textures.get('ui:wood').getSourceImage() as HTMLImageElement) : null;
+  paintButtons(textures, wood);
   paintFrame(textures);
   paintGrain(textures);
   paintCoin(textures);
-}
-
-/** A small seeded random, so the painted grain comes out the same every time. */
-function seeded(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  paintRibbon(textures);
 }
 
 interface PlaqueLook {
-  top: string;
-  bottom: string;
-  rim: string;
+  /** How much light the walnut face keeps (0 black, 1 as painted). */
+  face: number;
+  /** A wash over the face: gilt for a button that is on, grey for one that is off. */
+  wash?: [string, string];
+  /** The brass rim, light edge and dark edge. */
+  rim: [string, string];
   /** Inner glow, as the start of an rgba() colour. */
   glow?: string;
   sunk?: boolean;
 }
 
 const PLAQUES: Record<string, PlaqueLook> = {
-  base: { top: '#4b3421', bottom: '#26180c', rim: '#9c7c40' },
-  hover: { top: '#634529', bottom: '#33200e', rim: '#f2c45a', glow: 'rgba(242,196,90,' },
-  press: { top: '#1c1209', bottom: '#2e1e10', rim: '#c9a256', sunk: true },
-  on: { top: '#9c7432', bottom: '#5a3d14', rim: '#f6d98a' },
-  onHover: { top: '#b08840', bottom: '#694819', rim: '#fff0b8', glow: 'rgba(255,232,160,' },
-  off: { top: '#2d2824', bottom: '#1c1916', rim: '#4d4438' },
+  base: { face: 0.62, rim: ['#e9c97c', '#6e4c1c'] },
+  hover: { face: 0.82, rim: ['#fff2c0', '#a8823a'], glow: 'rgba(255,214,120,' },
+  press: { face: 0.4, rim: ['#b89048', '#4e3412'], sunk: true },
+  on: { face: 0.7, wash: ['rgba(214,160,64,0.62)', 'rgba(120,76,18,0.72)'], rim: ['#fff2c0', '#9c7432'] },
+  onHover: { face: 0.82, wash: ['rgba(236,186,84,0.62)', 'rgba(140,92,24,0.7)'], rim: ['#fffbe0', '#b8903e'], glow: 'rgba(255,236,170,' },
+  off: { face: 0.34, wash: ['rgba(60,56,52,0.55)', 'rgba(30,28,26,0.6)'], rim: ['#7a6e5c', '#3a3228'] },
 };
 
-function paintButtons(textures: Phaser.Textures.TextureManager): void {
-  const W = 44;
-  const H = 32;
+/** The six plaque states side by side, each a walnut face in a brass rim, for 9-slicing. */
+function paintButtons(textures: Phaser.Textures.TextureManager, wood: HTMLImageElement | null): void {
+  const W = 72;
+  const H = 44;
   const names = Object.keys(PLAQUES);
   const tex = textures.createCanvas('ui:btn', W * names.length, H)!;
   const ctx = tex.getContext();
@@ -574,76 +839,118 @@ function paintButtons(textures: Phaser.Textures.TextureManager): void {
     const ox = i * W;
     ctx.save();
     ctx.translate(ox, 0);
-    // A dark outer edge, then the wood.
-    roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 4);
-    ctx.fillStyle = 'rgba(8,4,2,0.9)';
+    // A dark outer edge, the brass rim, then the face.
+    roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 6);
+    ctx.fillStyle = 'rgba(8,4,2,0.95)';
     ctx.fill();
-    const wood = ctx.createLinearGradient(0, 1, 0, H - 1);
-    wood.addColorStop(0, look.top);
-    wood.addColorStop(1, look.bottom);
-    roundRect(ctx, 1.5, 1.5, W - 3, H - 3, 3);
-    ctx.fillStyle = wood;
+    const rim = ctx.createLinearGradient(0, 1, 0, H - 1);
+    rim.addColorStop(0, look.rim[0]);
+    rim.addColorStop(0.5, look.rim[1]);
+    rim.addColorStop(1, look.rim[0]);
+    roundRect(ctx, 1.5, 1.5, W - 3, H - 3, 5);
+    ctx.fillStyle = rim;
     ctx.fill();
-    // Grain runs along the plaque, so stretching it keeps it straight.
+    roundRect(ctx, 4, 4, W - 8, H - 8, 3);
+    ctx.fillStyle = '#120a04';
+    ctx.fill();
+    roundRect(ctx, 4.5, 4.5, W - 9, H - 9, 3);
     ctx.save();
     ctx.clip();
-    for (let k = 0; k < 9; k++) {
-      ctx.strokeStyle = rand() < 0.5 ? `rgba(0,0,0,${0.08 + rand() * 0.1})` : `rgba(255,220,170,${0.03 + rand() * 0.05})`;
-      ctx.lineWidth = 0.6 + rand();
-      const y = 3 + rand() * (H - 6);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y + rand() * 1.5 - 0.75);
-      ctx.stroke();
-    }
-    if (look.glow) {
-      for (let k = 0; k < 4; k++) {
-        ctx.strokeStyle = `${look.glow}${0.34 - k * 0.08})`;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(2.5 + k, 2.5 + k, W - 5 - 2 * k, H - 5 - 2 * k);
+    if (wood) {
+      // The same stretch of grain on every state, so a plaque does not shift when it lights.
+      ctx.drawImage(wood, 40, 30, 150, 92, 4, 4, W - 8, H - 8);
+    } else {
+      const g = ctx.createLinearGradient(0, 4, 0, H - 4);
+      g.addColorStop(0, '#6a4a2c');
+      g.addColorStop(1, '#2e1c0e');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      for (let k = 0; k < 9; k++) {
+        ctx.strokeStyle = rand() < 0.5 ? `rgba(0,0,0,${0.08 + rand() * 0.1})` : `rgba(255,220,170,${0.03 + rand() * 0.05})`;
+        ctx.lineWidth = 0.6 + rand();
+        const y = 5 + rand() * (H - 10);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y + rand() * 1.5 - 0.75);
+        ctx.stroke();
       }
     }
-    ctx.restore();
+    ctx.fillStyle = `rgba(10,5,2,${1 - look.face})`;
+    ctx.fillRect(0, 0, W, H);
+    if (look.wash) {
+      const g = ctx.createLinearGradient(0, 4, 0, H - 4);
+      g.addColorStop(0, look.wash[0]);
+      g.addColorStop(1, look.wash[1]);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (look.glow) {
+      for (let k = 0; k < 5; k++) {
+        ctx.strokeStyle = `${look.glow}${0.4 - k * 0.08})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(5 + k, 5 + k, W - 10 - 2 * k, H - 10 - 2 * k);
+      }
+    }
     // A bevel: light along the top, shadow along the bottom; the other way round when sunk.
-    ctx.fillStyle = look.sunk ? 'rgba(0,0,0,0.45)' : 'rgba(255,238,200,0.22)';
-    ctx.fillRect(3, 2.5, W - 6, 1);
-    ctx.fillStyle = look.sunk ? 'rgba(255,238,200,0.1)' : 'rgba(0,0,0,0.4)';
-    ctx.fillRect(3, H - 3.5, W - 6, 1);
-    roundRect(ctx, 1.5, 1.5, W - 3, H - 3, 3);
-    ctx.strokeStyle = look.rim;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.fillStyle = look.sunk ? 'rgba(0,0,0,0.55)' : 'rgba(255,238,200,0.2)';
+    ctx.fillRect(5, 5, W - 10, 1.5);
+    ctx.fillStyle = look.sunk ? 'rgba(255,238,200,0.12)' : 'rgba(0,0,0,0.45)';
+    ctx.fillRect(5, H - 6.5, W - 10, 1.5);
+    ctx.restore();
+    // Rivets at the corners of the rim.
+    for (const [rx, ry] of [
+      [5, 5],
+      [W - 5, 5],
+      [5, H - 5],
+      [W - 5, H - 5],
+    ]) {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath();
+      ctx.arc(rx + 0.4, ry + 0.6, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = look.rim[0];
+      ctx.beginPath();
+      ctx.arc(rx, ry, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
     tex.add(name, 0, ox, 0, W, H);
   });
   tex.refresh();
 }
 
-/** The panel's rim: shadow falling inward, a brass moulding, a keyline and fittings at the corners. The middle is clear. */
+/** The panel's rim: shadow falling inward, a bevelled brass moulding, a keyline and fittings at the corners. The middle is clear. */
 function paintFrame(textures: Phaser.Textures.TextureManager): void {
-  const S = 64;
+  const S = 72;
   const tex = textures.createCanvas('ui:frame', S, S)!;
   const ctx = tex.getContext();
-  for (let i = 0; i < 14; i++) {
-    ctx.strokeStyle = `rgba(0,0,0,${0.34 * (1 - i / 14) ** 2})`;
+  for (let i = 0; i < 16; i++) {
+    ctx.strokeStyle = `rgba(0,0,0,${0.4 * (1 - i / 16) ** 2})`;
     ctx.lineWidth = 1;
     ctx.strokeRect(i + 0.5, i + 0.5, S - 2 * i - 1, S - 2 * i - 1);
   }
-  ctx.strokeStyle = 'rgba(5,3,1,0.9)';
+  ctx.strokeStyle = 'rgba(5,3,1,0.95)';
   ctx.strokeRect(0.5, 0.5, S - 1, S - 1);
-  const brass = ctx.createLinearGradient(0, 0, 0, S);
-  brass.addColorStop(0, '#f1d58e');
-  brass.addColorStop(0.5, '#b08a42');
-  brass.addColorStop(1, '#7a5a26');
+  // The moulding: a light upper-left edge and a dark lower-right one, like turned brass catching the light.
+  const brass = ctx.createLinearGradient(0, 0, S, S);
+  brass.addColorStop(0, '#fbe6a6');
+  brass.addColorStop(0.45, '#c49a4c');
+  brass.addColorStop(1, '#6e4e1e');
   ctx.strokeStyle = brass;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(2, 2, S - 4, S - 4);
-  ctx.strokeStyle = 'rgba(5,3,1,0.7)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(2.5, 2.5, S - 5, S - 5);
+  ctx.strokeStyle = 'rgba(255,244,210,0.55)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(3.5, 3.5, S - 7, S - 7);
-  ctx.strokeStyle = 'rgba(217,180,103,0.4)';
-  ctx.strokeRect(6.5, 6.5, S - 13, S - 13);
-  // Corner fittings: a brass bracket over the keyline, and a rivet.
+  ctx.beginPath();
+  ctx.moveTo(1.5, S - 2);
+  ctx.lineTo(1.5, 1.5);
+  ctx.lineTo(S - 2, 1.5);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(5,3,1,0.75)';
+  ctx.strokeRect(4.5, 4.5, S - 9, S - 9);
+  ctx.strokeStyle = 'rgba(217,180,103,0.38)';
+  ctx.strokeRect(7.5, 7.5, S - 15, S - 15);
+  // Corner fittings: a brass bracket with a scroll over the keyline, and a rivet.
   for (const [sx, sy] of [
     [1, 1],
     [-1, 1],
@@ -653,28 +960,36 @@ function paintFrame(textures: Phaser.Textures.TextureManager): void {
     ctx.save();
     ctx.translate(sx > 0 ? 0 : S, sy > 0 ? 0 : S);
     ctx.scale(sx, sy);
-    ctx.fillStyle = '#c9a256';
+    const plate = ctx.createLinearGradient(3, 3, 20, 20);
+    plate.addColorStop(0, '#fbe6a6');
+    plate.addColorStop(1, '#9c7432');
+    ctx.fillStyle = plate;
     ctx.beginPath();
-    ctx.moveTo(4, 4);
-    ctx.lineTo(19, 4);
-    ctx.lineTo(16.5, 8);
-    ctx.lineTo(8, 8);
-    ctx.lineTo(8, 16.5);
-    ctx.lineTo(4, 19);
+    ctx.moveTo(3, 3);
+    ctx.lineTo(22, 3);
+    ctx.quadraticCurveTo(20, 9, 13, 9);
+    ctx.lineTo(9, 9);
+    ctx.lineTo(9, 13);
+    ctx.quadraticCurveTo(9, 20, 3, 22);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(5,3,1,0.65)';
+    ctx.strokeStyle = 'rgba(5,3,1,0.7)';
+    ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,240,192,0.9)';
+    ctx.fillStyle = 'rgba(40,24,8,0.8)';
     ctx.beginPath();
-    ctx.arc(6, 6, 1.4, 0, Math.PI * 2);
+    ctx.arc(6.5, 6.5, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,240,192,0.95)';
+    ctx.beginPath();
+    ctx.arc(6, 6, 1.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
   tex.refresh();
 }
 
-/** A tile of fine fibrous grain, laid over a panel's fill so it reads as an oiled board rather than flat colour. */
+/** A tile of fine fibrous grain, the stand-in for the painted walnut when it has not loaded. */
 function paintGrain(textures: Phaser.Textures.TextureManager): void {
   const S = 128;
   const tex = textures.createCanvas('ui:grain', S, S)!;
@@ -732,6 +1047,99 @@ function paintCoin(textures: Phaser.Textures.TextureManager): void {
   ctx.lineTo(c + 8, c);
   ctx.stroke();
   tex.refresh();
+}
+
+/**
+ * A red silk ribbon for headings: a band with stitched edges across the middle, and at each end a tail folded
+ * behind it with a swallowtail notch. 9-sliced across, so the tails keep their shape at any width.
+ */
+function paintRibbon(textures: Phaser.Textures.TextureManager): void {
+  const W = 200;
+  const H = RIBBON_H;
+  const T = RIBBON_TAIL;
+  const tex = textures.createCanvas('ui:ribbon', W, H)!;
+  const ctx = tex.getContext();
+  const bandTop = 6;
+  const bandBot = 36;
+  const cloth = (y0: number, y1: number, light: string, dark: string) => {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, light);
+    g.addColorStop(0.5, dark);
+    g.addColorStop(1, light);
+    return g;
+  };
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+  // The tails, behind the band: a darker underside, notched at the free end.
+  for (const s of [1, -1]) {
+    ctx.save();
+    if (s < 0) {
+      ctx.translate(W, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.beginPath();
+    ctx.moveTo(T - 2, 14);
+    ctx.lineTo(1, 14);
+    ctx.lineTo(11, 29);
+    ctx.lineTo(1, 44);
+    ctx.lineTo(T - 2, 44);
+    ctx.closePath();
+    ctx.fillStyle = cloth(14, 44, '#8a1e18', '#5a0e0a');
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    // The fold where the tail turns under the band.
+    ctx.beginPath();
+    ctx.moveTo(T - 14, bandBot);
+    ctx.lineTo(T - 2, 44);
+    ctx.lineTo(T - 2, bandBot);
+    ctx.closePath();
+    ctx.fillStyle = '#3a0604';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(240,200,140,0.35)';
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(4, 17);
+    ctx.lineTo(T - 2, 17);
+    ctx.moveTo(4, 41);
+    ctx.lineTo(T - 2, 41);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = cloth(bandTop, bandBot, '#c43a2c', '#8e1f1a');
+  ctx.fillRect(T - 14, bandTop, W - 2 * (T - 14), bandBot - bandTop);
+  ctx.shadowColor = 'transparent';
+  // Sheen, stitching and a dark edge top and bottom.
+  ctx.fillStyle = 'rgba(255,220,200,0.18)';
+  ctx.fillRect(T - 14, bandTop + 2, W - 2 * (T - 14), 4);
+  ctx.strokeStyle = 'rgba(40,4,2,0.8)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(T - 13.5, bandTop + 0.5, W - 2 * (T - 14) - 1, bandBot - bandTop - 1);
+  ctx.strokeStyle = 'rgba(246,214,150,0.6)';
+  ctx.setLineDash([3, 2]);
+  ctx.beginPath();
+  ctx.moveTo(T - 11, bandTop + 3.5);
+  ctx.lineTo(W - T + 11, bandTop + 3.5);
+  ctx.moveTo(T - 11, bandBot - 3.5);
+  ctx.lineTo(W - T + 11, bandBot - 3.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  tex.refresh();
+}
+
+/** A small seeded random, so the painted grain comes out the same every time. */
+function seeded(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

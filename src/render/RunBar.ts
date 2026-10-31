@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import type { Run } from '../sim/Run';
 import { SYSTEM_NAMES, type SystemId } from '../sim/types';
-import { COLORS, SCREEN, TITLE_FONT, textStyle } from './theme';
+import { icon } from './icons';
 import { openLedger } from './Ledger';
-import { Button, coin, drawBar, panel, SoundButton } from './ui';
+import { COLORS, SCREEN, TYPE, textStyle, titleStyle } from './theme';
+import { Button, drawBar, panel, SoundButton, tipZone } from './ui';
 
 /** The scene that holds the current voyage. Scenes share it through the game registry. */
 export function currentRun(scene: Phaser.Scene): Run {
@@ -33,64 +34,118 @@ export function fleetDistance(run: Run): string {
   return `Navy fleet ${n} jump${halves > 1 ? 's' : ''} astern`;
 }
 
-/** Top-of-screen status strip for chart, event and port scenes: hull, crew, gold, damage and the fleet. */
+const D = 6;
+
+/**
+ * Top-of-screen status strip for chart, event and port scenes: the ship, her hull and crew, gold and provisions,
+ * damage as station icons, and the fleet astern. Figures stand by their icons; the words are in the tips.
+ */
 export class RunBar {
   private readonly g: Phaser.GameObjects.Graphics;
   private readonly hull: Phaser.GameObjects.Text;
   private readonly crew: Phaser.GameObjects.Text;
   private readonly gold: Phaser.GameObjects.Text;
-  private readonly damage: Phaser.GameObjects.Text;
   private readonly fleet: Phaser.GameObjects.Text;
   private readonly food: Phaser.GameObjects.Text;
   private readonly sector: Phaser.GameObjects.Text;
+  /** Icons for damaged stations and wounded crew, remade when they change. */
+  private marks: Phaser.GameObjects.GameObject[] = [];
   /** What the strip last showed, so a refresh every frame only redraws when something changed. */
   private shown = '';
 
-  constructor(scene: Phaser.Scene, private readonly run: Run) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly run: Run,
+  ) {
     panel(scene, 8, 8, SCREEN.w - 16, 62).setDepth(5);
     // Brass rules between the groups.
-    const rules = scene.add.graphics().setDepth(6).lineStyle(1, COLORS.brass, 0.3);
-    for (const x of [218, 548, 1012]) rules.lineBetween(x, 18, x, 60);
-    scene.add.text(20, 14, run.def.name, { fontFamily: TITLE_FONT, fontSize: '23px', color: COLORS.gold }).setDepth(6).setShadow(0, 1, '#000000', 3, false, true);
-    scene.add.text(20, 44, run.def.className, textStyle(13, COLORS.textDim, { fontStyle: 'italic' })).setDepth(6);
-    this.g = scene.add.graphics().setDepth(6);
-    this.hull = scene.add.text(230, 14, '', textStyle(14)).setDepth(6);
-    this.crew = scene.add.text(230, 44, '', textStyle(13)).setDepth(6);
-    coin(scene, 572, 25, 20).setDepth(6);
-    this.gold = scene.add.text(588, 14, '', textStyle(18, COLORS.gold, { fontStyle: 'bold' })).setDepth(6);
-    this.damage = scene.add.text(560, 44, '', textStyle(12, COLORS.textWarn)).setDepth(6);
-    this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(6);
-    this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(6);
-    this.food = scene.add.text(760, 14, '', textStyle(16, COLORS.text, { fontStyle: 'bold' })).setDepth(6);
-    new SoundButton(scene, 972, 23, 30).setDepth(6);
+    const rules = scene.add.graphics().setDepth(D).lineStyle(1, COLORS.brass, 0.3);
+    for (const x of [218, 440, 1012]) rules.lineBetween(x, 18, x, 60);
+    const name = scene.add.text(20, 13, run.def.name, titleStyle(23, COLORS.gold)).setDepth(D).setShadow(0, 1, '#000000', 3, false, true);
+    for (let size = 22; name.width > 192 && size >= 16; size--) name.setFontSize(size);
+    scene.add.text(20, 44, run.def.className, textStyle(TYPE.body, COLORS.textDim, { fontStyle: 'italic' })).setDepth(D);
+    this.g = scene.add.graphics().setDepth(D);
+
+    // Hull and crew.
+    icon(scene, 242, 26, 'hull', 30).setDepth(D);
+    this.hull = scene.add.text(424, 25, '', textStyle(TYPE.body, '#fff6e0', { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(1, 0.5).setDepth(D + 0.5);
+    tipZone(scene, 226, 12, 204, 28, () => `Hull ${run.condition.hull} of ${run.fit.hull}. Shipwrights in port mend her; a fight at none sinks her.`).setDepth(D);
+    icon(scene, 242, 53, 'crew', 22).setDepth(D);
+    this.crew = scene.add.text(258, 45, '', textStyle(TYPE.body)).setDepth(D);
+    tipZone(scene, 226, 42, 110, 24, () => this.crewTip()).setDepth(D);
+
+    // Gold and provisions.
+    icon(scene, 466, 27, 'gold', 32).setDepth(D);
+    this.gold = scene.add.text(486, 12, '', titleStyle(24, COLORS.gold)).setDepth(D).setShadow(0, 1, '#000000', 2, false, true);
+    tipZone(scene, 448, 12, 110, 30, () => `${run.gold} gold: for repairs, stores, guns and hands in port.`).setDepth(D);
+    icon(scene, 600, 27, 'provisions', 32).setDepth(D);
+    this.food = scene.add.text(620, 16, '', textStyle(17, COLORS.text, { fontStyle: 'bold' })).setDepth(D);
+    tipZone(scene, 582, 12, 110, 30, () =>
+      `Provisions: ${run.provisions} of ${run.maxProvisions}. Each jump eats one; with none, the crew go hungry and weaken. Buy more in port.`,
+    ).setDepth(D);
+
+    this.fleet = scene.add.text(SCREEN.w - 22, 14, '', textStyle(16, COLORS.textWarn, { fontStyle: 'bold' })).setOrigin(1, 0).setDepth(D);
+    this.sector = scene.add.text(SCREEN.w - 22, 44, '', textStyle(12, COLORS.textDim, { fontStyle: 'italic' })).setOrigin(1, 0).setDepth(D);
+    tipZone(scene, 1020, 12, SCREEN.w - 1040, 50, () => `${fleetDistance(run)}. The Navy follows your wake: keep ahead of it, and leave the sector by its far side.`).setDepth(D);
+    new SoundButton(scene, 972, 23, 30).setDepth(D);
     // How the powers regard you, a click or the L key away on every screen that shows this strip.
-    new Button(scene, 920, 8, 34, 30, '⚑', () => openLedger(scene, run), { size: 17, tip: 'Standing at sea (L)' }).setDepth(6);
+    new Button(scene, 922, 21, 34, 34, '', () => openLedger(scene, run), { icon: 'flag', tip: 'Standing at sea (L)' }).setDepth(D);
     scene.input.keyboard?.on('keydown-L', () => openLedger(scene, run));
     this.refresh();
   }
 
+  private crewTip(): string {
+    const c = this.run.condition;
+    const hurt = c.crew.filter((m) => m.hp < 70);
+    const consort = this.run.consort;
+    return [
+      `Crew ${c.crew.length} of ${this.run.maxCrew} berths.`,
+      hurt.length ? `Wounded: ${hurt.map((m) => `${m.name} (${Math.round(m.hp)})`).join(', ')}.` : 'None wounded.',
+      consort ? `In company: ${consort.name}, hull ${consort.hull} of ${consort.maxHull}.` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   refresh(): void {
-    const { run } = this;
+    const { run, scene } = this;
     const c = run.condition;
     const state = `${c.hull}/${run.fit.hull} ${c.crew.map((m) => m.hp).join()}/${run.maxCrew} ${run.gold} ${JSON.stringify(c.damage)} ${run.navy}@${run.nodeId} ${run.sector} ${run.provisions}/${run.maxProvisions} ${run.consort?.hull ?? '-'}`;
     if (state === this.shown) return;
     this.shown = state;
     const g = this.g;
     g.clear();
-    this.hull.setText(`Hull ${c.hull}/${run.fit.hull}`);
+    this.hull.setText(`${c.hull}/${run.fit.hull}`);
     const frac = c.hull / run.fit.hull;
-    drawBar(g, 330, 17, 200, 14, frac, frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f);
+    drawBar(g, 262, 18, 166, 15, frac, frac > 0.5 ? 0x7fdc6a : frac > 0.25 ? 0xe5c23a : 0xe0452f);
     const hurt = c.crew.filter((m) => m.hp < 70).length;
-    const prize = run.consort ? `  ·  + ${run.consort.name} ${run.consort.hull}/${run.consort.maxHull}` : '';
-    this.crew.setText(`Crew ${c.crew.length}/${run.maxCrew}${hurt ? `  (${hurt} wounded)` : ''}${prize}`);
-    this.gold.setText(`${run.gold} gold`);
-    const dmg = (Object.entries(c.damage) as [SystemId, number][]).map(([id, n]) => `${SYSTEM_NAMES[id]} −${n}`);
-    this.damage.setText(dmg.length ? `Damaged: ${dmg.join(', ')}` : '');
+    this.crew.setText(`${c.crew.length}/${run.maxCrew}`);
+    this.gold.setText(`${run.gold}`);
     // The fleet's line warms from parchment to red as it closes.
     const gap = run.node.col - run.navy;
     this.fleet.setText(fleetDistance(run)).setColor(gap > 2 ? COLORS.text : gap > 1 ? COLORS.gold : COLORS.textWarn);
     this.sector.setText(`Sector ${run.sector + 1}: ${run.sectorDef.name}`);
-    this.food.setText(`Provisions ${run.provisions}/${run.maxProvisions}`);
+    this.food.setText(`${run.provisions}/${run.maxProvisions}`);
     this.food.setColor(run.provisions === 0 ? COLORS.textWarn : run.provisions <= 3 ? COLORS.gold : COLORS.text);
+    drawBar(g, 621, 42, 64, 5, run.provisions / Math.max(1, run.maxProvisions), run.provisions <= 3 ? 0xe5c23a : 0x9ac07a);
+
+    // Marks: a heart for the wounded, a prize in company, and each damaged station by its icon.
+    for (const o of this.marks) o.destroy();
+    this.marks = [];
+    let x = this.crew.x + this.crew.width + 12;
+    const mark = (name: Parameters<typeof icon>[3], text: string, color: string, tip: string, at = x, y = 54) => {
+      const img = icon(scene, at + 8, y, name, 17).setDepth(D);
+      const t = scene.add.text(at + 18, y - 8, text, textStyle(12, color, { fontStyle: 'bold' })).setDepth(D);
+      const zone = tipZone(scene, at, y - 11, 20 + t.width, 22, tip).setDepth(D);
+      this.marks.push(img, t, zone);
+      return at + 22 + t.width + 8;
+    };
+    if (hurt) x = mark('heart', `${hurt}`, COLORS.textWarn, `${hurt} wounded: rest them in port, or a surgeon heals them at sea.`);
+    if (run.consort) x = mark('flag', `${run.consort.hull}/${run.consort.maxHull}`, COLORS.textGood, `In company: ${run.consort.name}, hull ${run.consort.hull} of ${run.consort.maxHull}.`, Math.min(x, 380));
+    let dx = 700;
+    for (const [id, n] of Object.entries(c.damage) as [SystemId, number][]) {
+      if (!n) continue;
+      dx = mark(id, `−${n}`, COLORS.textWarn, `${SYSTEM_NAMES[id]} damaged (−${n}): a shipwright in port puts it right.`, dx, 40);
+    }
   }
 }

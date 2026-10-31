@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { applySound, installMusicDirector, soundKey } from '../render/sound';
 import { COLORS, SCREEN, textStyle } from '../render/theme';
+import { preloadKit } from '../render/ui';
 
 interface Manifest {
   files: string[];
@@ -32,6 +33,8 @@ export class PreloadScene extends Phaser.Scene {
       this.registry.set('music-files', parseManifest(data, AUDIO, 'music'));
     });
     this.load.text('audio-manifest', 'audio/manifest.json');
+    // The UI kit's painted wood, parchment and icons.
+    preloadKit(this);
   }
 
   create(): void {
