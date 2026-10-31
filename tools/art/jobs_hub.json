@@ -1,0 +1,156 @@
+[
+  {
+    "name": "hub-cove-a",
+    "kind": "plate",
+    "seed": 71001,
+    "w": 1792,
+    "h": 1008,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A hidden pirate hideout harbour in a jungle cove at dusk, wide view from a raised wooden quay of weathered planks running across the whole foreground. On the left a ramshackle two-storey timber tavern built against dark rocks, warm golden light glowing from its windows, a lantern by its door. A long plank pier on wooden pilings runs out from the left across the middle of the picture into calm open water. Steep dark green jungle cliffs and leaning palm trees enclose the cove on both sides; on the right a sandy beach under the cliffs. Far away a narrow mouth of the cove opens to the sea under a deep orange and crimson sunset with long purple clouds, the sun just set. Wide stretch of calm empty water in the middle reflecting the glowing sky, no ships in the harbour, quiet and peaceful"
+  },
+  {
+    "name": "hub-cove-b",
+    "kind": "plate",
+    "seed": 71002,
+    "w": 1792,
+    "h": 1008,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A hidden pirate hideout harbour in a jungle cove at dusk, wide view from a raised wooden quay of weathered planks running across the whole foreground. On the left a ramshackle two-storey timber tavern built against dark rocks, warm golden light glowing from its windows, a lantern by its door. A long plank pier on wooden pilings runs out from the left across the middle of the picture into calm open water. Steep dark green jungle cliffs and leaning palm trees enclose the cove on both sides; on the right a sandy beach under the cliffs. Far away a narrow mouth of the cove opens to the sea under a deep orange and crimson sunset with long purple clouds, the sun just set. Wide stretch of calm empty water in the middle reflecting the glowing sky, no ships in the harbour, quiet and peaceful"
+  },
+  {
+    "name": "hub-ship-wren",
+    "kind": "cutout",
+    "seed": 71011,
+    "w": 1024,
+    "h": 1024,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A small single-masted pirate sloop seen exactly from the side, broadside view, bow pointing right, sails furled on the boom, slim black hull with a red stripe, warm dusk light, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-ship-gull",
+    "kind": "cutout",
+    "seed": 71012,
+    "w": 1024,
+    "h": 1024,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A two-masted pirate brigantine seen exactly from the side, broadside view, bow pointing right, square sails furled on the yards of the foremast, black hull with a row of gunports, warm dusk light, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-ship-maw",
+    "kind": "cutout",
+    "seed": 71013,
+    "w": 1024,
+    "h": 1024,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A heavy three-masted frigate seen exactly from the side, broadside view, bow pointing right, all sails furled on the yards, dark weathered hull with two rows of gunports, high stern castle with lanterns, warm dusk light, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-ship-wolf",
+    "kind": "cutout",
+    "seed": 71014,
+    "w": 1024,
+    "h": 1024,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A lean Barbary xebec with three masts and long slanting lateen yards seen exactly from the side, broadside view, bow pointing right, lateen sails furled along the yards, long low painted hull with a pointed beak, warm dusk light, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-tavern-wall",
+    "kind": "plate",
+    "seed": 71021,
+    "w": 1792,
+    "h": 1008,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Interior of a dim pirate tavern seen straight on: a large bare wall of dark weathered wooden planks taking up the whole picture, warm candle and lantern light pooling on the planks, a few iron hooks and nails in the wall, a heavy beam across the top, the edge of a bar counter with bottles along the bottom, empty wall space for pictures, no paintings, no people"
+  },
+  {
+    "name": "hub-cap-rover",
+    "kind": "cutout",
+    "seed": 71030,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of a weathered pirate captain in a long faded blue coat and black tricorn hat, cutlass at his hip, sturdy and plain, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-gunner",
+    "kind": "cutout",
+    "seed": 71031,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of an old grey-bearded pirate gunner with a bald head and red scarf, leather apron over a striped shirt, holding a rammer, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-navigator",
+    "kind": "cutout",
+    "seed": 71032,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of a lean pirate navigator in a brown coat and spectacles, holding a brass telescope and a rolled chart under her arm, a woman with tied-back hair, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-gentleman",
+    "kind": "cutout",
+    "seed": 71033,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of an elegant gentleman pirate in a crimson silk frock coat with gold braid, white lace cravat, plumed hat and a slim rapier, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-smuggler",
+    "kind": "cutout",
+    "seed": 71034,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of a hooded smuggler in a dark green cloak and broad-brimmed hat, a lantern in one hand and a satchel over the shoulder, a woman, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-bosun",
+    "kind": "cutout",
+    "seed": 71035,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of a huge muscular hard-faced bosun with a shaved head and tattooed arms, sleeveless leather jerkin, a coiled rope's end in his fist, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  },
+  {
+    "name": "hub-cap-privateer",
+    "kind": "cutout",
+    "seed": 71036,
+    "w": 768,
+    "h": 1152,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "Full-length standing figure of a dashing French privateer captain in a dark navy coat with silver buttons, a sash in French blue, tricorn with a white cockade, a pistol in his belt, the whole body from hat to boots visible, standing on nothing, facing three-quarters towards the viewer, warm lantern light from one side, dusk, isolated on a plain flat pale grey studio background, no water, no sea, no ground, nothing else in the picture"
+  }
+]

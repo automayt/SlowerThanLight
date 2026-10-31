@@ -9,7 +9,7 @@ interface Manifest {
 }
 
 /**
- * Loads the painted illustrations listed in public/art/manifest.json. Backdrops load up front; event
+ * Loads the painted illustrations listed in public/art/manifest.json. Backdrops load up front; the hideout (hub-*) loads its own art, and event
  * vignettes load on demand when their event opens (see loadArtOnDemand). The game runs fine without any of them.
  */
 export class PreloadScene extends Phaser.Scene {
@@ -24,7 +24,7 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('filecomplete-text-art-manifest', (_key: string, _type: string, data: string) => {
       const files = parseManifest(data);
       this.registry.set('art-files', files);
-      for (const file of files) if (!file.startsWith('event-')) this.load.image(artKey(file), `art/${file}`);
+      for (const file of files) if (!file.startsWith('event-') && !file.startsWith('hub-')) this.load.image(artKey(file), `art/${file}`);
     });
     this.load.text('art-manifest', 'art/manifest.json');
     this.load.on('filecomplete-text-audio-manifest', (_key: string, _type: string, data: string) => {

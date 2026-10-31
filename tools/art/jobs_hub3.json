@@ -1,0 +1,36 @@
+[
+  {
+    "name": "hub-inp-jetty2",
+    "kind": "inpaint",
+    "seed": 71111,
+    "base": "hub-cove-b",
+    "mask": "hub-mask-jetty",
+    "crop": [
+      1100,
+      400,
+      1792,
+      860
+    ],
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A rickety wooden jetty of weathered planks on tall tarred pilings, running out from dark rocks across calm teal water at dusk, a small rowing boat moored beside it, coils of rope and barrels on its planks, a glowing lantern hung on a post, warm sunset reflections on the water"
+  },
+  {
+    "name": "hub-inp-careen2",
+    "kind": "inpaint",
+    "seed": 71112,
+    "base": "hub-cove-b",
+    "mask": "hub-mask-careen",
+    "crop": [
+      1100,
+      220,
+      1792,
+      680
+    ],
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A careening yard on a rocky shore at dusk: a small wooden sailing ship hauled out of the water and heeled far over on her side on the beach, her bare hull and keel showing, wooden scaffolding and ladders against her bottom, a glowing tar-pot fire with smoke, tiny figures of pirates scraping the hull, palm trees behind"
+  }
+]

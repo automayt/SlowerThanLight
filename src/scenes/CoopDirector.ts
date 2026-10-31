@@ -10,7 +10,7 @@ import { sceneFor } from './save';
 export const COOP_DIRECTOR = 'CoopDirector';
 
 /** Scenes that are part of the game itself (not the music or co-op directors). */
-const GAME_SCENES = ['Title', 'ShipSelect', 'SeaMap', 'Event', 'Hail', 'Port', 'Battle', 'Result', 'RunEnd', 'Logbook', 'CoopLobby'];
+const GAME_SCENES = ['Title', 'Harbour', 'SeaMap', 'Event', 'Hail', 'Port', 'Battle', 'Result', 'RunEnd', 'Logbook', 'CoopLobby'];
 
 /** How long after a command to check this copy of the voyage still matches the server's (the chart animates a jump first). */
 const CHECK_AFTER = 1500;

@@ -7,7 +7,8 @@ import { playLoop, stopLoop } from '../render/sound';
 import { setRun } from '../render/RunBar';
 import { Button, divider, frame, goldText, Sea, SoundButton } from '../render/ui';
 import { Run } from '../sim/Run';
-import { disableSaving, loadRun, sceneFor } from './save';
+import { setPlayerColours } from '../render/ShipArt';
+import { chosenColours, disableSaving, loadRun, sceneFor } from './save';
 
 export class TitleScene extends Phaser.Scene {
   private sea!: Sea;
@@ -52,6 +53,8 @@ export class TitleScene extends Phaser.Scene {
       stopCoopDirector(this.game);
     }
     const saved = loadRun();
+    // The colours chosen at the hideout fly on a continued voyage too.
+    setPlayerColours(chosenColours());
     const resume = () => {
       if (!saved) return;
       setRun(this, saved);
@@ -63,7 +66,7 @@ export class TitleScene extends Phaser.Scene {
     let primary: Button;
     if (saved) {
       primary = new Button(this, cx - 240, 340, 230, 52, 'Continue Voyage', resume, { size: 22, hint: 'Enter' });
-      const fresh = new Button(this, cx + 10, 340, 230, 52, 'New Voyage', () => this.scene.start('ShipSelect'), { size: 22 });
+      const fresh = new Button(this, cx + 10, 340, 230, 52, 'New Voyage', () => this.scene.start('Harbour'), { size: 22, tip: 'To the hideout, to choose a ship and captain.' });
       const where = this.add
         .text(cx, 410, `${saved.def.name}  ·  ${saved.sectorDef.name}  ·  leg ${saved.legs.sailed} of ${saved.legs.total}  ·  ${saved.gold} gold`, textStyle(14, COLORS.text, { fontStyle: 'italic' }))
         .setOrigin(0.5, 0)
@@ -71,7 +74,7 @@ export class TitleScene extends Phaser.Scene {
       const plate = this.add.rectangle(cx, where.y - 5, where.width + 40, where.height + 10, 0x07111a, 0.72).setOrigin(0.5, 0).setStrokeStyle(1, COLORS.panelEdge, 0.6).setDepth(-1);
       entrance.push(primary, fresh, plate, where);
     } else {
-      primary = new Button(this, cx - 115, 340, 230, 52, 'Set Sail', () => this.scene.start('ShipSelect'), { size: 22, hint: 'Enter' });
+      primary = new Button(this, cx - 115, 340, 230, 52, 'To the Hideout', () => this.scene.start('Harbour'), { size: 22, hint: 'Enter' });
       entrance.push(primary);
     }
 
