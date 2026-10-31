@@ -46,3 +46,30 @@ The music director in `src/render/sound.ts` plays one bed per screen: `shanty` (
 - `finish_music.py raw/x.flac ../../public/audio/music-x.ogg --start S --end E` keeps a clean stretch, loops it at the
   point whose onsets and harmony best match the head, normalises to -18 LUFS and encodes stereo Vorbis 96k.
 - `seam_png.py loop.ogg --out dir` draws the wrap-around so a click or jump would show.
+
+## Second pass: dedicated audio models (jobs_sound2.json)
+
+Everything the adaptive mixer plays (music beds, stings, ambience layers, effects) was regenerated with models made for
+audio instead of LTX's video soundtrack. The models live on `F:/ComfyModels` (listed in `E:/ComfyUI/extra_model_paths.yaml`).
+
+- **Music and stings:** ACE-Step 1.5 XL turbo, 8 steps, `[Instrumental]` lyrics; tags, BPM, key and metre per track
+  in `jobs_sound2.json`. A 150 s bed takes about 33 s on the 3090.
+- **Ambience and effects:** Stable Audio 3 medium, 8-step lcm, prompted directly (the template's Qwen re-prompt is skipped).
+
+Steps:
+1. `python gen_sound2.py jobs_sound2.json [music sting amb sfx] [--only a,b] [--takes N]` renders takes into `raw/v2/`.
+   Each take's seed and job are stored next to it as `<take>.flac.json`.
+2. `python pick_sound2.py [names]` scores every take with CLAP (`laion/larger_clap_general`) and writes the best to
+   `picks.json`. The score is the match to the job's caption, minus penalties for:
+   - voices (except crowd sounds);
+   - modern genres (music only);
+   - silence and clipping.
+   The printed table lets a person overrule a pick by editing `picks.json`.
+3. `python finish_sound2.py [names]` finishes the picks into `out_v2/`:
+   - music loops through `finish_music.py`;
+   - stings start on the first onset and fade out;
+   - ambience gets a 2 s equal-power loop crossfade;
+   - effects get `finish_sfx.process`.
+   Copy the results into `public/audio/` and list them in the manifest (`files`, `music`, `ambience`).
+
+None of this was checked by ear. Listen through the picks and regenerate any that miss.

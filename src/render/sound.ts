@@ -329,7 +329,11 @@ class AudioDirector extends Phaser.Scene {
     void loadAudio(this.game, soundKey(next), `audio/${this.files.get(next)}`).then((ok) => {
       if (!ok) this.failed.add(next);
       this.loading = null;
-      if (ok) this.evict();
+      if (ok) {
+        // Count it as wanted now, or it would be the stalest bed and the first evicted (then fetched again, forever).
+        this.lastWanted.set(next, this.time.now);
+        this.evict();
+      }
       this.pump();
     });
   }

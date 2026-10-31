@@ -1,0 +1,432 @@
+{
+  "_comment": "Every sound the game ships, by output name. kind: music (ACE-Step 1.5 XL turbo, looped), sting (ACE-Step, one-shot), amb (Stable Audio 3, looped), sfx (Stable Audio 3, one-shot). 'variants' makes name-1..name-N; 'takes' candidates are generated per file and the best CLAP match to 'caption' is kept.",
+  "music": [
+    {
+      "name": "music-title",
+      "seconds": 150,
+      "bpm": 112,
+      "key": "D minor",
+      "time": "6",
+      "caption": "epic orchestral pirate adventure theme",
+      "tags": "epic orchestral pirate adventure main theme, swashbuckling sea shanty melody, full string section, heroic french horns, timpani, snare drum, accordion, fiddle, 18th century age of sail, cinematic film score, instrumental"
+    },
+    {
+      "name": "music-harbour",
+      "seconds": 150,
+      "bpm": 84,
+      "key": "G major",
+      "time": "3",
+      "caption": "warm gentle maritime folk music",
+      "tags": "warm maritime folk instrumental, fingerpicked acoustic guitar, concertina, tin whistle, soft fiddle, gentle hand drum, cozy hidden pirate cove at dusk, nostalgic, relaxed, 18th century, instrumental"
+    },
+    {
+      "name": "music-sea",
+      "seconds": 160,
+      "bpm": 90,
+      "key": "D major",
+      "time": "4",
+      "caption": "calm cinematic orchestral sailing music",
+      "tags": "cinematic maritime underscore, sailing across the open ocean, flowing strings, solo cello melody, celtic harp, soft french horn, gentle timpani swells, hopeful, adventurous, calm, age of sail film score, instrumental"
+    },
+    {
+      "name": "music-sea-tense",
+      "seconds": 150,
+      "bpm": 96,
+      "key": "C minor",
+      "time": "4",
+      "caption": "dark tense suspenseful orchestral music",
+      "tags": "dark cinematic suspense underscore, low strings ostinato, cello and double bass pulses, distant war drums, swelling brass, eerie solo fiddle, hunted by a pirate hunter at sea, foreboding, age of sail film score, instrumental"
+    },
+    {
+      "name": "music-port",
+      "seconds": 150,
+      "bpm": 108,
+      "key": "F major",
+      "time": "4",
+      "caption": "lively cheerful caribbean folk music",
+      "tags": "lively caribbean colonial port town, baroque guitar strumming, fiddle, accordion, marimba, hand percussion, shakers, bustling harbour market, cheerful, sunny, 18th century, instrumental"
+    },
+    {
+      "name": "music-tavern",
+      "seconds": 120,
+      "bpm": 132,
+      "key": "D major",
+      "time": "6",
+      "caption": "rowdy fast irish fiddle jig",
+      "tags": "rowdy pirate tavern jig, fast irish fiddle, accordion, tin whistle, bodhran, foot stomping, hand claps, merry drunken sea shanty dance, live pub band, instrumental"
+    },
+    {
+      "name": "music-battle",
+      "seconds": 150,
+      "bpm": 140,
+      "key": "D minor",
+      "time": "4",
+      "caption": "epic orchestral battle music with drums",
+      "tags": "epic orchestral naval battle, driving staccato strings, pounding taiko and timpani, heroic french horns, snare drum rolls, swashbuckling pirate action, cinematic film score, instrumental"
+    },
+    {
+      "name": "music-battle-hot",
+      "seconds": 150,
+      "bpm": 150,
+      "key": "D minor",
+      "time": "4",
+      "caption": "intense frantic orchestral action music",
+      "tags": "intense desperate orchestral battle climax, frantic spiccato strings, relentless war drums, dissonant brass stabs, rising tension, dire peril, sinking ship, cinematic action film score, instrumental"
+    },
+    {
+      "name": "music-boss",
+      "seconds": 150,
+      "bpm": 144,
+      "key": "B minor",
+      "time": "4",
+      "caption": "dark menacing epic orchestral boss music",
+      "tags": "dark epic orchestral boss battle, menacing low brass, pipe organ, pounding timpani and taiko, fast aggressive strings, villainous pirate captain, black sails, cinematic film score, instrumental"
+    }
+  ],
+  "sting": [
+    {
+      "name": "fanfare",
+      "seconds": 10,
+      "bpm": 100,
+      "key": "D major",
+      "time": "4",
+      "caption": "triumphant brass victory fanfare",
+      "tags": "short triumphant orchestral victory fanfare, bright brass, timpani roll, cymbal crash, heroic, final chord, instrumental"
+    },
+    {
+      "name": "defeat",
+      "seconds": 10,
+      "bpm": 60,
+      "key": "D minor",
+      "time": "4",
+      "caption": "sad slow orchestral defeat music",
+      "tags": "short somber orchestral defeat sting, low strings, mournful french horn, slow, tragic, final chord, instrumental"
+    },
+    {
+      "name": "prize",
+      "seconds": 9,
+      "bpm": 120,
+      "key": "G major",
+      "time": "6",
+      "caption": "short joyful fiddle and brass flourish",
+      "tags": "short joyful pirate fanfare, fiddle flourish, brass hits, accordion, triumphant capture, final chord, instrumental"
+    },
+    {
+      "name": "strike",
+      "seconds": 7,
+      "bpm": 110,
+      "key": "D major",
+      "time": "4",
+      "caption": "short victorious brass stab",
+      "tags": "short victorious orchestral stinger, brass stabs, snare roll, timpani hit, enemy surrenders, final chord, instrumental"
+    },
+    {
+      "name": "discovery",
+      "seconds": 7,
+      "bpm": 80,
+      "key": "A major",
+      "time": "4",
+      "caption": "magical harp and bells discovery",
+      "tags": "short magical discovery sting, harp glissando, celesta and bells, soft shimmering strings, wonder, treasure found, final chord, instrumental"
+    }
+  ],
+  "amb": [
+    {
+      "name": "amb-sea",
+      "seconds": 40,
+      "caption": "ocean waves against a wooden ship",
+      "prompt": "Open ocean ambience from the deck of a wooden sailing ship, rolling waves washing against the hull, gentle sea spray, soft wind, steady and calm, wide stereo, no music. Length: 40 seconds"
+    },
+    {
+      "name": "amb-wind",
+      "seconds": 40,
+      "caption": "strong wind blowing",
+      "prompt": "Strong steady gale wind blowing and howling, whistling through ropes and rigging, sails flapping, outdoor at sea, no music. Length: 40 seconds"
+    },
+    {
+      "name": "amb-storm",
+      "seconds": 45,
+      "caption": "heavy rain and thunder storm at sea",
+      "prompt": "Violent storm at sea, heavy rain lashing a wooden deck, roaring wind, crashing waves, occasional deep rolling thunder in the distance, outdoor, wide stereo, no music. Length: 45 seconds"
+    },
+    {
+      "name": "amb-harbour",
+      "seconds": 40,
+      "caption": "seagulls and water at a harbour",
+      "prompt": "Seaside harbour ambience, many seagulls calling overhead, gentle water lapping against a wooden pier, a distant ship bell, ropes creaking, outdoor, no music. Length: 40 seconds"
+    },
+    {
+      "name": "amb-tavern",
+      "seconds": 40,
+      "caption": "crowded tavern chatter and tankards",
+      "prompt": "Crowded old wooden tavern interior, murmur of many voices and laughter, pewter tankards clinking, chairs scraping, crackling hearth, indoor room tone, no music. Length: 40 seconds"
+    },
+    {
+      "name": "amb-deck",
+      "seconds": 40,
+      "caption": "creaking wooden ship timbers",
+      "prompt": "Below and on deck of an old wooden sailing ship, timbers creaking and groaning slowly as the hull rolls, ropes straining, rigging blocks knocking, muffled waves outside, no music. Length: 40 seconds"
+    },
+    {
+      "name": "amb-fire",
+      "seconds": 30,
+      "caption": "fire crackling and burning wood",
+      "prompt": "Fire burning on a wooden ship, crackling and popping timber, roaring flames, occasional collapsing embers, close perspective, no music. Length: 30 seconds"
+    }
+  ],
+  "sfx": [
+    {
+      "name": "cannon",
+      "variants": 3,
+      "seconds": 4,
+      "caption": "cannon firing boom",
+      "prompt": "Single 18th century naval cannon firing, explosive black powder boom with deep low-end thump, sharp crack, rolling echo across open water, outdoor. Length: 4 seconds"
+    },
+    {
+      "name": "cannon-heavy",
+      "variants": 2,
+      "seconds": 5,
+      "caption": "huge heavy cannon blast",
+      "prompt": "Massive heavy 32-pounder ship cannon firing, enormous concussive boom, deep sub-bass rumble, carriage recoil thud on wooden deck, long rolling echo over the sea. Length: 5 seconds"
+    },
+    {
+      "name": "hit-wood",
+      "variants": 3,
+      "seconds": 3,
+      "caption": "cannonball smashing into wood",
+      "prompt": "Cannonball smashing into the thick wooden hull of a ship, violent splintering crack, timber shattering, debris falling, close perspective. Length: 3 seconds"
+    },
+    {
+      "name": "splash",
+      "variants": 2,
+      "seconds": 3,
+      "caption": "cannonball splashing into water",
+      "prompt": "Cannonball whooshing past and plunging into the sea, heavy water splash and spray falling back, outdoor, open water. Length: 3 seconds"
+    },
+    {
+      "name": "chain",
+      "seconds": 3,
+      "caption": "whirring chain whistling through the air",
+      "prompt": "Heavy iron chain spinning fast through the air, a loud whirring metallic whistle that rises and passes overhead from left to right, outdoor. Length: 3 seconds"
+    },
+    {
+      "name": "grape",
+      "seconds": 3,
+      "caption": "metal shot rattling spray",
+      "prompt": "Grapeshot blast, cannon fires a spray of small iron balls that rattle and pepper across a wooden deck and railings, sharp metallic ricochets, outdoor. Length: 3 seconds"
+    },
+    {
+      "name": "hotshot",
+      "seconds": 3,
+      "caption": "hot metal sizzling",
+      "prompt": "Red-hot iron cannonball landing on a wet wooden deck, sharp sizzle and hiss of steam, wood scorching and starting to smoke and crackle. Length: 3 seconds"
+    },
+    {
+      "name": "crit",
+      "variants": 2,
+      "seconds": 3,
+      "caption": "heavy crunching impact",
+      "prompt": "Devastating direct hit on a wooden warship, heavy crunching impact, beams snapping, iron fittings clanging, deep thud with debris scatter, cinematic. Length: 3 seconds"
+    },
+    {
+      "name": "mast",
+      "seconds": 5,
+      "caption": "wooden mast cracking and falling",
+      "prompt": "Huge wooden ship mast cracking under strain, long groaning creak then a loud snap, the mast toppling with ropes whipping and sails tearing, crashing onto the deck. Length: 5 seconds"
+    },
+    {
+      "name": "flood",
+      "seconds": 4,
+      "caption": "water gushing",
+      "prompt": "Seawater gushing and pouring loudly through a hole into a wooden ship's hold, heavy rushing torrent of water splashing, enclosed. Length: 4 seconds"
+    },
+    {
+      "name": "pump",
+      "seconds": 3,
+      "caption": "squeaking pump and splashing water",
+      "prompt": "Old wooden hand pump worked up and down, rhythmic squeaking creaks, water splashing out of a spout in gushes onto wooden planks. Length: 3 seconds"
+    },
+    {
+      "name": "hiss",
+      "seconds": 3,
+      "caption": "steam hissing",
+      "prompt": "Loud hiss of steam as a bucket of water douses hot burning wood, sizzling steam burst fading to crackle, close. Length: 3 seconds"
+    },
+    {
+      "name": "swords",
+      "variants": 3,
+      "seconds": 2,
+      "caption": "swords clashing",
+      "prompt": "Two steel cutlasses clashing together in a fight, sharp metallic clang and scrape, quick parry, close perspective, outdoor. Length: 2 seconds"
+    },
+    {
+      "name": "grapple",
+      "seconds": 3,
+      "caption": "grappling hooks thrown and catching",
+      "prompt": "Grappling hooks thrown across between two ships, ropes whooshing, iron hooks thudding and biting into wooden railings, ropes pulled taut and creaking. Length: 3 seconds"
+    },
+    {
+      "name": "boarders",
+      "seconds": 4,
+      "caption": "crowd of pirates roaring",
+      "prompt": "Crowd of pirates roaring a battle cry as they swarm over the side of a ship to board, boots thundering on wooden deck, steel drawn, outdoor. Length: 4 seconds"
+    },
+    {
+      "name": "musket",
+      "seconds": 3,
+      "caption": "musket volley",
+      "prompt": "Ragged volley of flintlock muskets firing from a ship's deck, several sharp gunshots in quick succession, powder crackle, outdoor echo. Length: 3 seconds"
+    },
+    {
+      "name": "breach",
+      "seconds": 3,
+      "caption": "hull breaking open",
+      "prompt": "Wooden ship hull planks splitting open below the waterline, loud cracking timber followed by water spraying in, enclosed space. Length: 3 seconds"
+    },
+    {
+      "name": "explosion",
+      "seconds": 5,
+      "caption": "huge gunpowder explosion",
+      "prompt": "Ship's powder magazine exploding, enormous gunpowder blast, deep booming shockwave, wood and debris raining down into the water, cinematic. Length: 5 seconds"
+    },
+    {
+      "name": "fire",
+      "seconds": 3,
+      "caption": "flames igniting",
+      "prompt": "Flames suddenly igniting and catching on dry wood and tarred rope, whoosh of fire taking hold, crackling. Length: 3 seconds"
+    },
+    {
+      "name": "sink",
+      "seconds": 6,
+      "caption": "ship sinking groaning and gurgling",
+      "prompt": "Wooden ship sinking, deep groaning and creaking hull under pressure, large air bubbles gurgling up, water rushing over the deck, slowly going under. Length: 6 seconds"
+    },
+    {
+      "name": "cheer",
+      "seconds": 4,
+      "caption": "crew cheering",
+      "prompt": "Ship's crew of rough sailors cheering loudly in victory, whooping and shouting hurrah, outdoor on deck. Length: 4 seconds"
+    },
+    {
+      "name": "bell",
+      "seconds": 4,
+      "caption": "ship bell ringing",
+      "prompt": "Two clear strikes of a brass ship's bell, bright ringing metallic tone with a long shimmering decay, outdoor. Length: 4 seconds"
+    },
+    {
+      "name": "sail",
+      "seconds": 3,
+      "caption": "canvas sail flapping and filling",
+      "prompt": "Large canvas sail being let loose, heavy flapping then snapping full with wind, ropes creaking through wooden blocks. Length: 3 seconds"
+    },
+    {
+      "name": "anchor",
+      "seconds": 4,
+      "caption": "anchor chain rattling down",
+      "prompt": "Ship's anchor dropped, heavy iron chain rattling fast through a wooden hawse hole, ending in a splash. Length: 4 seconds"
+    },
+    {
+      "name": "creak",
+      "seconds": 3,
+      "caption": "wooden ship creaking",
+      "prompt": "Single long creak and groan of old wooden ship timbers under strain, close perspective. Length: 3 seconds"
+    },
+    {
+      "name": "waves",
+      "seconds": 4,
+      "caption": "wave crashing",
+      "prompt": "A large ocean wave crashing against the bow of a wooden ship and washing over the deck. Length: 4 seconds"
+    },
+    {
+      "name": "gulls",
+      "seconds": 4,
+      "caption": "seagulls calling",
+      "prompt": "A few seagulls calling and squawking overhead by the sea, outdoor, light breeze. Length: 4 seconds"
+    },
+    {
+      "name": "thunder",
+      "variants": 2,
+      "seconds": 5,
+      "caption": "thunder clap",
+      "prompt": "Close thunder clap over the open sea, sharp crack followed by a long deep rolling rumble. Length: 5 seconds"
+    },
+    {
+      "name": "coins",
+      "seconds": 2,
+      "caption": "gold coins clinking",
+      "prompt": "A few gold coins dropped and clinking together on a wooden table, bright metallic jingle, close up. Length: 2 seconds"
+    },
+    {
+      "name": "dice",
+      "seconds": 2,
+      "caption": "dice rolling in a cup",
+      "prompt": "Bone dice shaken in a leather cup then thrown and tumbling across a wooden tavern table. Length: 2 seconds"
+    },
+    {
+      "name": "tankard",
+      "seconds": 2,
+      "caption": "glasses clinking toast",
+      "prompt": "Two heavy pewter tankards knocked together in a toast, a dull metallic clink and ale sloshing, tavern. Length: 2 seconds"
+    },
+    {
+      "name": "heal",
+      "seconds": 2,
+      "caption": "cloth bandage tearing",
+      "prompt": "A strip of linen cloth torn for a bandage, sharp ripping sound, then a cork pulled from a glass bottle with a pop. Length: 2 seconds"
+    },
+    {
+      "name": "hammer",
+      "seconds": 2,
+      "caption": "hammer on wood",
+      "prompt": "Carpenter hammering iron nails into wooden planks, three quick hammer strikes, workshop. Length: 2 seconds"
+    },
+    {
+      "name": "recruit",
+      "seconds": 2,
+      "caption": "coin purse dropped on a table",
+      "prompt": "Heavy leather purse full of coins dropped onto a wooden table, a muffled thud and jingle of coins, indoor. Length: 2 seconds"
+    },
+    {
+      "name": "chart",
+      "seconds": 2,
+      "caption": "paper map unrolling",
+      "prompt": "Old parchment sea chart being unrolled on a wooden table, crisp papery crackle and rustle. Length: 2 seconds"
+    },
+    {
+      "name": "quill",
+      "seconds": 2,
+      "caption": "quill pen scratching paper",
+      "prompt": "Quill pen scratching a short line onto parchment, crisp dry scratching, close up. Length: 2 seconds"
+    },
+    {
+      "name": "page",
+      "seconds": 2,
+      "caption": "page turning",
+      "prompt": "Single thick parchment page of an old logbook being turned, papery flutter. Length: 2 seconds"
+    },
+    {
+      "name": "click",
+      "seconds": 1,
+      "caption": "soft wooden click",
+      "prompt": "Single small wooden peg clicking into place, short dry woody tick, close up. Length: 1 seconds"
+    },
+    {
+      "name": "hover",
+      "seconds": 1,
+      "caption": "soft short wooden tick",
+      "prompt": "One very soft short tick of a small wooden bead tapped on a wooden table, quiet, dry, close up. Length: 1 seconds"
+    },
+    {
+      "name": "confirm",
+      "seconds": 1,
+      "caption": "brass latch click",
+      "prompt": "Small brass latch snapping shut on a wooden chest, crisp satisfying metallic click. Length: 1 seconds"
+    },
+    {
+      "name": "cancel",
+      "seconds": 1,
+      "caption": "soft wooden thud",
+      "prompt": "Soft dull thud of a book closed on a wooden table, short and muted. Length: 1 seconds"
+    }
+  ]
+}
