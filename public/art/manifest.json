@@ -143,6 +143,11 @@
     "hub-ship-wolf.png",
     "hub-careen.png",
     "hub-cap-rover.png",
-    "hub-cap-gunner.png"
+    "hub-cap-gunner.png",
+    "hub-cap-navigator.png",
+    "hub-cap-gentleman.png",
+    "hub-cap-smuggler.png",
+    "hub-cap-bosun.png",
+    "hub-cap-privateer.png"
   ]
 }
