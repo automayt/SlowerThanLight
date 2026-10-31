@@ -1,0 +1,137 @@
+[
+  {
+    "name": "portrait-captain-rover",
+    "seed": 7100,
+    "prompt": "a weathered pirate captain in his forties, battered black tricorn hat, salt-stained brown sea coat, dark stubble, steady calm grey eyes, a plain red sash"
+  },
+  {
+    "name": "portrait-captain-gunner",
+    "seed": 7101,
+    "prompt": "a grizzled old naval gunner in his sixties, short white beard, face speckled with black powder burns, one ear missing, red kerchief knotted round his neck, squinting"
+  },
+  {
+    "name": "portrait-captain-navigator",
+    "seed": 7102,
+    "prompt": "a sharp-eyed woman ship's navigator in her thirties, dark hair tied back under a blue scarf, dark blue sea coat, a brass quadrant on a cord around her neck, thoughtful expression"
+  },
+  {
+    "name": "portrait-captain-gentleman",
+    "seed": 7103,
+    "prompt": "a handsome gentleman pirate captain in his thirties, elegant burgundy silk coat with gold embroidery, white lace cravat, neat black moustache, long curled dark hair, wry confident smile, plumed tricorn hat"
+  },
+  {
+    "name": "portrait-captain-smuggler",
+    "seed": 7104,
+    "prompt": "a sly woman smuggler in her thirties, dark hooded wool cloak, gold hoop earrings, sun-browned face, knowing half smile, a knife hilt at her collar"
+  },
+  {
+    "name": "portrait-captain-bosun",
+    "seed": 7105,
+    "prompt": "a huge bald Black boatswain in his forties, broad shoulders, scarred forearms, open canvas shirt, a silver bosun's whistle on a chain, stern hard stare"
+  },
+  {
+    "name": "portrait-captain-privateer",
+    "seed": 7106,
+    "prompt": "a proud French corsair captain in his forties, royal blue coat with gold braid, black tricorn with a white cockade, powdered queue of hair, aquiline nose, aristocratic bearing"
+  },
+  {
+    "name": "portrait-crane",
+    "seed": 7107,
+    "prompt": "Silas Crane, a gaunt sun-scarred pirate captain, long greasy black hair tied back, a jagged scar across his cheek, cruel grin showing a gold tooth, black coat with tarnished buttons, a black dog's head pin at his throat, menacing"
+  },
+  {
+    "name": "portrait-harbour-crown",
+    "seed": 7108,
+    "prompt": "a stern English harbour master of Port Royal, grey powdered wig, dark navy blue coat with brass buttons, white neckcloth, a quill pen behind his ear, disapproving look"
+  },
+  {
+    "name": "portrait-harbour-spain",
+    "seed": 7109,
+    "prompt": "a severe Spanish colonial port official of Havana, black coat and black hat, pointed grey goatee, small gold crucifix, white collar, suspicious narrowed eyes"
+  },
+  {
+    "name": "portrait-harbour-france",
+    "seed": 7110,
+    "prompt": "a dapper French harbour master of Martinique, pale blue coat, lace jabot, powdered wig with a black ribbon, rouged cheeks, polite thin smile"
+  },
+  {
+    "name": "portrait-harbour-brethren",
+    "seed": 7111,
+    "prompt": "an old one-eyed pirate harbour master of Nassau, leather eyepatch, wild grey beard braided with beads, faded red coat with missing buttons, clay pipe, cunning look"
+  },
+  {
+    "name": "portrait-harbour-trade",
+    "seed": 7112,
+    "prompt": "a stout Dutch merchant harbour master of Willemstad, plain black coat, broad white collar, round wire spectacles, wide-brimmed black hat, ruddy cheeks, shrewd calculating look"
+  },
+  {
+    "name": "portrait-tavern",
+    "seed": 7113,
+    "prompt": "a stout cheerful woman tavern keeper in her fifties, rolled sleeves, stained linen apron, curly red-grey hair under a mob cap, rosy cheeks, warm candlelit tavern glow"
+  },
+  {
+    "name": "portrait-dice",
+    "seed": 7114,
+    "prompt": "a sly card-sharp gambler sea captain, gold rings on his fingers holding up two bone dice, rakish green coat, thin moustache, one raised eyebrow, candlelight"
+  },
+  {
+    "name": "portrait-crew-01",
+    "seed": 7115,
+    "prompt": "a young freckled cabin boy sailor of sixteen with tousled sandy hair, striped shirt, eager grin"
+  },
+  {
+    "name": "portrait-crew-02",
+    "seed": 7116,
+    "prompt": "an old salt sailor with a bushy white beard and a clay pipe, knitted red cap, deep wrinkles, twinkling eyes"
+  },
+  {
+    "name": "portrait-crew-03",
+    "seed": 7117,
+    "prompt": "a young African pirate sailor with a gold hoop earring and a patterned headscarf, bare shoulders, confident look"
+  },
+  {
+    "name": "portrait-crew-04",
+    "seed": 7118,
+    "prompt": "a young woman sailor with cropped short hair, sunburnt face, loose sailcloth shirt, determined jaw"
+  },
+  {
+    "name": "portrait-crew-05",
+    "seed": 7119,
+    "prompt": "a red-haired Irish sailor with a braided red beard, green kerchief, broken nose, cheerful"
+  },
+  {
+    "name": "portrait-crew-06",
+    "seed": 7120,
+    "prompt": "a Spanish mestizo sailor with a thick black moustache, yellow bandana, gold earring, weathered olive skin"
+  },
+  {
+    "name": "portrait-crew-07",
+    "seed": 7121,
+    "prompt": "an Indigenous Caribbean sailor with long straight black hair, shell necklace, calm proud gaze"
+  },
+  {
+    "name": "portrait-crew-08",
+    "seed": 7122,
+    "prompt": "a scarred brutish pirate with a leather eyepatch and a shaved head, thick neck, scowling"
+  },
+  {
+    "name": "portrait-crew-09",
+    "seed": 7123,
+    "prompt": "a lanky thin sailor with a gap-toothed grin, hollow cheeks, battered straw hat"
+  },
+  {
+    "name": "portrait-crew-10",
+    "seed": 7124,
+    "prompt": "a Black woman pirate in her forties with a bright red head wrap, gold earrings, scar on her chin, fierce steady eyes"
+  },
+  {
+    "name": "portrait-crew-11",
+    "seed": 7125,
+    "prompt": "a blond Dutch sailor with a short beard and a blue knitted wool cap, pale blue eyes, rosy wind-burned cheeks"
+  },
+  {
+    "name": "portrait-crew-12",
+    "seed": 7126,
+    "prompt": "a middle-aged sailor with a tarred pigtail, tattooed neck, grey stubble, faded blue jacket, sardonic squint"
+  }
+]

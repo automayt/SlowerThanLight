@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { power } from '../data/powers';
+import { harbourLine, portraitFor } from '../data/portraits';
+import { Dialogue } from './Dialogue';
 import { tierName } from '../sim/Diplomacy';
 import { describeCommission, type Run } from '../sim/Run';
 import { openLedger, standingBar } from './Ledger';
@@ -27,8 +29,10 @@ export class PortEnvoy {
   closed = false;
   private readonly x: number;
   private readonly y: number;
-  private readonly w = 560;
-  private readonly h = 320;
+  private readonly w = 620;
+  private readonly h = 440;
+  /** The greeting is typed out once, not again on every redraw. */
+  private greeted = false;
   private static readonly DEPTH = 50;
 
   constructor(
@@ -68,6 +72,10 @@ export class PortEnvoy {
 
     add(scene.add.text(SCREEN.w / 2, y, 'The Harbour Masters', { fontFamily: TITLE_FONT, fontSize: '26px', color: COLORS.gold }).setOrigin(0.5, 0));
     y += 40;
+    const master = add(new Dialogue(scene, { x, y, w, portrait: portraitFor({ power: id }), name: 'The harbour master', role: `${enc.name}, for ${p.short}`, text: harbourLine(run.tier(id)), portraitH: 112, size: 15, onParchment: false }));
+    if (this.greeted) master.skip();
+    this.greeted = true;
+    y += master.fullHeight + 14;
     add(scene.add.text(x, y, `${enc.name} answers to ${p.short}.`, { fontFamily: TITLE_FONT, fontSize: '17px', color: p.color }));
     y += 28;
     for (const o of standingBar(scene, x, y + 4, w, 10, run.standing[id])) add(o);

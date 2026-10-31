@@ -302,9 +302,10 @@ export function chartSerpent(scene: Phaser.Scene): string {
   return key;
 }
 
-/** A little ship in profile for "you are here", painted once. */
-export function chartShip(scene: Phaser.Scene, navy = false): string {
-  const key = navy ? 'charticon:navyship' : 'charticon:ship';
+/** A little ship in profile for "you are here" (or a Navy ship, or Crane's black-sailed Black Dog), painted once. */
+export function chartShip(scene: Phaser.Scene, navy: boolean | 'crane' = false): string {
+  const crane = navy === 'crane';
+  const key = crane ? 'charticon:craneship' : navy ? 'charticon:navyship' : 'charticon:ship';
   if (scene.textures.exists(key)) return key;
   const tex = scene.textures.createCanvas(key, 64, 64)!;
   const ctx = tex.getContext();
@@ -316,13 +317,13 @@ export function chartShip(scene: Phaser.Scene, navy = false): string {
   ctx.lineTo(50, 54);
   ctx.lineTo(14, 54);
   ctx.closePath();
-  ctx.fillStyle = navy ? '#1c1f2a' : '#3b2412';
+  ctx.fillStyle = crane ? '#14100c' : navy ? '#1c1f2a' : '#3b2412';
   ctx.fill();
   ctx.strokeStyle = '#120804';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // Masts and sails.
-  ctx.fillStyle = '#efe4c6';
+  // Masts and sails: black canvas on the Black Dog.
+  ctx.fillStyle = crane ? '#1e1a17' : '#efe4c6';
   for (const [x, h] of [
     [24, 30],
     [40, 34],
@@ -338,12 +339,64 @@ export function chartShip(scene: Phaser.Scene, navy = false): string {
     ctx.stroke();
   }
   // Black flag, or the King's red ensign.
-  ctx.fillStyle = navy ? '#b0242a' : '#111';
+  ctx.fillStyle = crane ? '#8a1c1c' : navy ? '#b0242a' : '#111';
   ctx.fillRect(40, 4, 9, 6);
-  if (navy) {
+  if (navy === true) {
     // A yellow band at the gunports.
     ctx.fillStyle = '#c9a23a';
     ctx.fillRect(12, 46, 40, 2);
+  }
+  tex.refresh();
+  return key;
+}
+
+/**
+ * A cloud as a chart-maker would wash it in: soft billows of paper-white with a faint grey underside. Several
+ * shapes (`variant` 0-3), 192x96, painted once each. `storm` paints a bruised thunderhead instead.
+ */
+export function chartCloud(scene: Phaser.Scene, variant: number, storm = false): string {
+  const key = `charticon:${storm ? 'storm' : 'cloud'}${variant}`;
+  if (scene.textures.exists(key)) return key;
+  const W = 192;
+  const H = 96;
+  const tex = scene.textures.createCanvas(key, W, H)!;
+  const ctx = tex.getContext();
+  let a = (variant + 1) * 7919 + (storm ? 13 : 0);
+  const rand = () => {
+    a = (a * 16807) % 2147483647;
+    return a / 2147483647;
+  };
+  const count = 9 + Math.floor(rand() * 4);
+  const puffs = Array.from({ length: count }, (_, i) => {
+    const t = (i + 0.5) / count;
+    const r = 18 + rand() * 16 * Math.sin(Math.PI * t) + 6;
+    return { x: 22 + t * (W - 44) + (rand() - 0.5) * 10, y: H * 0.6 - Math.sin(Math.PI * t) * 14 - rand() * 8, r };
+  });
+  const body = storm ? ['rgba(96,104,116,', 'rgba(38,42,52,'] : ['rgba(250,244,228,', 'rgba(196,186,166,'];
+  // Underside first, a little lower; then the lit tops.
+  for (const [dy, col, alpha] of [
+    [5, body[1], storm ? 0.75 : 0.5],
+    [0, body[0], storm ? 0.8 : 0.85],
+  ] as const) {
+    for (const p of puffs) {
+      const g = ctx.createRadialGradient(p.x, p.y + dy, 0, p.x, p.y + dy, p.r);
+      g.addColorStop(0, `${col}${alpha})`);
+      g.addColorStop(0.65, `${col}${alpha * 0.8})`);
+      g.addColorStop(1, `${col}0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y + dy, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // A few inked strokes along the lit edges, as an engraver would hint a cloud.
+  ctx.strokeStyle = storm ? 'rgba(10,10,14,0.5)' : 'rgba(42,23,10,0.22)';
+  ctx.lineWidth = 1;
+  for (const p of puffs) {
+    if (rand() < 0.45) continue;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 0.72, Math.PI * 1.1, Math.PI * 1.75);
+    ctx.stroke();
   }
   tex.refresh();
   return key;
