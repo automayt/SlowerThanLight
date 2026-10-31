@@ -13,6 +13,7 @@ import { COLORS, SCREEN, TYPE, capsStyle, textStyle, titleStyle } from './theme'
 import { LogBook, Toasts, type LogEntry } from './Toasts';
 import { addTip, Button, drawBar, drawPips, keycap, panel, Ribbon, Slip, tipZone } from './ui';
 import type { BattleCommand } from '../sim/commands';
+import { toDesign } from './screen';
 
 export interface HudCallbacks {
   selectCrew(id: number, additive: boolean): void;
@@ -676,8 +677,9 @@ Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.
     this.hoverSlip.setVisible(!!state.hoverText);
     if (state.hoverText) {
       this.hoverSlip.setLabel(state.hoverText);
-      const x = Math.min(this.pointer.x + 16, SCREEN.w - this.hoverSlip.paperW - 6);
-      const y = Math.max(this.pointer.y - 12 - this.hoverSlip.paperH, 6);
+      const at = toDesign(this.pointer.x, this.pointer.y);
+      const x = Math.min(at.x + 16, SCREEN.w - this.hoverSlip.paperW - 6);
+      const y = Math.max(at.y - 12 - this.hoverSlip.paperH, 6);
       this.hoverSlip.setPosition(Math.round(x), Math.round(y));
     }
   }

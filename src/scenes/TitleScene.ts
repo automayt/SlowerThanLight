@@ -8,6 +8,7 @@ import { setRun } from '../render/RunBar';
 import { Button, divider, frame, goldText, Sea, SoundButton } from '../render/ui';
 import { Run } from '../sim/Run';
 import { disableSaving, loadRun, sceneFor } from './save';
+import { FullscreenButton } from '../render/fullscreen';
 
 export class TitleScene extends Phaser.Scene {
   private sea!: Sea;
@@ -78,6 +79,7 @@ export class TitleScene extends Phaser.Scene {
     // The controls live behind a button, so the painting stays clear.
     entrance.push(
       new SoundButton(this, 20, SCREEN.h - 58, 38),
+      new FullscreenButton(this, 66, SCREEN.h - 58, 38),
       new Button(this, cx - 85, SCREEN.h - 58, 170, 38, 'How to Play', () => this.showHelp(), { size: 16, hint: 'H' }),
       new Button(this, cx - 285, SCREEN.h - 58, 190, 38, 'Sail Together', () => this.scene.start('CoopLobby'), { size: 16, hint: 'T', tip: 'Co-op: crew one ship with friends on your network.' }),
       new Button(this, SCREEN.w - 190, SCREEN.h - 58, 170, 38, 'Logbook', () => this.scene.start('Logbook'), { size: 16 }),

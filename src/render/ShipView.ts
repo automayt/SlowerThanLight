@@ -3,6 +3,7 @@ import type { Crew, Ship } from '../sim/Ship';
 import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
 import { ART_SCALE, paintFurls, paintShip, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
+import { motionScale } from './screen';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 
 export interface ShipViewState {
@@ -105,6 +106,23 @@ export class ShipView {
   private readonly flag: Ensign;
   private readonly ensign: EnsignArt;
   private readonly strips: Phaser.GameObjects.Image[] = [];
+  /**
+   * She yaws a little on the swell, turning about her middle. Everything of hers turns with her: the painted hull and
+   * rig as images, the deck overlays as graphics drawn in her own (unturned) frame, and toScreen/toTile, so clicks
+   * land on the room that is drawn under the pointer.
+   */
+  private yaw = 0;
+  private yawKick = 0;
+  private cos = 1;
+  private sin = 0;
+  private readonly pivot = { x: 0, y: 0 };
+  /** Top-left of the painted hull before the yaw. */
+  private left0 = 0;
+  private top0 = 0;
+  /** 0..1, easing in while she crowds on sail: she heels further, rolls deeper and throws a bigger wake. */
+  private press = 0;
+  /** Each gun's recoil: 1 the moment it fires, easing to 0 as the crew run it out again. */
+  private readonly gunKick: number[] = [];
   /** Her stern half, once she has blown in two. */
   private wreck: Phaser.GameObjects.Image | null = null;
   /** Where she broke, in screen pixels from the left of her painted hull. */
@@ -148,11 +166,12 @@ export class ShipView {
     }
     this.ui = scene.add.graphics().setDepth(DEPTH.ui);
 
+    this.updatePivot();
     if (showLabels) {
       for (const sys of ship.systems.values()) {
         this.badges.set(sys.id, scene.add.image(0, 0, systemIcon(scene, sys.id)).setScale(0.5).setDepth(DEPTH.ui).setOrigin(0.5));
       }
-      const nx = this.toScreen({ x: ship.width / 2, y: 0 }).x;
+      const nx = this.pivot.x;
       this.nameText = scene.add
         .text(nx, oy - (this.geom.beam - ship.height / 2) * tile - 22, ship.def.name, {
           fontFamily: TITLE_FONT,
@@ -172,14 +191,79 @@ export class ShipView {
 
   /** Tile coordinates (fractional) to screen pixels. */
   toScreen(p: Vec): Vec {
-    const x = this.flip ? this.ship.width - p.x : p.x;
-    return { x: this.ox + this.fx + x * this.tile, y: this.oy + this.bob + this.fy + p.y * this.tile };
+    const l = this.local(p);
+    return this.turn(l.x, l.y);
   }
 
   /** Screen pixels to fractional tile coordinates. */
   toTile(px: number, py: number): Vec {
-    const x = (px - this.ox - this.fx) / this.tile;
-    return { x: this.flip ? this.ship.width - x : x, y: (py - this.oy - this.bob - this.fy) / this.tile };
+    const l = this.unturn(px, py);
+    const x = (l.x - this.ox - this.fx) / this.tile;
+    return { x: this.flip ? this.ship.width - x : x, y: (l.y - this.oy - this.bob - this.fy) / this.tile };
+  }
+
+  /** Tile coordinates to pixels in her own frame, before the yaw: where her deck graphics draw. */
+  private local(p: Vec): Vec {
+    const x = this.flip ? this.ship.width - p.x : p.x;
+    return { x: this.ox + this.fx + x * this.tile, y: this.oy + this.bob + this.fy + p.y * this.tile };
+  }
+
+  /** Her frame to the screen: turned by the yaw about her middle. */
+  private turn(x: number, y: number): Vec {
+    const dx = x - this.pivot.x;
+    const dy = y - this.pivot.y;
+    return { x: this.pivot.x + dx * this.cos - dy * this.sin, y: this.pivot.y + dx * this.sin + dy * this.cos };
+  }
+
+  private unturn(x: number, y: number): Vec {
+    const dx = x - this.pivot.x;
+    const dy = y - this.pivot.y;
+    return { x: this.pivot.x + dx * this.cos + dy * this.sin, y: this.pivot.y - dx * this.sin + dy * this.cos };
+  }
+
+  private updatePivot(): void {
+    this.pivot.x = this.ox + this.fx + (this.ship.width * this.tile) / 2;
+    this.pivot.y = this.oy + this.bob + this.fy + (this.ship.height * this.tile) / 2;
+    this.cos = Math.cos(this.yaw);
+    this.sin = Math.sin(this.yaw);
+  }
+
+  /** Put a graphics layer drawn in her frame where she is: turned about her middle. */
+  private seat(g: Phaser.GameObjects.Graphics): void {
+    const { x, y } = this.pivot;
+    g.setRotation(this.yaw).setPosition(x - (x * this.cos - y * this.sin), y - (x * this.sin + y * this.cos));
+  }
+
+  /** Place an image whose origin falls at (x, y) in her frame. */
+  private seatImage(img: Phaser.GameObjects.Image, x: number, y: number, rotation = 0): void {
+    const p = this.turn(x, y);
+    img.setPosition(p.x, p.y).setRotation(rotation + this.yaw);
+  }
+
+  private localCenter(roomId: string): Vec {
+    return this.local(this.ship.roomCenter(roomId));
+  }
+
+  private localRoomRect(roomId: string): Phaser.Geom.Rectangle {
+    const d = this.ship.room(roomId).def;
+    return this.localRect(d.x, d.y, d.w, d.h);
+  }
+
+  private localTileRect(roomId: string, i: number): Phaser.Geom.Rectangle {
+    const d = this.ship.room(roomId).def;
+    return this.localRect(d.x + (i % d.w), d.y + Math.floor(i / d.w), 1, 1);
+  }
+
+  private localRect(x: number, y: number, w: number, h: number): Phaser.Geom.Rectangle {
+    const a = this.local({ x, y });
+    const b = this.local({ x: x + w, y: y + h });
+    return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
+  }
+
+  /** A rectangle in her frame, moved to where its middle is on screen (the yaw is too slight to tilt it noticeably). */
+  private onScreen(r: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle {
+    const c = this.turn(r.centerX, r.centerY);
+    return r.setPosition(c.x - r.width / 2, c.y - r.height / 2);
   }
 
   roomAt(px: number, py: number): string | null {
@@ -208,36 +292,30 @@ export class ShipView {
 
   /** Screen rectangle of a room. */
   roomRect(roomId: string): Phaser.Geom.Rectangle {
-    const d = this.ship.room(roomId).def;
-    const a = this.toScreen({ x: d.x, y: d.y });
-    const b = this.toScreen({ x: d.x + d.w, y: d.y + d.h });
-    return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
+    return this.onScreen(this.localRoomRect(roomId));
   }
 
   /** Screen rectangle of one tile of a room (`i` indexes the room's flames, row by row). */
   tileRect(roomId: string, i: number): Phaser.Geom.Rectangle {
-    const d = this.ship.room(roomId).def;
-    const x = d.x + (i % d.w);
-    const y = d.y + Math.floor(i / d.w);
-    const a = this.toScreen({ x, y });
-    const b = this.toScreen({ x: x + 1, y: y + 1 });
-    return new Phaser.Geom.Rectangle(Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y);
+    return this.onScreen(this.localTileRect(roomId, i));
   }
 
   /** Muzzle of the cannon that stands for gun `index`, run out through its port in the ship's side, and the way it points. */
   muzzle(index: number): { x: number; y: number; dx: number; dy: number } {
+    const m = this.localMuzzle(index);
+    const p = this.turn(m.x, m.y);
+    return { x: p.x, y: p.y, dx: -m.dy * this.sin, dy: m.dy * this.cos };
+  }
+
+  private localMuzzle(index: number): { x: number; y: number; dy: number } {
     const guns = this.gunRoom;
     const mid = this.ship.height / 2;
-    if (!guns) {
-      const c = this.toScreen({ x: this.ship.width / 2, y: mid });
-      return { ...c, dx: 0, dy: -1 };
-    }
+    if (!guns) return { ...this.local({ x: this.ship.width / 2, y: mid }), dy: -1 };
     const col = index % guns.w;
     const top = Math.floor(index / guns.w) % 2 === 0 || guns.h === 1;
     const x = guns.x + col + 0.5;
     const side = this.geom.half(x) + 0.05;
-    const p = this.toScreen({ x, y: top ? mid - side : mid + side });
-    return { x: p.x, y: p.y, dx: 0, dy: top ? -1 : 1 };
+    return { ...this.local({ x, y: top ? mid - side : mid + side }), dy: top ? -1 : 1 };
   }
 
   /** Leave a scorch mark where a ball struck. */
@@ -316,9 +394,17 @@ export class ShipView {
     this.marks?.setVisible(false);
   }
 
-  /** Her own gun has fired out of the side facing `dy`: she gives a little the other way. */
-  recoil(dy: number): void {
+  /**
+   * Her own gun has fired out of the side facing `dy`: she gives a little the other way, and turns a touch about her
+   * middle by where along her length it stands. The gun itself leaps back from its port and is run out again.
+   */
+  recoil(dy: number, gun?: number): void {
     this.kick = Math.max(-4, Math.min(4, this.kick - dy * 2.2));
+    if (gun === undefined) return;
+    this.gunKick[gun] = 1;
+    const m = this.localMuzzle(gun);
+    const arm = (m.x - this.pivot.x) / ((this.ship.width * this.tile) / 2 || 1);
+    this.yawKick = Math.max(-0.012, Math.min(0.012, this.yawKick - Math.sign(dy) * arm * 0.004 * motionScale()));
   }
 
   /** A ball has torn through her canvas. */
@@ -336,6 +422,8 @@ export class ShipView {
     const T = this.tile;
     const left = (this.flip ? this.ox - g.padR * T : this.ox - g.padL * T) + this.fx;
     const top = this.oy + this.bob + this.fy - g.padT * T;
+    this.left0 = left;
+    this.top0 = top;
     if (this.wreck && this.finale) {
       // Blown in two: the halves part and fold away from the break.
       const k = Math.min(1, (this.scene.time.now / 1000 - this.finale.t0) / 3.2);
@@ -343,13 +431,13 @@ export class ShipView {
       const px = left + this.breakX;
       const py = top + this.base.originY * this.base.displayHeight;
       const ease = 1 - Math.pow(1 - k, 2);
-      this.base.setPosition(px + bow * ease * 16, py).setRotation(bow * ease * 0.16);
-      this.wreck.setPosition(px - bow * ease * 14, py + ease * 4).setRotation(-bow * ease * 0.12);
-    } else this.base.setPosition(left, top);
-    this.rig.setPosition(left, top + this.roll);
+      this.seatImage(this.base, px + bow * ease * 16, py, bow * ease * 0.16);
+      this.seatImage(this.wreck, px - bow * ease * 14, py + ease * 4, -bow * ease * 0.12);
+    } else this.seatImage(this.base, left, top);
+    this.seatImage(this.rig, left, top + this.roll);
     const texW = this.rig.width;
     for (const { img, piece } of this.furls) {
-      img.setPosition(left + (this.flip ? texW - piece.x - piece.w : piece.x) / ART_SCALE, top + this.roll + piece.y / ART_SCALE);
+      this.seatImage(img, left + (this.flip ? texW - piece.x - piece.w : piece.x) / ART_SCALE, top + this.roll + piece.y / ART_SCALE);
     }
   }
 
@@ -368,11 +456,25 @@ export class ShipView {
     const dt = Math.min(0.1, Math.max(0, t - this.lastT));
     this.lastT = t;
     this.kick *= Math.exp(-dt * 7);
-    this.bob = Math.sin(t * 0.9 + this.phase) * 1.4 + this.kick;
-    this.roll = Math.sin(t * 0.7 + this.phase * 1.7) * 2.2;
+    this.yawKick *= Math.exp(-dt * 2.5);
+    for (let i = 0; i < this.gunKick.length; i++) this.gunKick[i] = Math.max(0, (this.gunKick[i] ?? 0) - dt / 1.1);
+    // Riding the swell: she rises and falls, yaws a little and rolls, the masts swinging over the hull. Crowding on
+    // sail, she heels hard to leeward (the rig leans off up the screen) and everything works deeper.
+    const sailing = (this.ship.orders?.sail.active ?? 0) > 0 && !this.finale;
+    this.press += ((sailing ? 1 : 0) - this.press) * Math.min(1, dt * 1.2);
+    const calm = motionScale();
+    const p = this.press;
+    this.bob = (Math.sin(t * 0.9 + this.phase) * 1.4 + Math.sin(t * 0.43 + this.phase * 2.3) * 0.9) * calm * (1 + 0.4 * p) + this.kick;
+    this.yaw = (Math.sin(t * 0.52 + this.phase * 1.3) * 0.0065 + Math.sin(t * 1.17 + this.phase) * 0.0022) * calm * (1 + 0.7 * p) + this.yawKick;
+    this.roll = (Math.sin(t * 0.7 + this.phase * 1.7) * (2.2 + 1.6 * p) - (1 + 5 * p)) * calm;
     const fin = this.finaleProgress(t);
+    this.updatePivot();
     this.placeImages();
-    if (this.nameText) this.nameText.setY(this.oy + this.bob - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
+    for (const g of [this.wake, this.over, this.sails, this.ui]) this.seat(g);
+    if (this.nameText) {
+      const n = this.turn(this.pivot.x, this.oy + this.bob + this.fy - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
+      this.nameText.setPosition(n.x, n.y);
+    }
 
     const fade = fin && fin.kind !== 'sail' ? 1 - fin.k * 0.92 : 1;
     const rigFade = fin && fin.kind !== 'sail' ? Math.max(0, 1 - fin.k * 1.6) : 1;
@@ -429,7 +531,7 @@ export class ShipView {
     const mid = this.ship.height / 2;
     g.clear();
     if (fin.kind === 'sail') return;
-    const c = this.toScreen({ x: (geo.stern + geo.tip) / 2, y: mid });
+    const c = this.local({ x: (geo.stern + geo.tip) / 2, y: mid });
     const len = (geo.tip - geo.stern) * T;
     // Churning water closing over her.
     for (let i = 0; i < 3; i++) {
@@ -535,7 +637,7 @@ export class ShipView {
     }
 
     // The ensign, cut in strips that each ride a travelling wave.
-    const staff = this.toScreen({ x: geo.stern + 0.1, y: mid });
+    const staff = this.local({ x: geo.stern + 0.1, y: mid });
     const ftex = this.strips[0].texture.getSourceImage();
     const sw = Math.ceil(ftex.width / FLAG_STRIPS);
     const flyPx = ftex.width / ART_SCALE;
@@ -543,7 +645,8 @@ export class ShipView {
     const top = staff.y - this.ensign.hoistY / ART_SCALE;
     this.strips.forEach((img, i) => {
       const d = Math.abs((i + 0.5) * sw - this.ensign.hoistX) / ART_SCALE;
-      img.setPosition(left, top + (d / flyPx) * 2.4 * Math.sin(t * 7.5 - d * 0.16 + this.phase)).setAlpha(alpha);
+      this.seatImage(img, left, top + (d / flyPx) * 2.4 * Math.sin(t * 7.5 - d * 0.16 + this.phase));
+      img.setAlpha(alpha);
     });
   }
 
@@ -599,8 +702,8 @@ export class ShipView {
   private drawMarks(alpha: number): void {
     if (!this.scorches.length && !this.scars.length) return;
     const T = this.tile;
-    const left = this.base.x;
-    const top = this.base.y;
+    const left = this.left0;
+    const top = this.top0;
     if (!this.marks) {
       // Between the deck art and the overlay, where the water and fire are drawn over them.
       this.marks = this.scene.add.renderTexture(left, top, Math.ceil(this.base.displayWidth), Math.ceil(this.base.displayHeight)).setOrigin(0).setDepth((DEPTH.base + DEPTH.over) / 2);
@@ -610,7 +713,7 @@ export class ShipView {
       this.marksDirty = false;
       const g = this.marksPen!.clear();
       const at = (x: number, y: number) => {
-        const p = this.toScreen({ x, y });
+        const p = this.local({ x, y });
         return { x: p.x - left, y: p.y - top };
       };
       for (const s of this.scorches) {
@@ -635,7 +738,7 @@ export class ShipView {
       }
       this.marks.clear().draw(g, 0, 0);
     }
-    this.marks.setPosition(left, top).setAlpha(alpha);
+    this.marks.setPosition(this.base.x, this.base.y).setRotation(this.base.rotation).setAlpha(alpha);
   }
 
   private drawWake(t: number): void {
@@ -650,7 +753,7 @@ export class ShipView {
         const ny = p.y - mid;
         const len = Math.hypot(nx * 0.35, ny) || 1;
         const out = 0.1 + ring * 0.12 + 0.05 * Math.sin(t * 2.2 + i * 0.7 + ring);
-        return this.toScreen({ x: p.x + ((nx * 0.35) / len) * out, y: p.y + (ny / len) * out });
+        return this.local({ x: p.x + ((nx * 0.35) / len) * out, y: p.y + (ny / len) * out });
       });
       g.lineStyle(2 - ring * 0.5, 0xe8f4f8, 0.32 - ring * 0.09);
       g.strokePoints(pts, true);
@@ -669,29 +772,48 @@ export class ShipView {
           const nx = p.x - (geo.stern + geo.tip) / 2;
           const ny = p.y - mid;
           const len = Math.hypot(nx * 0.35, ny) || 1;
-          return this.toScreen({ x: p.x + ((nx * 0.35) / len) * off, y: p.y + (ny / len) * off });
+          return this.local({ x: p.x + ((nx * 0.35) / len) * off, y: p.y + (ny / len) * off });
         });
         g.lineStyle(2.5 + flash * 2, flash > 0 ? 0xffffff : 0xf0dca0, Math.min(1, alpha + flash * 0.6));
         g.strokePoints(ring, true);
       }
     }
 
-    // Foam boiling off the bow, and a wake trailing astern.
+    // Foam boiling off the bow, and a wake trailing astern: longer, whiter and faster with sail crowded on.
     const dir = this.flip ? -1 : 1;
+    const press = this.press;
     for (const side of [-1, 1]) {
       for (let i = 0; i < 5; i++) {
-        const k = (i + ((t * 0.9) % 1)) / 5;
-        const x = geo.tip - 0.2 - k * 2.2;
-        const p = this.toScreen({ x, y: mid + side * (geo.half(x) + 0.12 + k * 0.45) });
-        g.fillStyle(0xe8f4f8, 0.3 * (1 - k));
-        g.fillEllipse(p.x, p.y, this.tile * (0.55 + k * 0.5), this.tile * (0.18 + k * 0.2));
+        const k = (i + ((t * (0.9 + 0.6 * press)) % 1)) / 5;
+        const x = geo.tip - 0.2 - k * (2.2 + 1.2 * press);
+        const p = this.local({ x, y: mid + side * (geo.half(x) + 0.12 + k * (0.45 + 0.35 * press)) });
+        g.fillStyle(0xe8f4f8, (0.3 + 0.18 * press) * (1 - k));
+        g.fillEllipse(p.x, p.y, this.tile * (0.55 + k * 0.5) * (1 + 0.3 * press), this.tile * (0.18 + k * 0.2));
       }
     }
-    const stern = this.toScreen({ x: geo.stern, y: mid });
-    for (let i = 0; i < 6; i++) {
-      const k = (i + ((t * 0.8) % 1)) / 6;
-      g.fillStyle(0xe8f4f8, 0.22 * (1 - k));
-      g.fillEllipse(stern.x - dir * this.tile * (0.4 + k * 3.2), stern.y + Math.sin(t * 1.3 + i) * 3, this.tile * (0.5 + k * 0.9), this.tile * (0.25 + k * 0.5));
+    const stern = this.local({ x: geo.stern, y: mid });
+    const reach = 3.2 + 2.6 * press;
+    const n = 6 + Math.round(3 * press);
+    for (let i = 0; i < n; i++) {
+      const k = (i + ((t * (0.8 + 0.5 * press)) % 1)) / n;
+      g.fillStyle(0xe8f4f8, (0.22 + 0.1 * press) * (1 - k));
+      g.fillEllipse(stern.x - dir * this.tile * (0.4 + k * reach), stern.y + Math.sin(t * 1.3 + i) * 3, this.tile * (0.5 + k * 0.9), this.tile * (0.25 + k * (0.5 + 0.4 * press)));
+    }
+    // Under a press of sail, two lines of broken water spread from her quarters.
+    if (press > 0.02) {
+      const half = geo.half(geo.stern + 0.3) * this.tile;
+      for (const side of [-1, 1]) {
+        g.lineStyle(2.5, 0xe8f4f8, 0.5 * press);
+        g.beginPath();
+        for (let i = 0; i <= 10; i++) {
+          const k = i / 10;
+          const x = stern.x - dir * this.tile * k * reach;
+          const y = stern.y + side * (half + k * this.tile * 1.4) + Math.sin(t * 3 + k * 9 + side) * 2;
+          if (i) g.lineTo(x, y);
+          else g.moveTo(x, y);
+        }
+        g.strokePath();
+      }
     }
   }
 
@@ -702,7 +824,7 @@ export class ShipView {
     g.clear();
 
     for (const room of ship.rooms.values()) {
-      const r = this.roomRect(room.def.id);
+      const r = this.localRoomRect(room.def.id);
       const sys = room.def.system ? ship.system(room.def.system) : undefined;
 
       if (room.water >= 1) {
@@ -728,7 +850,7 @@ export class ShipView {
       }
 
       if (room.breach) {
-        const c = this.roomCenter(room.def.id);
+        const c = this.localCenter(room.def.id);
         const hx = c.x + T * 0.25;
         const hy = c.y + T * 0.12;
         const pts: Vec[] = [];
@@ -756,7 +878,7 @@ export class ShipView {
         for (let i = 0; i < flames.length; i++) {
           const k = flames[i] / 100;
           if (k <= 0) continue;
-          const tr = this.tileRect(room.def.id, i);
+          const tr = this.localTileRect(room.def.id, i);
           const seed = i * 1.7 + r.x * 0.01;
           g.fillStyle(0xff6a1a, 0.12 + 0.26 * k + 0.05 * Math.sin(t * 9 + seed)).fillRect(tr.x + 1, tr.y + 1, tr.width - 2, tr.height - 2);
           g.fillStyle(0xffc040, 0.05 + 0.12 * k).fillRect(tr.x + 4, tr.y + 4, tr.width - 8, tr.height - 8);
@@ -798,10 +920,27 @@ export class ShipView {
       }
     }
 
+    // Her guns' muzzles out through the ports, each leaping back when it fires and run out again as it is served.
+    if (this.gunRoom && !this.finale) {
+      for (let i = 0; i < ship.guns.length; i++) {
+        const m = this.localMuzzle(i);
+        const k = this.gunKick[i] ?? 0;
+        const out = T * (0.2 * (1 - Math.pow(k, 0.6)) + 0.02);
+        const y0 = m.y - m.dy * T * 0.06;
+        const y1 = m.y + m.dy * out;
+        const w = T * 0.13;
+        g.fillStyle(0x161616, 1).fillRect(m.x - w / 2, Math.min(y0, y1), w, Math.abs(y1 - y0));
+        g.fillStyle(0x6a6a66, 0.7).fillRect(m.x - w / 2 + 1, Math.min(y0, y1), 1.5, Math.abs(y1 - y0));
+        g.fillStyle(0x0a0a0a, 1).fillEllipse(m.x, y1, w * 1.25, T * 0.06);
+        // A wisp of smoke still curling from the port.
+        if (k > 0.3) g.fillStyle(0xd8d4cc, (k - 0.3) * 0.5).fillCircle(m.x, y1 + m.dy * T * 0.12 * (1.3 - k), T * 0.1 * (1.6 - k));
+      }
+    }
+
     // Selection rings at the feet, under the crew.
     for (const c of ship.crew) {
       if (!state.selected?.has(c.id)) continue;
-      const p = this.toScreen(c.pos);
+      const p = this.local(c.pos);
       const fy = p.y + T * 0.3;
       g.lineStyle(2.5, COLORS.select, 0.95).strokeEllipse(p.x, fy, T * 0.62, T * 0.24);
       g.fillStyle(COLORS.select, 0.18).fillEllipse(p.x, fy, T * 0.62, T * 0.24);
@@ -863,10 +1002,11 @@ export class ShipView {
     // System badges and power pips at each station's top-left corner.
     for (const [id, badge] of this.badges) {
       const sys = ship.system(id)!;
-      const r = this.roomRect(sys.room);
+      const r = this.localRoomRect(sys.room);
       const bx = r.x + 11;
       const by = r.y + 11;
-      badge.setPosition(bx, by);
+      const at = this.turn(bx, by);
+      badge.setPosition(at.x, at.y);
       const out = ship.level(id) === 0;
       badge.setTint(sys.damage > 0 && ship.capacity(id) === 0 ? 0xff6a5a : out ? 0x9a9a9a : 0xffffff);
       const level = ship.level(id);
@@ -882,7 +1022,7 @@ export class ShipView {
 
     // Crew health and what they're doing, over their heads.
     for (const c of ship.crew) {
-      const p = this.toScreen(c.pos);
+      const p = this.local(c.pos);
       const headY = p.y + T * 0.3 - T * 0.95;
       const hurt = c.hp < c.maxHp;
       if (hurt || state.selected?.has(c.id)) {
@@ -909,7 +1049,7 @@ export class ShipView {
       const byRoom = new Map<string, AimMark[]>();
       for (const m of state.targets) if (ship.rooms.has(m.room)) byRoom.set(m.room, [...(byRoom.get(m.room) ?? []), m]);
       for (const [roomId, marks] of byRoom) {
-        const c = this.roomCenter(roomId);
+        const c = this.localCenter(roomId);
         const hostile = marks[0].hostile;
         const rad = T * (hostile ? 0.26 : 0.34);
         const color = hostile ? 0xff8a3a : COLORS.aim;
@@ -946,7 +1086,7 @@ export class ShipView {
     for (const mk of this.moveMarks) {
       const k = (t - mk.t0) / 0.9;
       if (k >= 1) continue;
-      const p = this.toScreen(mk.at);
+      const p = this.local(mk.at);
       g.lineStyle(2, COLORS.select, 0.9 * (1 - k)).strokeEllipse(p.x, p.y + T * 0.3, T * (0.3 + k * 0.6), T * (0.12 + k * 0.24));
     }
     this.moveMarks = this.moveMarks.filter((mk) => t - mk.t0 < 0.9);

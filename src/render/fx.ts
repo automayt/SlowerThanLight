@@ -110,6 +110,8 @@ type Particle = Phaser.GameObjects.Particles.Particle;
 
 /** Fade in fast, then out slowly: billowing smoke. */
 const billow = (peak: number) => (_p: Particle, _k: string, t: number) => peak * (t < 0.08 ? t / 0.08 : Math.pow(1 - (t - 0.08) / 0.92, 1.4));
+/** Gather slowly, hang a long while, thin away: a bank of powder smoke over the water. */
+const linger = (peak: number) => (_p: Particle, _k: string, t: number) => peak * (t < 0.15 ? t / 0.15 : Math.pow(1 - (t - 0.15) / 0.85, 0.7));
 
 /**
  * The battle's particle effects: gunsmoke that drifts downwind, muzzle flashes, splinters, sparks, splashes, embers and
@@ -124,6 +126,8 @@ export class BattleFx {
   private readonly embers: Emitter;
   private readonly splinters: Emitter;
   private readonly drops: Emitter;
+  /** Banks of spent powder smoke that hang between the ships and drift off downwind. */
+  private readonly haze: Emitter;
   /** Direction the next burst of gunsmoke is blown out in. */
   private dir = { x: 0, y: -1 };
   /** Fractional particles owed to burning rooms, carried between frames. */
@@ -134,7 +138,7 @@ export class BattleFx {
     const add = (tex: string, depth: number, config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig) =>
       scene.add.particles(0, 0, tex, { emitting: false, ...config }).setDepth(depth);
     this.smoke = add('fx:smoke', 9.5, {
-      lifespan: { min: 2000, max: 3200 },
+      lifespan: { min: 2600, max: 4200 },
       speedX: { onEmit: () => this.dir.x * rnd(18, 60) + rnd(-18, 18) },
       speedY: { onEmit: () => this.dir.y * rnd(18, 60) + rnd(-18, 18) },
       accelerationX: WIND.x,
@@ -143,6 +147,17 @@ export class BattleFx {
       alpha: { onUpdate: billow(0.42) },
       rotate: { min: 0, max: 360 },
       maxAliveParticles: 120,
+    });
+    this.haze = add('fx:smoke', 9.3, {
+      lifespan: { min: 7000, max: 11000 },
+      speedX: { min: -5, max: 7 },
+      speedY: { min: -5, max: 3 },
+      accelerationX: WIND.x * 0.12,
+      accelerationY: WIND.y * 0.1,
+      scale: { start: 1.5, end: 4.4, ease: 'Sine.easeOut' },
+      alpha: { onUpdate: linger(0.2) },
+      rotate: { min: 0, max: 360 },
+      maxAliveParticles: 28,
     });
     this.soot = add('fx:soot', 9.4, {
       lifespan: { min: 1600, max: 2800 },
@@ -215,6 +230,11 @@ export class BattleFx {
     for (let i = 0; i < 6; i++) this.smoke.explode(1, x + dx * (8 + i * 5) + rnd(-6, 6), y + dy * (8 + i * 5) + rnd(-6, 6));
   }
 
+  /** After a gun fires, a slow bank of its smoke settles over the water at (x, y) and hangs there, drifting downwind. */
+  gunHaze(x: number, y: number): void {
+    this.haze.emitParticleAt(x + rnd(-30, 30), y + rnd(-24, 24), 1);
+  }
+
   /** A ball striking home: splinters, a burst of light, dark smoke; hot shot sprays embers. */
   impact(x: number, y: number, hot: boolean, heavy: boolean): void {
     this.flash.explode(heavy ? 2 : 1, x, y);
@@ -234,6 +254,8 @@ export class BattleFx {
   /** A miss: a spout of white water. */
   splash(x: number, y: number): void {
     this.drops.explode(16, x, y);
+    // The column thrown up, falling back in a heavier, slower spray.
+    for (let i = 0; i < 10; i++) this.drops.emitParticleAt(x + rnd(-4, 4), y - rnd(0, 18), 1);
     this.dir = { x: 0, y: -1 };
     this.smoke.explode(1, x, y);
   }
