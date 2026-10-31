@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { ABOARD_EVENTS } from '../data/events/aboard';
 import { WEATHER_EVENTS } from '../data/events/weather';
-import { EVENT_SPEAKERS } from '../data/portraits';
+import { EVENT_SPEAKERS, portraitFor } from '../data/portraits';
 import { paintedBackdrop, shade } from '../render/backdrop';
-import { captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, SPECIAL_COLOR, Typer } from '../render/Dialogue';
+import { cameo, captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, SPECIAL_COLOR, Typer } from '../render/Dialogue';
 import { playLoop } from '../render/sound';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { CAPS_FONT, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
@@ -50,6 +50,7 @@ export class EventScene extends Phaser.Scene {
   private dialogue: Dialogue | null = null;
   /** "Your orders, Captain?", over the options until one is chosen. */
   private ordersHead: Phaser.GameObjects.Text | null = null;
+  private ordersFace: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('Event');
@@ -120,9 +121,12 @@ export class EventScene extends Phaser.Scene {
     }
     const leftH = ty + taleH;
 
-    const head = (this.ordersHead = this.add.text(OPTS.x, 0, 'Your orders, Captain?', { fontFamily: TITLE_FONT, fontSize: '19px', color: INK, fontStyle: 'italic' }));
-    parts.push(head);
-    let cy = head.height + 8;
+    // Your own captain's face beside the question: the decision is theirs.
+    const face = (this.ordersFace = cameo(this, portraitFor({ captain: run.captain.id }), OPTS.x, 0, 50));
+    const hx = face.length ? OPTS.x + 50 : OPTS.x;
+    const head = (this.ordersHead = this.add.text(hx, face.length ? 12 : 0, 'Your orders, Captain?', { fontFamily: TITLE_FONT, fontSize: '19px', color: INK, fontStyle: 'italic' }));
+    parts.push(...face, head);
+    let cy = Math.max(head.y + head.height, face.length ? 50 : 0) + 8;
     rows.forEach((row, pos) => {
       const b = this.optionButton(row, pos, OPTS.x, cy);
       this.choiceButtons.push(b);
@@ -233,6 +237,7 @@ export class EventScene extends Phaser.Scene {
     if (need > inner) this.layBand(need + BAND.pad * 2);
     this.ordersHead?.destroy();
     this.ordersHead = null;
+    this.ordersFace.forEach((o) => o.destroy());
     said.setY(BAND.pad);
     changes?.setY(BAND.pad + saidH + 14).setAlpha(0);
     this.band.add(changes ? [said, changes] : [said]);

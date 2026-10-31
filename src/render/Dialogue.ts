@@ -242,6 +242,21 @@ export class Dialogue extends Phaser.GameObjects.Container {
   }
 }
 
+/** A small framed portrait (a cameo beside a heading), `h` tall. Nothing when the face is not loaded. */
+export function cameo(scene: Phaser.Scene, name: string, x: number, y: number, h: number): Phaser.GameObjects.GameObject[] {
+  const key = `art:${name}`;
+  if (!scene.textures.exists(key)) return [];
+  const w = Math.round(h * 0.8);
+  const img = scene.add.image(x + w / 2, y + h / 2, key);
+  const s = Math.max(w / img.width, h / img.height);
+  img.setScale(s);
+  img.setCrop((img.width - w / s) / 2, (img.height - h / s) / 2, w / s, h / s);
+  const f = scene.add.graphics();
+  f.lineStyle(3, 0x6b4a1c, 1).strokeRect(x - 1, y - 1, w + 2, h + 2);
+  f.lineStyle(1.5, COLORS.brass, 1).strokeRect(x - 1, y - 1, w + 2, h + 2);
+  return [img, f];
+}
+
 export interface CaptainOption {
   /** The number on its seal (and its key). */
   num: number;

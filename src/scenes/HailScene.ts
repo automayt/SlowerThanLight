@@ -4,7 +4,7 @@ import { power } from '../data/powers';
 import { NEMESIS } from '../data/nemesis';
 import { craneLine, hailLine, portraitFor, shipMasterPortrait, withoutQuotes } from '../data/portraits';
 import { paintedBackdrop, shade } from '../render/backdrop';
-import { captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, Typer } from '../render/Dialogue';
+import { cameo, captainOption, Dialogue, INK, INK_RED, onAnyInput, parchment, Typer } from '../render/Dialogue';
 import { ledgerOpen, openLedger, standingBar } from '../render/Ledger';
 import { currentRun, freshHunger, RunBar } from '../render/RunBar';
 import { playLoop, playSfx } from '../render/sound';
@@ -38,6 +38,7 @@ export class HailScene extends Phaser.Scene {
   private bandTop = 0;
   private sheet: Phaser.GameObjects.GameObject[] = [];
   private head: Phaser.GameObjects.Text | null = null;
+  private face: Phaser.GameObjects.GameObject[] = [];
   private typers: Typer[] = [];
   private dialogue: Dialogue | null = null;
 
@@ -107,9 +108,11 @@ export class HailScene extends Phaser.Scene {
     };
     this.typers.push(new Typer(this, tale, narration, 80, speak));
 
-    const head = (this.head = this.add.text(OPTS.x, 0, enc.nemesis ? 'Answer him, Captain.' : 'How do you answer her?', { fontFamily: TITLE_FONT, fontSize: '19px', color: INK, fontStyle: 'italic' }));
-    parts.push(head);
-    let cy = head.height + 8;
+    const face = (this.face = cameo(this, portraitFor({ captain: run.captain.id }), OPTS.x, 0, 50));
+    const hx = face.length ? OPTS.x + 50 : OPTS.x;
+    const head = (this.head = this.add.text(hx, face.length ? 12 : 0, enc.nemesis ? 'Answer him, Captain.' : 'How do you answer her?', { fontFamily: TITLE_FONT, fontSize: '19px', color: INK, fontStyle: 'italic' }));
+    parts.push(...face, head);
+    let cy = Math.max(head.y + head.height, face.length ? 50 : 0) + 8;
     const options = run.hailOptions();
     options.forEach((o, i) => {
       const b = captainOption(
@@ -208,6 +211,7 @@ export class HailScene extends Phaser.Scene {
     if (need > BAND.bottom - this.bandTop - BAND.pad * 2) this.layBand(need + BAND.pad * 2);
     this.head?.destroy();
     this.head = null;
+    this.face.forEach((o) => o.destroy());
     said.setY(BAND.pad);
     changes?.setY(BAND.pad + saidH + 14).setAlpha(0);
     this.band.add(changes ? [said, changes] : [said]);
