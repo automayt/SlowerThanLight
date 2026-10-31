@@ -189,7 +189,7 @@ describe("the ship's log", () => {
     expect(by('Closest call')).toMatch(/La Furie.*20%/);
     expect(by('Hottest broadsides')).toMatch(/30 hull.*La Furie/);
     expect(by('Longest fight')).toMatch(/5 minutes.*HMS Swift/);
-    expect(by('Prize in company')).toBe('Fat Molly');
+    expect(by('Prize taken')).toBe('Fat Molly');
     expect(by('Rare finds')).toBe('Live-Oak Doubling');
     expect(by('Battle record')).toBe('2 won of 3 fought');
     expect(highlights([])).toEqual([]);

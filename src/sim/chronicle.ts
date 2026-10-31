@@ -8,7 +8,8 @@ export interface LogEntry {
   /** Jump it happened on, and the sector (0-based). */
   jump: number;
   sector: number;
-  kind: 'battle' | 'prize' | 'buy' | 'sector';
+  /** A 'prize' entry is a ship taken, sold (outcome 'sold'), sunk or retaken; 'flagship' is shifting your flag to one. */
+  kind: 'battle' | 'prize' | 'flagship' | 'buy' | 'sector';
   text: string;
   /** Battles: her name, how it ended, gold taken, your hull left as a share, hull damage your guns dealt, seconds. */
   name?: string;
@@ -58,8 +59,17 @@ export function highlights(log: readonly LogEntry[], max = 6): Highlight[] {
   if (gunnery && (gunnery.dealt ?? 0) > 0) out.push({ label: 'Hottest broadsides', text: `${gunnery.dealt} hull smashed in ${gunnery.name}${gunnery.time ? ` in ${Math.round(gunnery.time)} seconds` : ''}.` });
   const long = best(log.filter((e) => e.kind === 'battle'), (e) => e.time ?? 0);
   if (long && long !== gunnery && (long.time ?? 0) >= 120) out.push({ label: 'Longest fight', text: `${Math.round((long.time ?? 0) / 60)} minutes yardarm to yardarm with ${long.name}.` });
-  const prizes = log.filter((e) => e.kind === 'prize');
-  if (prizes.length) out.push({ label: prizes.length > 1 ? 'Prizes in company' : 'Prize in company', text: prizes.map((e) => e.name).join(', ') });
+  const flag = log.filter((e) => e.kind === 'flagship').at(-1);
+  if (flag) out.push({ label: 'Change of flag', text: `${flag.item ? `From ${flag.item} to ` : ''}${flag.name}.` });
+  // Each prize once, by what became of her: sold (for how much), sunk or retaken, or still in company.
+  const taken = log.filter((e) => e.kind === 'prize' && !e.outcome);
+  if (taken.length) {
+    const fate = (name?: string) => {
+      const last = log.filter((e) => e.kind === 'prize' && e.outcome && e.name === name).at(-1);
+      return !last ? '' : last.outcome === 'sold' ? ` (sold, ${last.gold} gold)` : ` (${last.outcome})`;
+    };
+    out.push({ label: taken.length > 1 ? 'Prizes taken' : 'Prize taken', text: taken.map((e) => `${e.name}${fate(e.name)}`).join(', ') });
+  }
   const rare = log.filter((e) => e.kind === 'buy' && e.item && FITTINGS[e.item]?.rare);
   if (rare.length) out.push({ label: 'Rare finds', text: rare.map((e) => FITTINGS[e.item!].name).join(', ') });
   const record = log.filter((e) => e.kind === 'battle');

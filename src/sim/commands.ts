@@ -116,7 +116,12 @@ export type VoyageCommand =
   | { t: 'leavePort' }
   | { t: 'prizeGun'; weapon: string }
   | { t: 'pressCrew' }
+  /** Put a prize crew aboard the beaten ship, to sell her in port. */
   | { t: 'prizeShip' }
+  /** Strip the beaten ship's hold and cut her loose. */
+  | { t: 'prizeCargo' }
+  /** Shift your flag to the beaten ship. */
+  | { t: 'flagship' }
   | { t: 'sellConsort' }
   /** Stand a round in the tavern and hear what lies ahead. */
   | { t: 'rumour' }
@@ -144,6 +149,10 @@ export function voyageAllowed(run: Run, cmd: VoyageCommand): boolean {
       return !!run.prize && !run.prize.taken;
     case 'prizeShip':
       return !run.prizeShipBlocker();
+    case 'prizeCargo':
+      return !!run.prize && !run.prize.taken && !!run.prize.cargo;
+    case 'flagship':
+      return !run.flagshipBlocker();
     case 'rumour':
       return run.canBuyRumour();
     case 'dice':
@@ -192,6 +201,10 @@ export function applyVoyage(run: Run, cmd: VoyageCommand): VoyageResult {
       return { t: 'text', text: run.pressPrizeCrew() };
     case 'prizeShip':
       return { t: 'text', text: run.takePrizeShip() };
+    case 'prizeCargo':
+      return { t: 'text', text: run.takePrizeCargo() };
+    case 'flagship':
+      return { t: 'text', text: run.takeFlagship() };
     case 'sellConsort':
       return { t: 'text', text: run.canSellConsort() ? `${run.consort!.name} fetches ${run.sellConsort()} gold at the prize court.` : null };
     case 'rumour':
@@ -203,5 +216,5 @@ export function applyVoyage(run: Run, cmd: VoyageCommand): VoyageResult {
 
 /** A short fingerprint of a voyage, so clients can tell when their copy has drifted from the server's. */
 export function voyageCheck(run: Run): string {
-  return [run.rng.position, run.status, run.nodeId, run.gold, run.provisions, run.condition.hull, run.condition.crew.length, run.jumps].join(':');
+  return [run.rng.position, run.status, run.nodeId, run.gold, run.provisions, run.condition.hull, run.condition.crew.length, run.jumps, run.def.id, run.consort?.hull ?? '-'].join(':');
 }

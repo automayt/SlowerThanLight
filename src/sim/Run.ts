@@ -94,6 +94,16 @@ export function scaleEnemy(def: ShipDef, tier: number): ShipDef {
   systems.sails = (systems.sails ?? 0) + sails;
   return { ...def, hull: Math.round(def.hull * (1 + 0.1 * tier)), hands: def.hands + extraGunHands + sails, systems, guns };
 }
+/**
+ * What a ship is worth to a prize court before her condition is counted: her timbers, her guns and her fittings
+ * (two gold a point of hull, two-fifths of what her guns cost new, three a bar of her stations).
+ */
+export function shipWorth(def: ShipDef): number {
+  const guns = def.guns.reduce((n, g) => n + weapon(g.weapon).price, 0);
+  const bars = Object.values(def.systems).reduce((n, v) => n + (v ?? 0), 0);
+  return Math.round(2 * def.hull + 0.4 * guns + 3 * bars);
+}
+
 /** How well found the blockade frigate is, on scaleEnemy's scale: more hull and a 12-pounder for her long 9. */
 export const BOSS_TIER = 1;
 export const HULL_PRICE = 3;
@@ -149,7 +159,21 @@ export const COMMISSION_STANDING = 15;
 /** A prize in company: crew you must keep aboard to spare a prize crew, how often she fires, and her price at a prize court. */
 export const PRIZE_MIN_CREW = 2;
 export const PRIZE_EVERY = 14;
-export const PRIZE_COURT = 1.2;
+/** Share of a ship's worth (see shipWorth) a prize court pays for her, sound and in the first sector. */
+export const PRIZE_COURT = 0.55;
+/** The least a prize court pays, whatever state she is in: her timbers and fittings are worth something. */
+export const PRIZE_FLOOR = 0.3;
+/**
+ * Prize money: a court pays more for a ship of its enemies (by how the powers regard each other, see
+ * data/powers.ts), and only a ransom for one of its own.
+ */
+export const PRIZE_MONEY = { sworn: 1.5, rival: 1.25, own: 0.5 } as const;
+/** Her hold's worth as a share of her usual plunder, when you strip it and cut her loose instead. */
+export const PRIZE_CARGO = 0.3;
+/** Renown for each ship taken as a prize or a flagship. */
+export const PRIZE_RENOWN = 4;
+/** The least hull (as built) a ship needs before she is worth shifting your flag to. */
+export const FLAGSHIP_MIN_HULL = 20;
 /** How much of the blockade frigate's hull the Brethren shoot away when they come to your aid. */
 export const BRETHREN_AID = 0.2;
 
@@ -261,6 +285,10 @@ export interface RunSave {
   challenges?: string[];
   /** The ship's log (sim/chronicle.ts). */
   log?: LogEntry[];
+  /** The ship you sail now, when you shifted your flag to a prize (shipId stays the one you sailed from Tortuga in). */
+  flagship?: ShipDef;
+  /** Ships taken as prizes or flagships, for renown. */
+  prizes?: number;
 }
 
 /** Silas Crane, your old quartermaster with a grudge (data/nemesis.ts). */
@@ -404,7 +432,6 @@ export interface BattleReport {
   lines: string[];
 }
 
-/** What a beaten ship has to offer beyond her gold: one pick, made on the result screen. */
 /** A captured ship sailing in company, with a prize crew of one of your own aboard. */
 export interface PrizeShip {
   /** Her kind (an enemy id), for her guns and her worth. */
@@ -414,8 +441,26 @@ export interface PrizeShip {
   maxHull: number;
   /** The hand put aboard to sail her: back with you if she is sold, lost if she sinks. */
   crew?: CrewRecord;
+  /** Whose flag she flew: a prize court of that power's enemies pays prize money for her. */
+  power?: PowerId;
+  /** The sector she was taken in, which says how she was found (see scaleEnemy). */
+  tier?: number;
+  /** Gold her hold is worth: it stays aboard and is sold with her. */
+  cargo?: number;
 }
 
+/** A beaten ship you could take command of: as she was found, and as the fight left her. */
+export interface FlagshipOffer {
+  /** Her ship, as found for her sector and named. */
+  def: ShipDef;
+  hull: number;
+  damage: Partial<Record<SystemId, number>>;
+}
+
+/**
+ * What a beaten ship has to offer beyond her gold: one pick, made on the result screen. Plunder her (a gun, a
+ * survivor or her cargo) and cut her loose, put a prize crew aboard to sell her in port, or take command of her.
+ */
 export interface Prize {
   /** The ship herself, when she struck or was carried by boarding: sail her in company, or sell her. */
   ship?: PrizeShip;
@@ -423,8 +468,33 @@ export interface Prize {
   guns: string[];
   /** Survivors willing to sign on (only when she struck her colours). */
   recruits: number;
+  /** Gold her hold is worth, stripped before you cut her loose (struck or boarded ships only). */
+  cargo?: number;
+  /** Her, to shift your flag to (struck or boarded ships only). */
+  flagship?: FlagshipOffer;
   /** Whether the pick has been made. */
   taken: boolean;
+}
+
+/** What a prize court would pay for the ship in company, and why: (worth × condition × prize money) + cargo. */
+export interface PrizeQuote {
+  price: number;
+  /** Her worth sound, in this sector (before condition and prize money). */
+  worth: number;
+  /** Share of her worth her hull leaves (PRIZE_FLOOR to 1). */
+  condition: number;
+  /** Prize money on the ship: more for a ship of this port's enemies, a ransom for one of its own. */
+  money: number;
+  /** Her cargo, sold at its worth whoever buys it. */
+  cargo: number;
+  /** Prize money in words ("Spain pays prize money on an English ship"), empty when there is none. */
+  why: string;
+}
+
+/** Taking command of a prize: what comes across with you and what stays with your old ship. */
+export interface FlagshipTerms {
+  comes: string[];
+  stays: string[];
 }
 
 export interface FittingOffer {
@@ -443,7 +513,10 @@ export interface EventResult {
 export class Run {
   readonly seed: number;
   readonly rng: Rng;
-  readonly def: ShipDef;
+  /** The ship you sail: the one you left Tortuga in, until you shift your flag to a prize. */
+  def: ShipDef;
+  /** The ship you sailed from Tortuga in (for the hideout and its records, whatever you sail now). */
+  readonly shipId: string;
   chart: SeaChart;
   fit: ShipFit;
   nodeId = 0;
@@ -482,8 +555,10 @@ export class Run {
   standing: Standing = freshStanding();
   /** A friendly ship sailing in company for the next fight. */
   escort: Escort | null = null;
-  /** A prize sailing in company, until she is sunk or sold. */
+  /** A prize sailing in company, until she is sunk, retaken or sold. */
   consort: PrizeShip | null = null;
+  /** Ships taken as prizes or flagships this voyage. */
+  prizes = 0;
   /** Work taken on for a power, until done. */
   commission: Commission | null = null;
   /** What the last jump cost you on short rations, for the chart to report (not saved). */
@@ -507,6 +582,7 @@ export class Run {
     this.provisions = DIFFICULTY[difficulty].provisions;
     this.seed = seed ?? Math.floor(Math.random() * 2 ** 31);
     this.rng = new Rng(this.seed);
+    this.shipId = shipId;
     this.def = playerShip(shipId);
     this.condition = new Ship(this.def, 'player').condition();
     for (const c of this.condition.crew) this.usedNames.add(c.name);
@@ -592,7 +668,7 @@ export class Run {
    */
   get renown(): number {
     const allies = (Object.keys(this.standing) as PowerId[]).filter((p) => this.tier(p) === 'allied').length;
-    const base = this.legs.sailed * 2 + this.battlesWon * 5 + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.nemesis.done ? 15 : 0) + (this.status === 'won' ? 40 : 0);
+    const base = this.legs.sailed * 2 + this.battlesWon * 5 + this.prizes * PRIZE_RENOWN + this.sector * 10 + this.plunderTaken / 25 + allies * 10 + (this.nemesis.done ? 15 : 0) + (this.status === 'won' ? 40 : 0);
     // Hardships chosen at the start earn their share.
     return Math.round(base * challengeRenown(this.challenges));
   }
@@ -638,12 +714,25 @@ export class Run {
 
   /** The ship as currently fitted out. */
   get ship(): ShipDef {
-    const f = this.fit;
-    const fx = fittingEffects(this.fittings);
-    const speedBonus = this.def.speedBonus + (this.has('careened') ? 5 : 0) + (this.has('copper') ? 5 : 0) + fx.evasion;
-    const melee = (this.def.melee ?? 1) * (this.has('marines') ? 1.25 : 1) * (this.captain.melee ?? 1) * fx.melee;
-    const armour = Math.max(this.def.armour ?? 0, fx.armour) || undefined;
-    return { ...this.def, hull: f.hull, hands: f.hands, speedBonus, melee, ...(armour ? { armour } : {}), systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
+    return this.fitted(this.def, this.fit, this.fittings);
+  }
+
+  /** The beaten ship as she would be under your command (your captain, and the fittings that come across), or null. */
+  get flagshipShip(): ShipDef | null {
+    const f = this.prize?.flagship;
+    if (!f) return null;
+    const fit = { hull: f.def.hull, hands: f.def.hands, systems: { ...f.def.systems }, guns: f.def.guns.map((g) => ({ weapon: g.weapon })) };
+    return this.fitted(f.def, fit, this.fittings.filter((id) => !fitting(id).fixed));
+  }
+
+  /** A ship as fitted out, with fittings and the captain's gifts. */
+  private fitted(def: ShipDef, f: ShipFit, fittings: string[]): ShipDef {
+    const fx = fittingEffects(fittings);
+    const has = (id: string) => fittings.includes(id);
+    const speedBonus = def.speedBonus + (has('careened') ? 5 : 0) + (has('copper') ? 5 : 0) + fx.evasion;
+    const melee = (def.melee ?? 1) * (has('marines') ? 1.25 : 1) * (this.captain.melee ?? 1) * fx.melee;
+    const armour = Math.max(def.armour ?? 0, fx.armour) || undefined;
+    return { ...def, hull: f.hull, hands: f.hands, speedBonus, melee, ...(armour ? { armour } : {}), systems: { ...f.systems }, guns: f.guns.map((g) => ({ ...g })) };
   }
 
   get node(): SeaNode {
@@ -689,13 +778,13 @@ export class Run {
     if (this.rng.chance(this.reefOdds())) return 'You thread the shoals with a leadsman in the chains, and come out a day ahead.';
     if (this.rng.chance(2 / 3)) {
       c.hull = Math.max(1, c.hull - REEF_SCRAPE);
-      return `Coral grinds along the keel as you clear the shoals (−${REEF_SCRAPE} hull).`;
+      return [`Coral grinds along the keel as you clear the shoals (−${REEF_SCRAPE} hull).`, ...this.batterConsort(REEF_SCRAPE)].join(' ');
     }
     c.hull = Math.max(1, c.hull - REEF_AGROUND);
     const sails = this.fit.systems.sails ?? 0;
     if (sails) this.setDamage('sails', Math.min(sails, (c.damage.sails ?? 0) + 1));
     this.navy += REEF_AGROUND_FLEET;
-    return `Aground on the reef! A day kedging her off, the hull stove in (−${REEF_AGROUND}) and the mainmast sprung, while the fleet closes.`;
+    return [`Aground on the reef! A day kedging her off, the hull stove in (−${REEF_AGROUND}) and the mainmast sprung, while the fleet closes.`, ...this.batterConsort(REEF_SCRAPE)].join(' ');
   }
 
   /** Whether a reachable node is across in the same column rather than onward. */
@@ -1125,6 +1214,22 @@ export class Run {
     }
   }
 
+  /**
+   * Weather or rocks knock this much off a prize in company. If it is more than she has left she founders, and her
+   * prize crew pull across to you in her boat (if there is a bunk; otherwise they make for the shore). Says what happened.
+   */
+  batterConsort(amount: number): string[] {
+    const p = this.consort;
+    if (!p || amount <= 0) return [];
+    p.hull -= amount;
+    if (p.hull > 0) return [`${p.name} takes a beating too (−${amount} hull, ${p.hull}/${p.maxHull} left).`];
+    this.consort = null;
+    const back = !!p.crew && this.condition.crew.length < this.maxCrew;
+    if (back) this.condition.crew.push(p.crew!);
+    this.note({ kind: 'prize', text: `${p.name} foundered.`, name: p.name, outcome: 'foundered' });
+    return [`${p.name} founders!${p.crew ? ` ${p.crew.name} ${back ? 'pulls across to you in her boat' : 'takes to her boat and makes for the shore'}.` : ''}`];
+  }
+
   private setDamage(id: SystemId, amount: number): void {
     if (amount > 0) this.condition.damage[id] = amount;
     else delete this.condition.damage[id];
@@ -1249,8 +1354,16 @@ export class Run {
       this.consort.hull = mine.hull!;
       if (this.consort.hull <= 0) {
         lines.push(`${this.consort.name} is sunk under you${this.consort.crew ? `, and ${this.consort.crew.name} goes down with her` : ''}.`);
+        this.note({ kind: 'prize', text: `${this.consort.name} sunk in company.`, name: this.consort.name, outcome: 'sunk' });
         this.consort = null;
       }
+    }
+    // A prize cannot keep up with a ship running for her life: the enemy retakes her, prize crew and all.
+    if (this.consort && o.kind === 'escaped') {
+      const p = this.consort;
+      lines.push(`${p.name} cannot keep up as you run. ${enc.name} retakes her${p.crew ? `, and ${p.crew.name} is taken prisoner` : ''}.`);
+      this.note({ kind: 'prize', text: `${p.name} retaken by ${enc.name}.`, name: p.name, outcome: 'retaken' });
+      this.consort = null;
     }
 
     if (o.kind === 'defeat' || o.kind === 'sunk' || o.kind === 'crewLost') {
@@ -1263,8 +1376,12 @@ export class Run {
     if (!enc.boss && (o.kind === 'captured' || o.kind === 'surrender')) {
       // The guns she actually fought with, as found for this sector.
       const guns = scaleEnemy(foe.ship, this.sector).guns.map((g) => g.weapon);
-      const ship = { enemy: foe.id, name: enc.name, hull: Math.max(1, battle.enemy.hull), maxHull: battle.enemy.def.hull };
-      this.prize = { ship, guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, taken: false };
+      const cargo = Math.round(((foe.plunder[0] + foe.plunder[1]) / 2) * PRIZE_CARGO * (1 + SECTOR_PLUNDER * this.sector));
+      const ship: PrizeShip = { enemy: foe.id, name: enc.name, hull: Math.max(1, battle.enemy.hull), maxHull: battle.enemy.def.hull, power: foe.power, tier: this.sector, cargo };
+      // Her ship as she fought (Crane's Black Dog included), and what the fight left of her.
+      const def: ShipDef = structuredClone({ ...battle.enemy.def, guns: battle.enemy.def.guns.map((g) => ({ weapon: g.weapon })) });
+      const flagship = { def, hull: Math.max(1, Math.round(battle.enemy.hull)), damage: battle.enemy.condition().damage };
+      this.prize = { ship, guns: [...new Set(guns)], recruits: o.kind === 'surrender' ? 1 : 0, cargo, flagship, taken: false };
     }
     this.note({
       kind: 'battle',
@@ -1309,8 +1426,8 @@ export class Run {
   }
 
   /**
-   * Put a prize crew aboard her and sail her in company. One of your hands (the least seasoned) goes across. A
-   * prize already in company is sold to make room. Returns what happened.
+   * Put a prize crew aboard her and sail her in company, to sell at a port's prize court. One of your hands (the
+   * least seasoned) goes across. A prize already in company is sold to make room. Returns what happened.
    */
   takePrizeShip(): string | null {
     if (this.prizeShipBlocker() || !this.prize?.ship) return null;
@@ -1323,18 +1440,46 @@ export class Run {
     const hand = crew.slice(1).reverse().sort((a, b) => xp(a) - xp(b))[0];
     crew.splice(crew.indexOf(hand), 1);
     this.consort = { ...this.prize.ship, crew: hand };
-    lines.push(`${hand.name} takes ${this.consort.name} as prize master. She sails in company.`);
-    this.note({ kind: 'prize', text: `${this.consort.name} sails in company, ${hand.name} her prize master.`, name: this.consort.name });
+    this.prizes++;
+    lines.push(`${hand.name} goes across as prize master. ${this.consort.name} sails in company, to be sold at the next port.`);
+    this.note({ kind: 'prize', text: `${this.consort.name} taken as a prize, ${hand.name} her prize master.`, name: this.consort.name });
     return lines.join(' ');
   }
 
-  /** What a prize court pays for the ship in company: her hold's worth, as much of it as her hull has left. */
-  consortValue(): number {
-    const p = this.consort;
-    if (!p) return 0;
+  /**
+   * What a prize court would pay for a prize (the one in company unless another is given) in a port of the given
+   * power (this port's unless given): her worth, as much of it as her hull has left, with prize money, and her cargo.
+   */
+  prizeQuote(p: PrizeShip | null = this.consort, port: PowerId | null = this.portPower): PrizeQuote | null {
+    if (!p) return null;
     const foe = enemy(p.enemy);
-    const worth = Math.max(25, (foe.plunder[0] + foe.plunder[1]) / 2);
-    return Math.round(worth * PRIZE_COURT * (0.4 + (0.6 * p.hull) / p.maxHull) * (1 + SECTOR_PLUNDER * this.sector));
+    const found = scaleEnemy(foe.ship, p.tier ?? this.sector);
+    const worth = Math.round(shipWorth({ ...found, hull: p.maxHull }) * PRIZE_COURT * (1 + SECTOR_PLUNDER * this.sector));
+    const condition = Math.max(PRIZE_FLOOR, Math.min(1, p.hull / p.maxHull));
+    const flag = p.power ?? foe.power;
+    let money = 1;
+    let why = '';
+    if (port) {
+      const r = relation(port, flag);
+      const court = power(port).name;
+      if (port === flag) {
+        money = PRIZE_MONEY.own;
+        why = `${court} pays only a ransom for a ship of its own`;
+      } else if (r <= -1) {
+        money = PRIZE_MONEY.sworn;
+        why = `${court} pays prize money on a ship of ${power(flag).short}, its sworn enemy`;
+      } else if (r < 0) {
+        money = PRIZE_MONEY.rival;
+        why = `${court} pays prize money on a ship of ${power(flag).short}, its rival`;
+      }
+    }
+    const cargo = p.cargo ?? 0;
+    return { price: Math.max(1, Math.round(worth * condition * money + cargo)), worth, condition, money, cargo, why };
+  }
+
+  /** What a prize court here pays for the ship in company. */
+  consortValue(): number {
+    return this.prizeQuote()?.price ?? 0;
   }
 
   /** Sell the ship in company: gold, and her prize crew comes back aboard if there is a bunk. Returns the price. */
@@ -1346,11 +1491,87 @@ export class Run {
     this.plunderTaken += price;
     if (p.crew && this.condition.crew.length < this.maxCrew) this.condition.crew.push(p.crew);
     this.consort = null;
+    const where = this.encounter.kind === 'port' ? ` at ${this.encounter.name}` : '';
+    this.note({ kind: 'prize', text: `${p.name} sold${where} for ${price} gold.`, name: p.name, outcome: 'sold', gold: price });
     return price;
   }
 
   canSellConsort(): boolean {
     return this.inPort && !!this.consort;
+  }
+
+  /** Strip her hold and cut her loose: her cargo's worth in gold. Returns what happened. */
+  takePrizeCargo(): string | null {
+    const p = this.prize;
+    if (!p || p.taken || !p.cargo) return null;
+    p.taken = true;
+    this.gold += p.cargo;
+    this.plunderTaken += p.cargo;
+    return `Her hold is broken open and stripped: ${p.cargo} gold in cargo. You cut her loose.`;
+  }
+
+  /** Whether her kind could ever be your flagship (big enough), whatever your crew: the result screen only offers those. */
+  get flagshipOffered(): boolean {
+    const f = this.prize?.flagship;
+    return !!f && !this.prize!.taken && f.def.hull >= FLAGSHIP_MIN_HULL;
+  }
+
+  /** Why you cannot shift your flag to the beaten ship, or null if you can. */
+  flagshipBlocker(): string | null {
+    const f = this.prize?.flagship;
+    if (!f || this.prize!.taken) return 'nothing to take';
+    if (f.def.hull < FLAGSHIP_MIN_HULL) return `a ${f.def.className.toLowerCase()} is too small to be your flagship`;
+    const berths = f.def.crew.length + EXTRA_CREW;
+    if (this.condition.crew.length > berths) return `she has berths for only ${berths} of your ${this.condition.crew.length} crew`;
+    return null;
+  }
+
+  /**
+   * Taking command of her: your people and everything they can carry come with you; whatever is built into your
+   * old ship stays with her (the shipwright's refits, her guns, and the fittings that are part of her).
+   */
+  flagshipTerms(): FlagshipTerms {
+    const f = this.fit;
+    const d = this.def;
+    const comes = [`Your crew (${this.condition.crew.length})`, `${this.gold} gold and ${this.provisions} provisions`];
+    const stays: string[] = [];
+    if (f.hull > d.hull) stays.push(`Oak planking (+${f.hull - d.hull} hull)`);
+    if (f.hands > d.hands) stays.push(`Extra deckhands' berths (+${f.hands - d.hands})`);
+    for (const [id, bars] of Object.entries(f.systems) as [SystemId, number][]) {
+      const built = d.systems[id] ?? 0;
+      if (bars > built) stays.push(`${SYSTEM_NAMES[id]} refit (+${bars - built})`);
+    }
+    if (f.guns.length) stays.push(`Your guns: ${f.guns.map((g) => weapon(g.weapon).name).join(', ')}`);
+    for (const id of this.fittings) (fitting(id).fixed ? stays : comes).push(fitting(id).name);
+    if (this.consort) comes.push(`${this.consort.name}, in company`);
+    return { comes, stays };
+  }
+
+  /**
+   * Shift your flag to the beaten ship: she becomes yours as the fight left her (her hull, her damage, her guns
+   * and stations as she was found); your crew go to the same stations aboard her; whatever is built into your old
+   * ship stays with her, and her people are put aboard your old ship and sent on their way. Returns what happened.
+   */
+  takeFlagship(): string | null {
+    const f = this.prize?.flagship;
+    if (this.flagshipBlocker() || !f) return null;
+    this.prize!.taken = true;
+    const old = this.def;
+    const def: ShipDef = structuredClone(f.def);
+    const station = (home: string) => old.rooms.find((r) => r.id === home)?.system;
+    const crew = this.condition.crew.map((c) => {
+      const sys = station(c.home);
+      const room = (sys && def.rooms.find((r) => r.system === sys)) || def.rooms.find((r) => r.id === c.home && !r.system) || def.rooms.find((r) => !r.system) || def.rooms[0];
+      return { ...c, home: room.id };
+    });
+    const left = this.fittings.filter((id) => fitting(id).fixed).map((id) => fitting(id).name);
+    this.def = def;
+    this.fit = { hull: def.hull, hands: def.hands, systems: { ...def.systems }, guns: def.guns.map((g) => ({ weapon: g.weapon })) };
+    this.condition = { hull: Math.min(def.hull, Math.max(1, f.hull)), crew, damage: { ...f.damage } };
+    this.fittings = this.fittings.filter((id) => !fitting(id).fixed);
+    this.prizes++;
+    this.note({ kind: 'flagship', text: `Shifted your flag from ${old.name} to ${def.name}, a ${def.className.toLowerCase()}.`, name: def.name, item: old.name });
+    return `You take command of ${def.name} and run up your colours. Her people are put aboard ${old.name} and sent on their way${left.length ? `, and your ${left.join(', ')} with her` : ''}.`;
   }
 
   /** Sign on one of the surrendered crew. Returns the new hand's name. */
@@ -1573,6 +1794,8 @@ export class Run {
       const before = c.hull;
       c.hull = Math.max(1, Math.min(this.fit.hull, c.hull + e.hull));
       if (c.hull !== before) out.push(`${c.hull > before ? '+' : '−'}${Math.abs(c.hull - before)} hull`);
+      // What batters you batters a prize in company too, and she has only a prize crew to save her.
+      if (e.hull < 0) out.push(...this.batterConsort(-e.hull));
     }
     if (e.crewHp) {
       for (const m of c.crew) m.hp = Math.max(1, Math.min(100, m.hp + e.crewHp));
@@ -2077,7 +2300,7 @@ export class Run {
   toSave(): RunSave {
     return structuredClone({
       version: 1 as const,
-      shipId: this.def.id,
+      shipId: this.shipId,
       seed: this.seed,
       rng: this.rng.position,
       chart: this.chart,
@@ -2113,6 +2336,8 @@ export class Run {
       nemesis: this.nemesis,
       challenges: this.challenges,
       log: this.log,
+      flagship: this.def === playerShip(this.shipId) ? undefined : this.def,
+      prizes: this.prizes,
     });
   }
 
@@ -2127,6 +2352,7 @@ export class Run {
     run.gold = s.gold;
     run.condition = s.condition;
     run.fit = s.fit;
+    if (s.flagship) run.def = s.flagship;
     // Saves from before bulwarks have no bulwark station in the fit: give her the one she was built with.
     for (const [id, bars] of Object.entries(run.def.systems) as [SystemId, number][]) run.fit.systems[id] ??= bars;
     run.status = s.status;
@@ -2155,6 +2381,7 @@ export class Run {
     run.wind = s.wind ?? Math.PI;
     run.nemesis = s.nemesis ?? { grudge: 0, met: 0, last: 'first', done: false };
     run.log = s.log ?? [];
+    run.prizes = s.prizes ?? 0;
     return run;
   }
 }

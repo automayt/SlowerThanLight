@@ -15,6 +15,7 @@ import { nodeById, type NodeKind, type SeaNode } from '../sim/SeaChart';
 import { onVoyage, voyage } from '../net/voyage';
 import { applyVoyage } from '../sim/commands';
 import { saveRun } from './save';
+import { TowedPrize } from '../render/TowedPrize';
 
 const LEFT = 90;
 const RIGHT = SCREEN.w - 90;
@@ -192,6 +193,8 @@ export class SeaMapScene extends Phaser.Scene {
   private crane: { img: Phaser.GameObjects.Image; x: number; y: number } | null = null;
   /** Lamplight around the ship by night. */
   private lantern: Phaser.GameObjects.Arc | null = null;
+  /** A prize in company, astern of you on a tow line. */
+  private towed: TowedPrize | null = null;
 
   constructor() {
     super('SeaMap');
@@ -323,6 +326,7 @@ export class SeaMapScene extends Phaser.Scene {
 
     this.wakeG = this.add.graphics().setDepth(3.9);
     this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
+    this.towed = run.consort ? new TowedPrize(this, () => this.run.consort) : null;
 
     // The tooltip: a note in ink on a slip of parchment.
     this.tipBg = this.add.graphics().setDepth(20).setVisible(false);
@@ -995,6 +999,7 @@ export class SeaMapScene extends Phaser.Scene {
     }
     this.wake = this.wake.filter((w) => w.age < 1.1);
     this.lantern?.setPosition(this.ship.x, this.ship.y - 14).setRadius(28 + Math.sin(time / 180) * 1.5);
+    this.towed?.follow(this.ship, sail ? this.along(sail, Math.max(0, sail.t - 42 / sail.at[sail.at.length - 1])) : null, time, dt);
     this.bar.refresh();
   }
 

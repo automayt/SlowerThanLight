@@ -61,6 +61,8 @@ function checkRun(run: Run): void {
   if (!Object.values(run.standing).every(Number.isFinite)) throw new Error('Save has a broken standing');
   if (run.status === 'event') run.currentEvent();
   for (const id of run.prize?.guns ?? []) weapon(id);
+  if (run.consort) enemy(run.consort.enemy);
+  if (run.prize?.flagship) new Ship(run.prize.flagship.def, 'enemy');
   for (const node of run.chart.nodes) {
     if (node.enemy) enemy(node.enemy);
     for (const id of node.stock ?? []) weapon(id);
@@ -300,7 +302,7 @@ export function paintingOf(run: Run, renown: number, when = Date.now()): VoyageP
   const won = run.status === 'won';
   return {
     seed: run.seed,
-    ship: run.def.id,
+    ship: run.shipId,
     captain: run.captain.id,
     won,
     sailed: run.legs.sailed,

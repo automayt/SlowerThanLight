@@ -12,6 +12,8 @@ export interface FittingDef {
   rare?: boolean;
   /** What it does in a fight, for the fittings that work through FittingEffects (older fittings are wired in Run). */
   effects?: FittingEffects;
+  /** Built into the ship (her hull, her pumps, her bow): it stays with her when you shift your flag to a prize. */
+  fixed?: boolean;
 }
 
 /** How fittings change the ship and the fight. Every field is optional; several fittings combine (see fittingEffects). */
@@ -40,17 +42,18 @@ export const FITTINGS: Record<string, FittingDef> = {
     short: '+5% evasion, +1 grapple',
     blurb: 'Weed and barnacles scraped off: +5% evasion, a quicker getaway, and +1 grapple speed to lay alongside a faster ship.',
     price: 55,
+    fixed: true,
   },
   spars: { id: 'spars', name: 'Spare Spars', short: 'Mend 2 systems and 1 hull a jump', blurb: 'Spare spars, planks and cordage: running repairs mend two damaged systems and a point of hull per jump.', price: 45 },
   chest: { id: 'chest', name: "Surgeon's Chest", short: 'Heal 30 HP a jump', blurb: 'Laudanum, lint and a proper saw: crew heal 30 HP per jump, not 15 (hungry crews heal nothing).', price: 40 },
   nets: { id: 'nets', name: 'Boarding Nets', short: 'Boarders land wounded', blurb: 'Rigged along the rails: enemy boarders come over the side wounded (−30 HP).', price: 45 },
   casks: { id: 'casks', name: 'Water Casks', short: 'Carry 30 provisions', blurb: 'Extra water casks: room for 30 provisions instead of 20.', price: 30 },
-  copper: { id: 'copper', name: 'Copper Sheathing', short: '+5% evasion', blurb: 'Copper plates below the waterline keep her bottom clean and fast: +5% evasion (on top of a careened hull).', price: 80 },
+  copper: { id: 'copper', name: 'Copper Sheathing', short: '+5% evasion', blurb: 'Copper plates below the waterline keep her bottom clean and fast: +5% evasion (on top of a careened hull).', price: 80, fixed: true },
   marines: { id: 'marines', name: 'Marine Drill', short: 'Crew fight 25% harder', blurb: 'A deserter from the marines teaches cutlass and bayonet: your crew fight 25% harder hand to hand.', price: 60 },
-  lockers: { id: 'lockers', name: 'Shot Lockers', short: 'Chain and grape load 30% faster', blurb: 'Racks of ready chain and grape beside every gun: guns loaded with them fire 30% sooner. Swivels love them.', price: 40 },
-  figurehead: { id: 'figurehead', name: 'Fearsome Figurehead', short: 'Foes strike sooner, pay toll', blurb: 'A snarling sea-devil at the bow: ships strike their colours more readily (+10%) and pay toll more often (+15%).', price: 45 },
+  lockers: { id: 'lockers', name: 'Shot Lockers', short: 'Chain and grape load 30% faster', blurb: 'Racks of ready chain and grape beside every gun: guns loaded with them fire 30% sooner. Swivels love them.', price: 40, fixed: true },
+  figurehead: { id: 'figurehead', name: 'Fearsome Figurehead', short: 'Foes strike sooner, pay toll', blurb: 'A snarling sea-devil at the bow: ships strike their colours more readily (+10%) and pay toll more often (+15%).', price: 45, fixed: true },
   flags: { id: 'flags', name: 'Locker of Flags', short: 'False colours fool more often', blurb: 'Every nation’s ensign and signal book: false colours fool a hostile ship 70% of the time instead of 45%.', price: 35 },
-  pumps: { id: 'pumps', name: 'Chain Pumps', short: 'Pumps drain 50% faster', blurb: 'Modern chain pumps in place of the old suction pumps: the pumps drain water half again as fast.', price: 50 },
+  pumps: { id: 'pumps', name: 'Chain Pumps', short: 'Pumps drain 50% faster', blurb: 'Modern chain pumps in place of the old suction pumps: the pumps drain water half again as fast.', price: 50, fixed: true },
   furnace: {
     id: 'furnace',
     name: 'Shot Furnace',
@@ -58,6 +61,7 @@ export const FITTINGS: Record<string, FittingDef> = {
     blurb: 'A brick furnace on the gun deck keeps balls glowing: guns loaded with hot shot fire 30% sooner. Set her alight and keep her burning.',
     price: 50,
     effects: { shotRate: { hot: 1.3 } },
+    fixed: true,
   },
   // Rare finds, each with a price to pay beyond the gold.
   oak: {
@@ -68,6 +72,7 @@ export const FITTINGS: Record<string, FittingDef> = {
     price: 90,
     rare: true,
     effects: { armour: 1, evasion: -5 },
+    fixed: true,
   },
   redflag: {
     id: 'redflag',

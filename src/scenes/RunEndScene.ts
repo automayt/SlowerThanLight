@@ -120,7 +120,7 @@ export class RunEndScene extends Phaser.Scene {
           link.send({ t: 'leave' });
           this.scene.start('CoopLobby');
         }, { size: 18, hint: 'Enter' })
-      : new Button(this, cx - 250, y, 230, 44, 'Home to the Hideout', () => this.scene.start('Harbour', { shipId: run.def.id, arrival }), { size: 18, hint: 'Enter' });
+      : new Button(this, cx - 250, y, 230, 44, 'Home to the Hideout', () => this.scene.start('Harbour', { shipId: run.shipId, arrival }), { size: 18, hint: 'Enter' });
     const home = new Button(this, cx + 20, y, 230, 44, 'Title Screen', () => this.scene.start('Title'), { size: 18, hint: 'Esc' });
     this.input.keyboard!.once('keydown-ENTER', () => again.press());
     this.input.keyboard!.once('keydown-ESC', () => home.press());

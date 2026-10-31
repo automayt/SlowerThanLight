@@ -1,6 +1,7 @@
 import { STEP, type Battle } from './Battle';
-import { diceTotal, Run, type BattleReport, type HailId, type UpgradeId } from './Run';
-import type { SystemId } from './types';
+import { diceTotal, MAX_GUNS, Run, type BattleReport, type HailId, type UpgradeId } from './Run';
+import { weapon } from '../data/weapons';
+import type { ShipDef, SystemId } from './types';
 
 export interface AutoRunOptions {
   /** Player AI gun focus in battles. */
@@ -78,13 +79,7 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
         break;
       }
       battles.push({ enemy, sector, ambush, report: run.finishBattle(battle) });
-      // Spoils: a hand if short-crewed, else her best gun.
-      const prize = run.prize;
-      if (prize && !prize.taken && !run.consort && !run.prizeShipBlocker() && run.condition.crew.length >= run.def.crew.length) run.takePrizeShip();
-      if (prize && !prize.taken) {
-        if (prize.recruits && run.condition.crew.length < run.def.crew.length) run.pressPrizeCrew();
-        else if (prize.guns.length) run.takePrizeGun(prize.guns[prize.guns.length - 1]);
-      }
+      takeSpoils(run);
       break;
     }
     case 'hail':
@@ -99,6 +94,9 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
     case 'port': {
       const hurt = run.condition.crew.some((c) => c.hp < 70) || Object.keys(run.condition.damage).length > 0;
       if (hurt) run.rest();
+      // A prize in company fights beside you: she goes to the prize court when she is too battered to last, or the purse is empty.
+      const c = run.consort;
+      if (c && run.canSellConsort() && (c.hull < c.maxHull * 0.4 || run.gold < 30)) run.sellConsort();
       while (run.repairHull(1));
       if (run.condition.crew.length < run.def.crew.length) run.hireCrew();
       // Victuals first: enough for the rest of the sector and a little over.
@@ -118,6 +116,39 @@ export function autoStep(run: Run, opts: AutoRunOptions = {}, battles: AutoRunRe
       break;
     }
   }
+}
+
+/** A rough measure of a ship's fighting strength as she stands: hull left, weight of broadside, stations and speed. */
+export function shipStrength(def: ShipDef, hull: number): number {
+  const broadside = def.guns.reduce((n, g) => n + weapon(g.weapon).damage * weapon(g.weapon).shots, 0);
+  const bars = Object.values(def.systems).reduce((n, v) => n + (v ?? 0), 0);
+  return hull + 2 * broadside + bars + def.speedBonus / 2;
+}
+
+/**
+ * Spoils after a fight, as a simple captain takes them: her ship as a flagship when she is clearly the better
+ * ship, else a prize crew aboard when there are hands to spare and no prize already in company; failing those, a
+ * hand if short-crewed, else her best gun if there is a port for it, else whichever of gun or cargo pays more.
+ */
+function takeSpoils(run: Run): void {
+  const prize = run.prize;
+  if (!prize || prize.taken) return;
+  const her = prize.flagship;
+  if (her && !run.flagshipBlocker() && her.hull >= her.def.hull * 0.5 && shipStrength(her.def, her.hull) > 1.15 * shipStrength(run.ship, run.condition.hull)) {
+    run.takeFlagship();
+    return;
+  }
+  if (!run.consort && !run.prizeShipBlocker() && run.condition.crew.length >= run.def.crew.length) {
+    run.takePrizeShip();
+    return;
+  }
+  if (prize.recruits && run.condition.crew.length < run.def.crew.length) run.pressPrizeCrew();
+  else if (prize.guns.length) {
+    const gun = prize.guns[prize.guns.length - 1];
+    const scrap = run.fit.guns.length >= MAX_GUNS ? Math.floor(weapon(gun).price / 2) : Infinity;
+    if ((prize.cargo ?? 0) > scrap) run.takePrizeCargo();
+    else run.takePrizeGun(gun);
+  } else if (prize.cargo) run.takePrizeCargo();
 }
 
 /**
