@@ -275,3 +275,58 @@ describe('sceneFor', () => {
     expect(scenes).toEqual(['SeaMap', 'Battle', 'Event', 'Port', 'RunEnd', 'RunEnd']);
   });
 });
+
+describe('prizes and a change of flag', () => {
+  /** A run that has just beaten a sloop-of-war, which struck her colours. */
+  const struck = (): Run => {
+    const run = sailed('gull', 3, 2);
+    run.encounter = { kind: 'battle', enemy: 'sloop', name: 'HMS Hazard', boss: false, ambush: false, text: '' };
+    run.status = 'battle';
+    const b = run.startBattle();
+    b.enemy.hull = 9;
+    (b as unknown as { finish(k: string): void }).finish('surrender');
+    run.finishBattle(b);
+    return run;
+  };
+
+  it('a prize on offer (ship, cargo and flagship) survives a save and can still be taken', () => {
+    const run = struck();
+    const back = Run.fromSave(viaJson(run));
+    expect(back.prize).toEqual(run.prize);
+    expect(back.flagshipBlocker()).toBeNull();
+    expect(back.takeFlagship()).toBe(run.takeFlagship());
+    expect(back.toSave()).toEqual(run.toSave());
+  });
+
+  it('a prize in company keeps her hull, cargo, flag and prize master', () => {
+    const run = struck();
+    run.takePrizeShip();
+    const back = Run.fromSave(viaJson(run));
+    expect(back.consort).toEqual(run.consort);
+    expect(back.consortValue()).toBe(run.consortValue());
+    expect(back.prizes).toBe(1);
+  });
+
+  it('the ship you shifted your flag to is the one you load, refits, damage and all; the hideout still knows your first ship', () => {
+    const run = struck();
+    run.takeFlagship();
+    run.status = 'chart';
+    run.fit.systems.guns = (run.fit.systems.guns ?? 0) + 1;
+    save.saveRun(run);
+    const back = save.loadRun()!;
+    expect(back).not.toBeNull();
+    expect(back.def).toEqual(run.def);
+    expect(back.def.name).toBe('HMS Hazard');
+    expect(back.shipId).toBe('gull');
+    expect(back.fit).toEqual(run.fit);
+    expect(back.condition).toEqual(run.condition);
+    expect(back.maxCrew).toBe(run.maxCrew);
+    expect(back.renown).toBe(run.renown);
+    expect(back.toSave()).toEqual(run.toSave());
+    expect(save.paintingOf(back, 10).ship).toBe('gull');
+  });
+
+  it('a voyage that never changed ships saves no flagship', () => {
+    expect(viaJson(sailed()).flagship).toBeUndefined();
+  });
+});

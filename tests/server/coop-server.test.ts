@@ -103,6 +103,37 @@ describe('co-op server', () => {
     expect(Run.fromSave(end.save).status).not.toBe('battle');
   });
 
+  it("a beaten ship's fate is the captain's call: a prize crew, her cargo or her command, replayed on every screen", () => {
+    for (const cmd of [{ t: 'prizeShip' }, { t: 'prizeCargo' }, { t: 'flagship' }] as const) {
+      const server = new CoopServer();
+      const { a, b } = crewOf(server);
+      a.send({ t: 'setup', ship: 'gull', difficulty: 'normal' });
+      a.send({ t: 'start' });
+      // A fight the server has just finished: a sloop-of-war struck to you.
+      const crew = (server as unknown as { crews: Map<string, { run: Run }> }).crews.get(a.crew().code)!;
+      const run = crew.run;
+      run.status = 'battle';
+      run.encounter = { kind: 'battle', enemy: 'sloop', name: 'HMS Hazard', boss: false, ambush: false, text: '' };
+      const fight = run.startBattle();
+      (fight as unknown as { finish(k: string): void }).finish('surrender');
+      run.finishBattle(fight);
+      const copy = Run.fromSave(JSON.parse(JSON.stringify(run.toSave())));
+      // Mary is not the captain: her pick is refused (in the game it goes to the captain as a suggestion).
+      b.send({ t: 'voyage', cmd });
+      expect(b.last('error')?.text).toMatch(/captain/);
+      a.send({ t: 'voyage', cmd });
+      const relayed = b.last('voyage')!;
+      expect(relayed.cmd).toEqual(cmd);
+      applyVoyage(copy, relayed.cmd);
+      expect(voyageCheck(copy)).toBe(relayed.check);
+      expect(copy.toSave()).toEqual(run.toSave());
+      expect(run.prize?.taken).toBe(true);
+      // One pick only: a second is refused.
+      a.send({ t: 'voyage', cmd: { t: 'prizeCargo' } });
+      expect(a.last('error')?.text).toMatch(/cannot be done/);
+    }
+  });
+
   it('a player who comes back with their token rejoins their crew', () => {
     const server = new CoopServer();
     const { a } = crewOf(server);

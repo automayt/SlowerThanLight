@@ -284,21 +284,34 @@ export class PortScene extends Phaser.Scene {
     }).setEnabled(!full && waiting > 0 && !run.portFeud);
     hall.label.setOrigin(0, 0.5).setX(12);
     this.dyn.push(hall, this.add.text(x + w + 10, y + 20, `Crew ${run.condition.crew.length}/${run.maxCrew}`, textStyle(12, COLORS.textDim)).setOrigin(0, 0.5));
-    // A prize sailing in company can go to the prize court here.
+    // A prize sailing in company can go to the prize court here: her worth by her class and her hull, prize money
+    // if the port's masters are her flag's enemies (a ransom if they are her own), and her cargo.
     const prize = run.consort;
-    if (prize) {
+    const quote = run.prizeQuote();
+    if (prize && quote) {
       y += ROW;
-      const value = run.consortValue();
-      this.button(x, y, w, `Sell ${prize.name} (${value}g)`, {
+      const money = quote.money > 1 ? `\nprize money ×${quote.money}` : quote.money < 1 ? '\na ransom only' : '';
+      this.button(x, y, w, `Prize court: ${quote.price}g`, {
         enabled: run.canSellConsort(),
         cmd: { t: 'sellConsort' },
         fn: () => {
           const name = prize.name;
           const price = run.sellConsort();
-          if (price) this.say(`The prize court pays ${price} gold for ${name}.`);
+          if (price) {
+            playSfx(this, 'anchor', 0.5);
+            this.say(`The prize court condemns ${name} as a lawful prize and pays ${price} gold.${prize.crew && run.condition.crew.includes(prize.crew) ? ` ${prize.crew.name} comes back aboard.` : ''}`);
+          }
         },
-        detail: `Hull ${prize.hull}/${prize.maxHull}`,
-        tip: 'Her prize crew comes back aboard if there is a bunk.',
+        detail: `${prize.name} · hull ${prize.hull}/${prize.maxHull}${money}`,
+        detailColor: quote.money > 1 ? COLORS.textGood : quote.money < 1 ? COLORS.textWarn : undefined,
+        tip: [
+          `${prize.name}: worth ${quote.worth} gold sound; her hull is ${Math.round(quote.condition * 100)}% of that.`,
+          quote.why ? `${quote.why[0].toUpperCase()}${quote.why.slice(1)} (×${quote.money}).` : 'No prize money here: her flag is no enemy of this port.',
+          quote.cargo ? `Her cargo: ${quote.cargo} gold.` : '',
+          `${prize.crew ? `${prize.crew.name}, her prize master, comes back aboard if there is a bunk.` : ''}`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
       });
     }
     y += ROW + 10;

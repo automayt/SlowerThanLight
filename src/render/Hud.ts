@@ -212,7 +212,7 @@ export class Hud {
     this.companyText = scene.add.text(14, 78, '', textStyle(12, COLORS.textGood, { fontStyle: 'italic', backgroundColor: '#1c120acc', padding: { x: 6, y: 2 } })).setDepth(HUD_DEPTH.panels);
     this.escapeBtn = new Button(scene, 360, 42, 108, 26, 'Escape', () => cb.order({ t: 'escape' }), {
       size: 13,
-      tip: 'Make sail and escape the fight. The bar fills while hands work the Sails and someone stands at the Helm.',
+      tip: `Make sail and escape the fight. The bar fills while hands work the Sails and someone stands at the Helm.${battle.consorts.some((c) => c.hull !== undefined) ? '\nYour prize cannot keep up: run, and she is retaken.' : ''}`,
     });
 
     // --- Top centre: the clock ---
