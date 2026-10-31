@@ -1236,6 +1236,248 @@
         "seed": 9122,
         "prompt": "A sailing ship hove to over a patch of pale green shallow water teeming with leaping fish, flocks of white seabirds diving into the sea, sailors in striped shirts dangling fishing lines from the rail and the bowsprit, brilliant afternoon sunlight on the sea"
       }
+    ],
+    "portrait-captain-rover": [
+      {
+        "stem": "portrait-captain-rover",
+        "seed": 7100,
+        "prompt": "a weathered pirate captain in his forties, battered black tricorn hat, salt-stained brown sea coat, dark stubble, steady calm grey eyes, a plain red sash",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-gunner": [
+      {
+        "stem": "portrait-captain-gunner",
+        "seed": 7101,
+        "prompt": "a grizzled old naval gunner in his sixties, short white beard, face speckled with black powder burns, one ear missing, red kerchief knotted round his neck, squinting",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-navigator": [
+      {
+        "stem": "portrait-captain-navigator",
+        "seed": 7102,
+        "prompt": "a sharp-eyed woman ship's navigator in her thirties, dark hair tied back under a blue scarf, dark blue sea coat, a brass quadrant on a cord around her neck, thoughtful expression",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-gentleman": [
+      {
+        "stem": "portrait-captain-gentleman",
+        "seed": 7103,
+        "prompt": "a handsome gentleman pirate captain in his thirties, elegant burgundy silk coat with gold embroidery, white lace cravat, neat black moustache, long curled dark hair, wry confident smile, plumed tricorn hat",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-smuggler": [
+      {
+        "stem": "portrait-captain-smuggler",
+        "seed": 7104,
+        "prompt": "a sly woman smuggler in her thirties, dark hooded wool cloak, gold hoop earrings, sun-browned face, knowing half smile, a knife hilt at her collar",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-bosun": [
+      {
+        "stem": "portrait-captain-bosun",
+        "seed": 7105,
+        "prompt": "a huge bald Black boatswain in his forties, broad shoulders, scarred forearms, open canvas shirt, a silver bosun's whistle on a chain, stern hard stare",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-captain-privateer": [
+      {
+        "stem": "portrait-captain-privateer",
+        "seed": 7106,
+        "prompt": "a proud French corsair captain in his forties, royal blue coat with gold braid, black tricorn with a white cockade, powdered queue of hair, aquiline nose, aristocratic bearing",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crane": [
+      {
+        "stem": "portrait-crane",
+        "seed": 7107,
+        "prompt": "Silas Crane, a gaunt sun-scarred pirate captain, long greasy black hair tied back, a jagged scar across his cheek, cruel grin showing a gold tooth, black coat with tarnished buttons, a black dog's head pin at his throat, menacing",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-harbour-crown": [
+      {
+        "stem": "portrait-harbour-crown",
+        "seed": 7108,
+        "prompt": "a stern English harbour master of Port Royal, grey powdered wig, dark navy blue coat with brass buttons, white neckcloth, a quill pen behind his ear, disapproving look",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-harbour-spain": [
+      {
+        "stem": "portrait-harbour-spain",
+        "seed": 7109,
+        "prompt": "a severe Spanish colonial port official of Havana, black coat and black hat, pointed grey goatee, small gold crucifix, white collar, suspicious narrowed eyes",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-harbour-france": [
+      {
+        "stem": "portrait-harbour-france",
+        "seed": 7110,
+        "prompt": "a dapper French harbour master of Martinique, pale blue coat, lace jabot, powdered wig with a black ribbon, rouged cheeks, polite thin smile",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-harbour-brethren": [
+      {
+        "stem": "portrait-harbour-brethren",
+        "seed": 7111,
+        "prompt": "an old one-eyed pirate harbour master of Nassau, leather eyepatch, wild grey beard braided with beads, faded red coat with missing buttons, clay pipe, cunning look",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-harbour-trade": [
+      {
+        "stem": "portrait-harbour-trade",
+        "seed": 7112,
+        "prompt": "a stout Dutch merchant harbour master of Willemstad, plain black coat, broad white collar, round wire spectacles, wide-brimmed black hat, ruddy cheeks, shrewd calculating look",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-tavern": [
+      {
+        "stem": "portrait-tavern",
+        "seed": 7113,
+        "prompt": "a stout cheerful woman tavern keeper in her fifties, rolled sleeves, stained linen apron, curly red-grey hair under a mob cap, rosy cheeks, warm candlelit tavern glow",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-dice": [
+      {
+        "stem": "portrait-dice",
+        "seed": 7114,
+        "prompt": "a sly card-sharp gambler sea captain, gold rings on his fingers holding up two bone dice, rakish green coat, thin moustache, one raised eyebrow, candlelight",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-01": [
+      {
+        "stem": "portrait-crew-01",
+        "seed": 7115,
+        "prompt": "a young freckled cabin boy sailor of sixteen with tousled sandy hair, striped shirt, eager grin",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-02": [
+      {
+        "stem": "portrait-crew-02",
+        "seed": 7116,
+        "prompt": "an old salt sailor with a bushy white beard and a clay pipe, knitted red cap, deep wrinkles, twinkling eyes",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-03": [
+      {
+        "stem": "portrait-crew-03 (rejected)",
+        "seed": 7117,
+        "prompt": "a young African pirate sailor with a gold hoop earring and a patterned headscarf, bare shoulders, confident look"
+      },
+      {
+        "stem": "portrait-crew-03",
+        "seed": 7217,
+        "prompt": "a young African pirate sailor man with a gold hoop earring and a patterned headscarf, wearing a loose white linen shirt and a brown leather waistcoat, confident look",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-04": [
+      {
+        "stem": "portrait-crew-04",
+        "seed": 7118,
+        "prompt": "a young woman sailor with cropped short hair, sunburnt face, loose sailcloth shirt, determined jaw",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-05": [
+      {
+        "stem": "portrait-crew-05",
+        "seed": 7119,
+        "prompt": "a red-haired Irish sailor with a braided red beard, green kerchief, broken nose, cheerful",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-06": [
+      {
+        "stem": "portrait-crew-06",
+        "seed": 7120,
+        "prompt": "a Spanish mestizo sailor with a thick black moustache, yellow bandana, gold earring, weathered olive skin",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-07": [
+      {
+        "stem": "portrait-crew-07",
+        "seed": 7121,
+        "prompt": "an Indigenous Caribbean sailor with long straight black hair, shell necklace, calm proud gaze",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-08": [
+      {
+        "stem": "portrait-crew-08",
+        "seed": 7122,
+        "prompt": "a scarred brutish pirate with a leather eyepatch and a shaved head, thick neck, scowling",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-09": [
+      {
+        "stem": "portrait-crew-09",
+        "seed": 7123,
+        "prompt": "a lanky thin sailor with a gap-toothed grin, hollow cheeks, battered straw hat",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-10": [
+      {
+        "stem": "portrait-crew-10",
+        "seed": 7124,
+        "prompt": "a Black woman pirate in her forties with a bright red head wrap, gold earrings, scar on her chin, fierce steady eyes",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-11": [
+      {
+        "stem": "portrait-crew-11",
+        "seed": 7125,
+        "prompt": "a blond Dutch sailor with a short beard and a blue knitted wool cap, pale blue eyes, rosy wind-burned cheeks",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "portrait-crew-12": [
+      {
+        "stem": "portrait-crew-12",
+        "seed": 7126,
+        "prompt": "a middle-aged sailor with a tarred pigtail, tattooed neck, grey stubble, faded blue jacket, sardonic squint",
+        "note": "gen_portraits.py style suffix, 768x960"
+      }
+    ],
+    "event-fallback-sea": [
+      {
+        "stem": "event-fallback-sea",
+        "seed": 9601,
+        "prompt": "A pirate brigantine under full sail seen from her own quarterdeck, the helmsman at the wheel and sailors in the rigging, an empty open sea ahead under towering afternoon clouds, warm light"
+      }
+    ],
+    "event-fallback-aboard": [
+      {
+        "stem": "event-fallback-aboard",
+        "seed": 9602,
+        "prompt": "The lantern-lit gun deck of a pirate ship at night, a ragged crew gathered around a sea chest talking in low voices, hammocks and cannons in shadow, warm amber lantern glow"
+      }
+    ],
+    "event-fallback-weather": [
+      {
+        "stem": "event-fallback-weather",
+        "seed": 9603,
+        "prompt": "A small pirate sloop heeling hard in a rising gale, dark squall line of rain on the horizon, white-capped grey green waves, a shaft of sunlight breaking through the clouds"
+      }
     ]
   }
 }

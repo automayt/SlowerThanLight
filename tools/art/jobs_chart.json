@@ -1,0 +1,35 @@
+[
+  {
+    "name": "event-fallback-sea",
+    "model": "flux",
+    "seed": 9601,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A pirate brigantine under full sail seen from her own quarterdeck, the helmsman at the wheel and sailors in the rigging, an empty open sea ahead under towering afternoon clouds, warm light"
+  },
+  {
+    "name": "event-fallback-aboard",
+    "model": "flux",
+    "seed": 9602,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "The lantern-lit gun deck of a pirate ship at night, a ragged crew gathered around a sea chest talking in low voices, hammocks and cannons in shadow, warm amber lantern glow"
+  },
+  {
+    "name": "event-fallback-weather",
+    "model": "flux",
+    "seed": 9603,
+    "w": 1344,
+    "h": 768,
+    "kw": {
+      "lora_s": 0.45
+    },
+    "prompt": "A small pirate sloop heeling hard in a rising gale, dark squall line of rain on the horizon, white-capped grey green waves, a shaft of sunlight breaking through the clouds"
+  }
+]

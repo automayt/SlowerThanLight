@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { TAVERNS } from '../data/nemesis';
 import { voyage } from '../net/voyage';
 import { DICE_HANDS, DICE_STAKES, DICE_TARGET, diceTotal, type Run } from '../sim/Run';
+import { portraitFor } from '../data/portraits';
+import { Dialogue } from './Dialogue';
 import { COLORS, SCREEN, TYPE, inkStyle, titleStyle } from './theme';
 import { Button, panel, ribbon } from './ui';
 
@@ -33,8 +35,10 @@ export class Tavern {
   private objects: Phaser.GameObjects.GameObject[] = [];
   closed = false;
   private last = '';
-  private readonly w = 900;
-  private readonly h = 500;
+  /** What the keeper and the rival last said: words already heard are not typed out again on a redraw. */
+  private spoken: Record<string, string> = {};
+  private readonly w = 980;
+  private readonly h = 540;
   private static readonly DEPTH = 50;
 
   constructor(
@@ -78,20 +82,29 @@ export class Tavern {
     this.bones(add);
   }
 
+  /** Someone at the tavern speaking, typed out only the first time those words are said. */
+  private speaker(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T, key: string, x: number, y: number, w: number, portrait: string, name: string, role: string, text: string): number {
+    const d = add(new Dialogue(this.scene, { x, y, w, portrait, name, role, text, portraitH: 112, size: 14, cps: 90 }));
+    if (this.spoken[key] === text) d.skip();
+    this.spoken[key] = text;
+    return d.fullHeight;
+  }
+
   private rumours(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
     const { scene, run } = this;
     const x = (SCREEN.w - this.w) / 2 + 28;
-    let y = (SCREEN.h - this.h) / 2 + 52;
+    let y = (SCREEN.h - this.h) / 2 + 66;
     const w = this.w / 2 - 56;
-    add(scene.add.text(x, y, 'Rumours', titleStyle(22, COLORS.ink)));
-    y += 32;
+    const port = run.encounter.kind === 'port' ? run.encounter.name : '';
     const heard = run.encounter.kind === 'port' ? run.encounter.rumours : undefined;
-    if (heard) {
-      add(scene.add.text(x, y, heard.join('\n\n'), inkStyle(14, COLORS.ink, { wordWrap: { width: w }, lineSpacing: 3 })));
-      return;
-    }
-    const blurb = add(scene.add.text(x, y, 'Stand the house a round and the talk turns to the waters ahead: what the sails out there are, what tales wait in the unknown waters, and now and then a wreck worth diving on.', inkStyle(14, COLORS.inkDim, { wordWrap: { width: w }, lineSpacing: 3, fontStyle: 'italic' })));
-    y += blurb.height + 18;
+    // The keeper tells the rumours herself, once a round is bought.
+    const words = heard
+      ? heard.join('\n\n')
+      : run.portFeud
+        ? 'We don’t serve your sort here. Drink up whatever you brought and go.'
+        : 'Stand the house a round, Captain, and the talk turns to the waters ahead: what the sails out there are, what tales wait in the unknown waters, and now and then a wreck worth diving on.';
+    y += this.speaker(add, 'keeper', x, y, w, portraitFor('tavern'), 'The keeper', `${TAVERNS[port] ?? 'The Tavern'}, ${port || 'ashore'}`, words) + 16;
+    if (heard) return;
     const price = run.rumourPrice();
     const why = run.portFeud ? 'Nobody here will talk to you.' : run.gold < price ? `You are ${price - run.gold} gold short.` : undefined;
     add(new Button(scene, x, y, 240, 40, `Stand a round · ${price}`, () => voyage(scene, { t: 'rumour' }, 'Stand a round in the tavern'), { size: 15, icon: 'gold', tip: why ?? `Stand the house a round for ${price} gold.` })).setEnabled(run.canBuyRumour());
@@ -102,10 +115,11 @@ export class Tavern {
     const table = run.diceTable;
     if (!table) return;
     const x = SCREEN.w / 2 + 28;
-    let y = (SCREEN.h - this.h) / 2 + 52;
+    let y = (SCREEN.h - this.h) / 2 + 66;
     const w = this.w / 2 - 56;
-    add(scene.add.text(x, y, `Bones with ${table.rival}`, titleStyle(22, COLORS.ink, { wordWrap: { width: w } })));
-    y += 32;
+    const left = DICE_HANDS - table.played;
+    const greeting = left <= 0 ? 'Enough. You’ve had the best of me tonight, or I of you. Come back when the tide turns.' : 'Sit down, Captain. Bones is a simple game: two dice, a little nerve, and knowing when to stop.';
+    y += this.speaker(add, 'rival', x, y, w, portraitFor('dice'), table.rival, 'Plays Bones for coin', greeting) + 12;
     const rules = add(
       scene.add.text(x, y, `Roll two dice, then roll again or stand. Over ${DICE_TARGET} and you bust. He rolls until he beats you or busts; a tie is a push. Exactly ${DICE_TARGET} pays double.`, inkStyle(TYPE.body, COLORS.inkDim, { wordWrap: { width: w }, lineSpacing: 2 })),
     );
@@ -132,7 +146,6 @@ export class Tavern {
       add(new Button(scene, x + 162, y, 150, 40, `Stand on ${diceTotal(hand.you)}`, () => voyage(scene, { t: 'dice', act: 'stand' }, 'Stand at Bones'), { size: 15 })).setEnabled(run.canDice('stand'));
       return;
     }
-    const left = DICE_HANDS - table.played;
     add(scene.add.text(x, y, left > 0 ? `${left} hand${left > 1 ? 's' : ''} left before your rival calls it a night.` : `${table.rival} has had enough of you for one night.`, inkStyle(TYPE.body, COLORS.inkDim, { fontStyle: 'italic' })));
     y += 26;
     DICE_STAKES.forEach((stake, i) => {

@@ -30,3 +30,11 @@ and the ships and captains as cutouts (FLUX, then RMBG-2.0 background removal); 
 renown milestones (a second jetty, a careening yard) into crops of the cove. `finish_hub.py` crops, trims and lists
 them (`cove=`, `wall=`, `cut=`, `overlay=`, which prints the overlay's offset for HarbourScene's OVERLAYS).
 `hub-*` files are listed in the manifest but loaded by the hideout itself, not at boot.
+
+## Portraits
+
+Portraits (`public/art/portrait-*.jpg`, 320x400, loaded up front; see `src/data/portraits.ts`):
+
+- `gen_portraits.py jobs_portraits.json [name ...]` uses the same Flux + LoRA recipe with a head-and-shoulders style suffix at 768x960.
+- `finish_portraits.py [name ...]` crops to 4:5, saves a small JPEG and adds it to the manifest.
+- Events without a painting fall back to `fallback-sea|aboard|weather.jpg` (`jobs_chart.json`).

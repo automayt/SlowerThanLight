@@ -9,7 +9,8 @@ import { currentRun, RunBar } from '../render/RunBar';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Button, divider, frame, goldText, panel, Sea } from '../render/ui';
 import { type Run } from '../sim/Run';
-import { chartIcon, chartRose, chartSerpent, chartShip, SEAL } from '../render/chartIcons';
+import { chartCloud, chartIcon, chartRose, chartSerpent, chartShip, SEAL } from '../render/chartIcons';
+import { onAnyInput } from '../render/Dialogue';
 import { nodeById, type NodeKind, type SeaNode } from '../sim/SeaChart';
 import { onVoyage, voyage } from '../net/voyage';
 import { applyVoyage } from '../sim/commands';
@@ -39,6 +40,73 @@ const KIND_NAMES: Partial<Record<NodeKind, string>> = { battle: 'the sail on the
 /** The chart's key, in the footer's right-hand corner. */
 const LEGEND_W = 430;
 const LEGEND_H = 60;
+
+/** The light over the chart, one step of the day per jump: multiplied into the paper and everything inked on it. */
+const DAYLIGHT: { name: string; tint: number }[] = [
+  { name: 'dawn', tint: 0xffe9d6 },
+  { name: 'forenoon', tint: 0xffffff },
+  { name: 'afternoon', tint: 0xfff2dc },
+  { name: 'dusk', tint: 0xf9d6b4 },
+  { name: 'night', tint: 0xaab3d8 },
+];
+
+/** A ship on her way: the passage she follows, how far along it she is, and the pen inking it behind her. */
+interface Passage {
+  pts: Phaser.Math.Vector2[];
+  /** Distance along the passage at each point. */
+  at: number[];
+  t: number;
+  ink: Phaser.GameObjects.Graphics;
+  tween: Phaser.Tweens.Tween | null;
+}
+
+/** A cloud drifting over the chart, in the fog over waters you have not reached. */
+interface Cloud {
+  img: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  speed: number;
+  alpha: number;
+}
+
+/** Points along a route as a pen would ink it: never quite straight, the same wobble every time it is drawn. */
+function inkPoints(a: { x: number; y: number }, b: { x: number; y: number }, seed: number): Phaser.Math.Vector2[] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const nx = -(b.y - a.y) / len;
+  const ny = (b.x - a.x) / len;
+  const n = Math.max(6, Math.round(len / 12));
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n;
+    const w = Math.sin(t * Math.PI) * (Math.sin(t * 7 + seed) * 1.6 + Math.sin(t * 19 + seed * 1.7) * 0.6);
+    return new Phaser.Math.Vector2(a.x + (b.x - a.x) * t + nx * w, a.y + (b.y - a.y) * t + ny * w);
+  });
+}
+
+/** Stroke a polyline. */
+function strokeLine(g: Phaser.GameObjects.Graphics, pts: Phaser.Math.Vector2[]): void {
+  g.beginPath();
+  g.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
+  g.strokePath();
+}
+
+/** A ring drawn by hand in ink: twice round, never quite closing, never quite the same. */
+function inkRing(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, color: number, width: number, seed: number): void {
+  for (let pass = 0; pass < 2; pass++) {
+    g.lineStyle(pass ? width * 0.6 : width, color, pass ? 0.55 : 0.9);
+    g.beginPath();
+    const start = seed + pass * 1.9;
+    for (let i = 0; i <= 40; i++) {
+      const a = start + (i / 40) * Math.PI * 2.08;
+      const rr = r + pass * 1.6 + Math.sin(a * 3 + seed) * 1.1 + Math.sin(a * 5 + pass) * 0.6;
+      const px = x + Math.cos(a) * rr;
+      const py = y + Math.sin(a) * rr * 0.96;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.strokePath();
+  }
+}
 
 interface SectorLook {
   /** Multiplied into the parchment. */
@@ -112,7 +180,18 @@ export class SeaMapScene extends Phaser.Scene {
   /** Enter-key shortcut of the open dialog, removed when the dialog closes. */
   private dialogEnter: (() => void) | null = null;
   /** The passage being inked in, while the ship sails it. */
-  private sailing: { from: { x: number; y: number }; to: { x: number; y: number }; t: number; ink: Phaser.GameObjects.Graphics } | null = null;
+  private sailing: Passage | null = null;
+  /** Foam astern of the ship as she sails. */
+  private wake: { x: number; y: number; age: number; side: number }[] = [];
+  private wakeG!: Phaser.GameObjects.Graphics;
+  private clouds: Cloud[] = [];
+  /** Thunderheads riding the fleet's front, and its lightning. */
+  private storm: Phaser.GameObjects.Image[] = [];
+  private flash = { at: 0, power: 0, y: 0, seed: 0 };
+  /** The Black Dog's sail on the horizon, when Crane is near. */
+  private crane: { img: Phaser.GameObjects.Image; x: number; y: number } | null = null;
+  /** Lamplight around the ship by night. */
+  private lantern: Phaser.GameObjects.Arc | null = null;
 
   constructor() {
     super('SeaMap');
@@ -123,6 +202,11 @@ export class SeaMapScene extends Phaser.Scene {
     this.dialog = [];
     this.badges = [];
     this.sailing = null;
+    this.wake = [];
+    this.clouds = [];
+    this.storm = [];
+    this.crane = null;
+    this.lantern = null;
   }
 
   preload(): void {
@@ -142,6 +226,7 @@ export class SeaMapScene extends Phaser.Scene {
     this.squadron = [0, 1, 2].map(() => this.add.image(0, 0, chartShip(this, true)).setScale(0.42).setDepth(2.6).setFlipX(false));
     this.chartG = this.add.graphics();
     this.g = this.add.graphics().setDepth(0.5);
+    const inked = this.add.graphics().setDepth(2.1);
     this.bar = new RunBar(this, run);
 
     // The sector's name between two brass flourishes (the strip above says which of the three it is).
@@ -153,12 +238,13 @@ export class SeaMapScene extends Phaser.Scene {
     for (const node of run.chart.nodes) {
       const { x, y } = this.pos(node);
       const style = KIND_STYLE[node.kind];
-      this.add.image(x, y, chartIcon(this, node.kind)).setScale(node.kind === 'boss' || node.kind === 'exit' ? 0.62 : 0.5).setDepth(2);
-      // A lead the story has put on the chart: a gilt ring, and the tale's name instead of "Unknown".
+      // The stamp in the wax, pressed a little askew as a hand would.
+      this.add.image(x, y, chartIcon(this, node.kind)).setScale(node.kind === 'boss' || node.kind === 'exit' ? 0.62 : 0.5).setDepth(2).setAngle(((node.id * 37) % 13) - 6);
+      // A lead the story has put on the chart: ringed by hand in brown ink, and the tale's name instead of "Unknown".
       const lead = node.story ? seaEvent(node.story) : null;
-      if (lead) this.add.circle(x, y, NODE_R + 5).setStrokeStyle(3, 0xd8a531, 0.95).setDepth(2.1);
+      if (lead) inkRing(inked, x, y, NODE_R + 6, 0x7a4a06, 2.6, node.id);
       // Silas Crane lies in wait: a ring of red ink, and his ship's name.
-      if (node.nemesis) this.add.circle(x, y, NODE_R + 5).setStrokeStyle(3, RED_INK, 0.95).setDepth(2.1);
+      if (node.nemesis) inkRing(inked, x, y, NODE_R + 6, RED_INK, 2.8, node.id + 3);
       // What a tavern rumour told you is here.
       const heard = !lead && node.rumour ? seaEvent(node.rumour) : null;
       const scouted = node.kind === 'battle' && node.scouted && node.enemy && !node.nemesis ? enemy(node.enemy).ship.className : null;
@@ -175,17 +261,13 @@ export class SeaMapScene extends Phaser.Scene {
                 : style.label;
       const big = node.kind === 'boss' || node.kind === 'exit' ? 6 : 0;
       const ink = node.nemesis ? '#8a1c1c' : lead ? '#7a4a06' : heard || scouted ? '#1d4a66' : '#2a170a';
-      // The name under the seal, on a scrap of clean parchment, kept inside the chart's frame.
-      const name = this.add.text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '14px', color: ink, fontStyle: lead || node.nemesis ? 'bold italic' : 'italic' }).setDepth(2);
+      // The name under the seal, written in ink straight onto the paper (scraped clean around the letters), kept inside the chart's frame.
+      const name = this.add
+        .text(0, y + NODE_R + big + 5, label, { fontFamily: TITLE_FONT, fontSize: '15px', color: ink, fontStyle: lead || node.nemesis ? 'bold italic' : 'italic', stroke: '#efe2bf', strokeThickness: 4 })
+        .setDepth(2)
+        .setAngle(((node.id * 53) % 5) - 2);
       const inset = 16;
       name.setX(Phaser.Math.Clamp(x - name.width / 2, CHART.x + inset, CHART.x + CHART.w - inset - name.width));
-      this.add
-        .graphics()
-        .setDepth(1.9)
-        .fillStyle(PAPER, 0.82)
-        .fillRoundedRect(name.x - 5, name.y - 1, name.width + 10, name.height + 2, 6)
-        .lineStyle(1, INK, 0.3)
-        .strokeRoundedRect(name.x - 5, name.y - 1, name.width + 10, name.height + 2, 6);
       const hit = this.add.circle(x, y, NODE_R + 6, 0x000000, 0.001).setDepth(3);
       hit.setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => {
@@ -208,6 +290,9 @@ export class SeaMapScene extends Phaser.Scene {
       }
     }
     this.refreshChart();
+    this.skyAndWeather();
+    // A click or key while the ship is under way hurries her along (the course is already set).
+    onAnyInput(this, () => this.sailing?.tween?.setTimeScale(4));
     NUMBER_KEYS.forEach((key, i) => this.input.keyboard!.on(`keydown-${key}`, () => this.reach[i] && this.chooseNode(this.reach[i])));
     // The captain's course, when it is set (by this player alone, or by the server in co-op).
     onVoyage(this, {
@@ -236,6 +321,7 @@ export class SeaMapScene extends Phaser.Scene {
     help.setY(words.y + words.height + 4);
     this.legend(SCREEN.w - 16 - LEGEND_W, footY + (SCREEN.h - 8 - footY - LEGEND_H) / 2 + 6);
 
+    this.wakeG = this.add.graphics().setDepth(3.9);
     this.ship = this.add.image(0, 0, chartShip(this)).setScale(0.62).setDepth(4).setOrigin(0.5, 1);
 
     // The tooltip: a note in ink on a slip of parchment.
@@ -260,7 +346,7 @@ export class SeaMapScene extends Phaser.Scene {
     const entries: [number, number, (cx: number, cy: number) => void, string][] = [
       [0, 0, (cx, cy) => g.lineStyle(3, RING, 1).strokeCircle(cx, cy, 8), 'You can sail here'],
       [col, 0, (cx, cy) => g.lineStyle(3, RING_AMBUSH, 1).strokeCircle(cx, cy, 8), 'Navy ambush if you go'],
-      [0, 24, (cx, cy) => g.fillStyle(RED_INK, 0.7).fillRect(cx - 9, cy - 7, 18, 14).lineStyle(2, RING_AMBUSH, 1).lineBetween(cx + 9, cy - 7, cx + 9, cy + 7), 'The Navy fleet'],
+      [0, 24, (cx, cy) => g.fillStyle(0x2a3038, 0.9).fillRect(cx - 9, cy - 7, 18, 14).fillStyle(RED_INK, 0.45).fillRect(cx - 9, cy - 7, 18, 14).lineStyle(2, RING_AMBUSH, 1).lineBetween(cx + 9, cy - 7, cx + 9, cy + 7), 'The Navy fleet'],
       [col, 24, (cx, cy) => {
         g.lineStyle(2, RING_AMBUSH, 1);
         g.lineBetween(cx, cy - 9, cx, cy - 3).lineBetween(cx, cy + 2, cx, cy + 8);
@@ -318,7 +404,7 @@ export class SeaMapScene extends Phaser.Scene {
       tip.x + Math.cos(toward - 2.5) * 10,
       tip.y + Math.sin(toward - 2.5) * 10,
     );
-    const label = this.add.text(wx + 36, wy, `Wind ${run.windName}`, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#2a170a', fontStyle: 'italic' }).setOrigin(0, 0.5).setDepth(3.4);
+    const label = this.add.text(wx + 36, wy, `Wind ${run.windName} · ${DAYLIGHT[run.jumps % DAYLIGHT.length].name}`, { fontFamily: TITLE_FONT, fontSize: '13px', color: '#2a170a', fontStyle: 'italic' }).setOrigin(0, 0.5).setDepth(3.4);
     const labelBack = this.add.rectangle(label.x - 4, wy, label.width + 8, label.height, PAPER, 0.8).setOrigin(0, 0.5).setDepth(3.3);
     this.badges.push(g, labelBack, label);
   }
@@ -361,8 +447,10 @@ export class SeaMapScene extends Phaser.Scene {
         const b = this.pos(m);
         const sailed = visited.has(n.id) && visited.has(m.id) && run.visited.indexOf(m.id) === run.visited.indexOf(n.id) + 1;
         const open = n.id === run.nodeId && reach.has(m.id);
-        g.lineStyle(sailed ? 3.5 : open ? 3 : 1.8, sailed ? RED_INK : INK, sailed ? 0.9 : open ? 0.9 : 0.35);
-        g.lineBetween(a.x, a.y, b.x, b.y);
+        const pts = inkPoints(a, b, n.id * 31 + m.id);
+        // Sailed passages soak into the paper: a faint bleed under the line.
+        if (sailed) strokeLine(g.lineStyle(6, RED_INK, 0.12), pts);
+        strokeLine(g.lineStyle(sailed ? 3.2 : open ? 2.8 : 1.6, sailed ? RED_INK : INK, sailed ? 0.88 : open ? 0.88 : 0.32), pts);
       }
     }
 
@@ -584,27 +672,125 @@ export class SeaMapScene extends Phaser.Scene {
     if (!this.run.reachable().some((n) => n.id === node.id)) return;
     this.hover = null;
     this.updateTip();
-    const sail = (this.sailing = { from: this.pos(this.run.node), to: this.pos(node), t: 0, ink: this.add.graphics().setDepth(0.4) });
-    playSfx(this, 'click', 0.2);
-    this.tweens.add({
+    const run = this.run;
+    const from = this.pos(run.node);
+    const to = this.pos(node);
+    // The passage as the chart has it: through the shoals on its curve, otherwise the inked line.
+    const pts = run.isReef(node) ? this.reefCurve(run.node, node).getPoints(40) : inkPoints(from, to, run.node.id * 31 + node.id);
+    const at = [0];
+    for (let i = 1; i < pts.length; i++) at.push(at[i - 1] + pts[i].distance(pts[i - 1]));
+    const total = at[at.length - 1];
+    const sail: Passage = (this.sailing = { pts, at, t: 0, ink: this.add.graphics().setDepth(0.4), tween: null });
+    playSfx(this, 'sail', 0.35);
+    sail.tween = this.tweens.add({
       targets: sail,
       t: 1,
-      duration: 560,
+      duration: Phaser.Math.Clamp(total * 7, 1300, 2300),
       ease: 'Sine.easeInOut',
       onUpdate: () => {
-        const { from, to, t, ink } = sail;
-        const x = from.x + (to.x - from.x) * t;
-        const y = from.y + (to.y - from.y) * t;
-        ink.clear().lineStyle(3.5, RED_INK, 0.9).lineBetween(from.x, from.y, x, y);
-        // A wet blot at the pen's tip.
-        ink.fillStyle(RED_INK, 0.9).fillCircle(x, y, 2.6);
+        // The pen follows the ship: red ink up to her, a wet blot at its tip.
+        const tip = this.along(sail, sail.t);
+        const drawn = sail.pts.filter((_, i) => sail.at[i] < sail.t * total);
+        drawn.push(new Phaser.Math.Vector2(tip.x, tip.y));
+        const ink = sail.ink.clear();
+        if (drawn.length > 1) {
+          strokeLine(ink.lineStyle(6, RED_INK, 0.12), drawn);
+          strokeLine(ink.lineStyle(3.2, RED_INK, 0.9), drawn);
+        }
+        ink.fillStyle(RED_INK, 0.9).fillCircle(tip.x, tip.y, 2.8);
       },
       onComplete: () => {
-        sail.ink.destroy();
-        this.sailing = null;
-        this.arrive(node);
+        sail.tween = null;
+        playSfx(this, 'quill', 0.4);
+        // A breath at the mark before the next scene.
+        this.time.delayedCall(320, () => {
+          sail.ink.destroy();
+          this.sailing = null;
+          this.arrive(node);
+        });
       },
     });
+  }
+
+  /** Where along a passage the ship is at t (0 to 1), and which way she is heading. */
+  private along(sail: Passage, t: number): { x: number; y: number; dx: number; dy: number } {
+    const d = t * sail.at[sail.at.length - 1];
+    let i = 1;
+    while (i < sail.at.length - 1 && sail.at[i] < d) i++;
+    const a = sail.pts[i - 1];
+    const b = sail.pts[i];
+    const f = Phaser.Math.Clamp((d - sail.at[i - 1]) / (sail.at[i] - sail.at[i - 1] || 1), 0, 1);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, dx: b.x - a.x, dy: b.y - a.y };
+  }
+
+  /**
+   * The weather and the hour over the chart: clouds over the waters ahead, the storm the fleet sails in, the Black
+   * Dog's sail if Crane is near, and the light of the hour (easing from the last jump's).
+   */
+  private skyAndWeather(): void {
+    const run = this.run;
+    const rand = seeded(run.seed * 13 + run.sector * 7 + run.jumps);
+    // Everything adrift is kept inside the chart's neatline.
+    const clip = this.make.graphics({}, false).fillStyle(0xffffff).fillRect(CHART.x + 6, CHART.y + 6, CHART.w - 12, CHART.h - 12);
+    const mask = clip.createGeometryMask();
+    this.events.once('shutdown', () => {
+      mask.destroy();
+      clip.destroy();
+    });
+
+    for (let i = 0; i < 16; i++) {
+      const img = this.add
+        .image(0, 0, chartCloud(this, i % 4))
+        .setDepth(2.5)
+        .setScale(0.9 + rand() * 0.8)
+        .setFlipX(rand() < 0.5)
+        .setMask(mask);
+      this.clouds.push({ img, x: CHART.x + rand() * CHART.w, y: CHART.y + 20 + rand() * (CHART.h - 40), speed: 5 + rand() * 7, alpha: 0.55 + rand() * 0.3 });
+    }
+    // Thunderheads piled along the front, some ahead of it and some behind, so its edge billows.
+    for (let i = 0; i < 13; i++) {
+      const img = this.add
+        .image(0, 0, chartCloud(this, i % 4, true))
+        .setDepth(2.55)
+        .setScale(0.5 + rand() * 0.3)
+        .setFlipX(rand() < 0.5)
+        .setMask(mask);
+      img.setData('dx', -46 + rand() * 50);
+      this.storm.push(img);
+    }
+    this.flash.at = this.time.now + 1500 + rand() * 2500;
+
+    const lair = run.nemesis.done ? undefined : run.chart.nodes.find((n) => n.nemesis);
+    const near = lair ? lair.col - run.node.col : 0;
+    if (lair && near > 0 && near <= 2) {
+      const p = this.pos(lair);
+      const x = Math.min(p.x + 38, CHART.x + CHART.w - 30);
+      const img = this.add.image(x, p.y - 22, chartShip(this, 'crane')).setScale(0.48).setDepth(2.62).setAlpha(0).setFlipX(true);
+      this.tweens.add({ targets: img, alpha: near === 1 ? 0.95 : 0.7, duration: 1400, delay: 400 });
+      this.crane = { img, x, y: p.y - 22 };
+    }
+
+    const now = run.jumps % DAYLIGHT.length;
+    const was = (this.registry.get('chart-light') as number | undefined) ?? now;
+    this.registry.set('chart-light', now);
+    const veil = this.add.rectangle(CHART.x, CHART.y, CHART.w, CHART.h, DAYLIGHT[was].tint).setOrigin(0).setDepth(2.58).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    if (was !== now) {
+      const a = Phaser.Display.Color.ValueToColor(DAYLIGHT[was].tint);
+      const b = Phaser.Display.Color.ValueToColor(DAYLIGHT[now].tint);
+      this.tweens.addCounter({
+        from: 0,
+        to: 100,
+        duration: 2200,
+        ease: 'Sine.easeInOut',
+        onUpdate: (tw) => {
+          const c = Phaser.Display.Color.Interpolate.ColorWithColor(a, b, 100, tw.getValue() ?? 0);
+          veil.setFillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+        },
+      });
+    }
+    if (DAYLIGHT[now].name === 'night' || DAYLIGHT[now].name === 'dusk') {
+      this.lantern = this.add.circle(0, 0, 30, 0xff9a30, DAYLIGHT[now].name === 'night' ? 0.12 : 0.06).setDepth(3.8).setBlendMode(Phaser.BlendModes.ADD);
+    }
   }
 
   private arrive(node: SeaNode): void {
@@ -703,9 +889,20 @@ export class SeaMapScene extends Phaser.Scene {
       ship.setPosition(Math.max(CHART.x + 22, front - 14) + Math.sin(time / 900 + i) * 2, top + (bottom - top) * (0.22 + 0.28 * i) + Math.sin(time / 600 + i * 2) * 3);
       ship.setAlpha(astern ? 0.55 : 0.95);
     });
+    // It sails in its own weather: a grey murk of rain behind a wall of thunderheads, lit now and then by lightning.
+    const wall = Math.max(CHART.x + 30, front);
+    const dt = Math.min(0.05, this.game.loop.delta / 1000);
     if (front > CHART.x) {
-      f.fillStyle(RED_INK, 0.22).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
-      f.lineStyle(3, RED_INK, 0.85);
+      const w = front - CHART.x - 3;
+      f.fillStyle(0x1e262e, 0.3).fillRect(CHART.x + 3, top, w, bottom - top);
+      f.fillStyle(RED_INK, 0.13).fillRect(CHART.x + 3, top, w, bottom - top);
+      f.lineStyle(1, 0x1a2028, 0.32);
+      for (let i = 0; i < Math.min(70, w / 4); i++) {
+        const rx = CHART.x + 8 + ((i * 97.3 + time * 0.05) % Math.max(1, w - 8));
+        const ry = top + ((i * 61.7 + time * 0.32) % (bottom - top - 16));
+        f.lineBetween(rx, ry, rx - 4, ry + 12);
+      }
+      f.lineStyle(2, RED_INK, 0.7);
       f.beginPath();
       for (let y = top; y <= bottom; y += 6) {
         const x = front + Math.sin(y / 18 + time / 400) * 5;
@@ -714,6 +911,51 @@ export class SeaMapScene extends Phaser.Scene {
       }
       f.strokePath();
     }
+    this.storm.forEach((c, i) => {
+      const y = top + ((i + 0.5) * (bottom - top)) / this.storm.length;
+      c.setPosition(wall + (c.getData('dx') as number) + Math.sin(time / 1300 + i * 1.7) * 6, y + Math.sin(time / 900 + i) * 4);
+      c.setAlpha(front > CHART.x ? 0.92 : 0.6);
+    });
+    if (time > this.flash.at) {
+      this.flash = { at: time + 2600 + Math.random() * 4800, power: 1, y: top + 30 + Math.random() * (bottom - top - 60), seed: Math.random() * 100 };
+    }
+    if (this.flash.power > 0.03) {
+      const p = this.flash.power;
+      // A forked bolt out of the front of the storm, and the murk lit behind it.
+      if (front > CHART.x) f.fillStyle(0xfff8e0, 0.18 * p).fillRect(CHART.x + 3, top, front - CHART.x - 3, bottom - top);
+      f.lineStyle(2, 0xfffbe8, 0.95 * p);
+      f.beginPath();
+      let bx = wall - 10;
+      let by = this.flash.y - 40;
+      f.moveTo(bx, by);
+      for (let k = 1; k <= 6; k++) {
+        bx += Math.sin(this.flash.seed + k * 2.3) * 9 - 3;
+        by += 13;
+        f.lineTo(bx, by);
+      }
+      f.strokePath();
+      this.storm.forEach((c) => c.setTint(Phaser.Display.Color.GetColor(255, 255, Math.round(255 - 40 * p))).setAlpha(Math.min(1, c.alpha + 0.1 * p)));
+      this.flash.power *= Math.pow(0.02, dt);
+      if (this.flash.power <= 0.03) this.storm.forEach((c) => c.clearTint());
+    }
+
+    // Clouds drift with the wind; over the waters you have not reached they thicken into fog.
+    const colW = (RIGHT - LEFT) / (run.chart.columns - 1);
+    const toward = run.wind + Math.PI;
+    const vx = Math.cos(toward);
+    const vy = Math.sin(toward) * 0.4;
+    const shipX = this.ship?.x ?? this.pos(run.node).x;
+    for (const c of this.clouds) {
+      c.x += vx * c.speed * dt;
+      c.y += vy * c.speed * dt;
+      if (c.x > CHART.x + CHART.w + 100) c.x = CHART.x - 100;
+      if (c.x < CHART.x - 100) c.x = CHART.x + CHART.w + 100;
+      if (c.y > CHART.y + CHART.h + 40) c.y = CHART.y - 40;
+      if (c.y < CHART.y - 40) c.y = CHART.y + CHART.h + 40;
+      const fog = Phaser.Math.Clamp((c.x - shipX - colW * 1.2) / (colW * 0.9), 0, 1);
+      c.img.setPosition(c.x, c.y).setAlpha(c.alpha * fog * fog * (3 - 2 * fog));
+    }
+    if (this.crane) this.crane.img.setPosition(this.crane.x + Math.sin(time / 1700) * 5, this.crane.y + Math.sin(time / 640) * 1.5).setAngle(Math.sin(time / 700) * 3);
 
     const g = this.g.clear();
     const pulse = 4 + Math.sin(time / 200) * 2;
@@ -728,11 +970,31 @@ export class SeaMapScene extends Phaser.Scene {
       g.lineStyle(2, INK, 1).strokeCircle(x, y, r + 10);
     }
 
-    // Your ship, riding just above her node, or on her way along the passage being inked.
+    // Your ship, riding just above her node, or down on the passage being inked as she sails it, a wake astern.
     const sail = this.sailing;
-    const here = sail ? { x: sail.from.x + (sail.to.x - sail.from.x) * sail.t, y: sail.from.y + (sail.to.y - sail.from.y) * sail.t } : this.pos(run.node);
-    this.ship.setPosition(here.x, here.y - NODE_R - 2 + Math.sin(time / 300) * 2).setAngle(Math.sin(time / 520) * 3);
-    this.ship.setFlipX(!!sail && sail.to.x < sail.from.x);
+    const rest = -NODE_R - 2;
+    if (sail) {
+      const p = this.along(sail, sail.t);
+      const k = Math.sin(Math.PI * Math.min(1, sail.t * 1.15));
+      const lift = rest * (1 - k) + 6 * k;
+      const dir = p.dx < 0 ? -1 : 1;
+      const heel = Phaser.Math.Clamp(Phaser.Math.RadToDeg(Math.atan2(p.dy, Math.abs(p.dx) || 1)) * 0.35, -12, 12) * dir;
+      this.ship.setPosition(p.x, p.y + lift + Math.sin(time / 200) * 1.2).setAngle(heel + Math.sin(time / 260) * 2.5).setFlipX(dir < 0);
+      if (sail.t > 0.03 && sail.t < 0.98) this.wake.push({ x: p.x - dir * 15, y: p.y + lift - 7, age: 0, side: dir });
+    } else {
+      const here = this.pos(run.node);
+      this.ship.setPosition(here.x, here.y + rest + Math.sin(time / 300) * 2).setAngle(Math.sin(time / 520) * 3);
+    }
+    const wg = this.wakeG.clear();
+    for (const w of this.wake) {
+      w.age += dt;
+      const fade = 1 - w.age / 1.1;
+      if (fade <= 0) continue;
+      const spread = 2 + w.age * 9;
+      wg.fillStyle(0x1d3a4a, 0.45 * fade).fillCircle(w.x - w.side * w.age * 6, w.y - spread * 0.4, 1.3).fillCircle(w.x - w.side * w.age * 6, w.y + spread * 0.5, 1.3);
+    }
+    this.wake = this.wake.filter((w) => w.age < 1.1);
+    this.lantern?.setPosition(this.ship.x, this.ship.y - 14).setRadius(28 + Math.sin(time / 180) * 1.5);
     this.bar.refresh();
   }
 
