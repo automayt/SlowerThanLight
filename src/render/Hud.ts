@@ -475,7 +475,7 @@ Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.
     else this.log.push({ text, color, count: 1, time: this.battle.time });
     while (this.log.length > 400) this.log.shift();
     if (this.logBook) return;
-    this.toasts.push(text, color, last && last.text === text ? last.count : 1);
+    this.toasts.push(text, color);
     this.unread++;
   }
 

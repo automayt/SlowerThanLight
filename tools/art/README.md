@@ -9,3 +9,16 @@ Painted illustrations in `public/art/` were made with a local ComfyUI (http://12
 - `prompts.json` records every prompt tried per image.
 
 New event art: name it `event-<event id>.jpg`; the event scene picks it up automatically.
+
+## UI kit
+
+`public/ui/` holds the painted pieces of the UI kit, loaded by `preloadKit` (src/render/ui.ts):
+
+- `gen_ui.py [name ...]` renders the sources to `raw/ui-*.png`: a parchment sheet and an oiled-walnut board (FLUX + LoRA 0.3,
+  1024x1024) and the icons (LoRA 0.35, 768x768, one object on plain white).
+- `finish_ui.py [wood] [parchment] [icons]` makes `wood.jpg` (a seamless two-plank tile), `parchment.png` (browned, with a
+  deckled alpha edge, for 9-slicing) and `icons.png`/`icons.json` (a 64px Phaser atlas: each icon cut from its white
+  ground, with a dark keyline so it reads on wood and on parchment). Icons painted standing on a tan floor are listed in
+  `TAN_GROUND` so the floor is cut away too.
+- Button plaques, the brass frame, the ribbon and the small drawn icons (fire, wind, hammer…) are painted in code
+  (ui.ts, icons.ts), sampling the walnut where it has loaded.

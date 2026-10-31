@@ -51,13 +51,16 @@ interface Toast {
   born: number;
   until: number;
   leaving: boolean;
+  /** How many times the line has come up while this toast was showing. */
+  count: number;
 }
 
 /** Where each stack of toasts stands: the bottom of the newest, over its ship and clear of the bottom panels and the alert. */
-const STACK_X: Record<Side, number> = { player: 420, enemy: 1000, both: SCREEN.w / 2 };
+const STACK_X: Record<Side, number> = { player: 330, enemy: 950, both: SCREEN.w / 2 };
 const STACK_BOTTOM = 466;
 const MAX_PER_STACK = 3;
-const TOAST_WRAP = 300;
+/** Narrow enough that the three stacks never touch. */
+const TOAST_WRAP = 236;
 
 /**
  * Short notes that pop up near the action, stack, and fade: the Captain's Log as it happens. Not interactive, so
@@ -73,13 +76,14 @@ export class Toasts {
     private readonly depth: number,
   ) {}
 
-  push(text: string, color: string, count = 1): void {
+  push(text: string, color: string): void {
     const tone = toneOf(color);
     const side = sideOf(text);
     // A repeated line updates its toast rather than stacking a copy.
     const same = this.toasts.find((t) => !t.leaving && t.slip.getData('text') === text);
     if (same) {
-      same.slip.setLabel(`${text}  ×${count}`);
+      same.count++;
+      same.slip.setLabel(`${text}  ×${same.count}`);
       same.until = this.scene.time.now + this.hold(text);
       this.layout(true);
       return;
@@ -87,7 +91,7 @@ export class Toasts {
     const slip = new Slip(this.scene, 0, 0, text, { size: TYPE.body, wrap: TOAST_WRAP, icon: iconFor(text, tone), color: TONE_INK[tone] }).setDepth(this.depth);
     slip.setData('text', text);
     const now = this.scene.time.now;
-    const toast: Toast = { slip, side, born: now, until: now + this.hold(text), leaving: false };
+    const toast: Toast = { slip, side, born: now, until: now + this.hold(text), leaving: false, count: 1 };
     this.toasts.push(toast);
     // Too many over one ship: the oldest makes way.
     const stack = this.toasts.filter((t) => t.side === side && !t.leaving);

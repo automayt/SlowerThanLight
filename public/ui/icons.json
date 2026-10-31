@@ -120,7 +120,7 @@
     "h": 64
    }
   },
-  "gold": {
+  "round": {
    "frame": {
     "x": 128,
     "y": 64,
@@ -140,7 +140,7 @@
     "h": 64
    }
   },
-  "provisions": {
+  "chain": {
    "frame": {
     "x": 192,
     "y": 64,
@@ -160,7 +160,7 @@
     "h": 64
    }
   },
-  "crew": {
+  "grape": {
    "frame": {
     "x": 0,
     "y": 128,
@@ -180,10 +180,90 @@
     "h": 64
    }
   },
-  "hull": {
+  "hot": {
    "frame": {
     "x": 64,
     "y": 128,
+    "w": 64,
+    "h": 64
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 64
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 64
+   }
+  },
+  "gold": {
+   "frame": {
+    "x": 128,
+    "y": 128,
+    "w": 64,
+    "h": 64
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 64
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 64
+   }
+  },
+  "provisions": {
+   "frame": {
+    "x": 192,
+    "y": 128,
+    "w": 64,
+    "h": 64
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 64
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 64
+   }
+  },
+  "crew": {
+   "frame": {
+    "x": 0,
+    "y": 192,
+    "w": 64,
+    "h": 64
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 64
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 64
+   }
+  },
+  "hull": {
+   "frame": {
+    "x": 64,
+    "y": 192,
     "w": 64,
     "h": 64
    },
@@ -205,7 +285,7 @@
   "image": "icons.png",
   "size": {
    "w": 256,
-   "h": 192
+   "h": 256
   },
   "scale": "1"
  }

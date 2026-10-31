@@ -20,7 +20,7 @@ ICONS = ["helm", "sails", "guns", "bulwarks", "pumps", "surgeon", "round", "chai
          "gold", "provisions", "crew", "hull"]
 ICON = 64  # atlas cell, px
 # Icons painted standing on a patch of tan floor, which goes with the white (the others keep their pale parts).
-TAN_GROUND = {"guns", "bulwarks"}
+TAN_GROUND = {"guns", "bulwarks", "round", "chain", "provisions"}
 
 
 def wood():
