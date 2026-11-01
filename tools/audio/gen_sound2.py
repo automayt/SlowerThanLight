@@ -4,7 +4,7 @@ Second sound pass, with dedicated audio models instead of LTX's video soundtrack
 - music and stings: ACE-Step 1.5 XL turbo (8 steps, no CFG), instrumental ("[Instrumental]" lyrics);
 - ambience and effects: Stable Audio 3 medium (8-step lcm), prompted directly (the template's Qwen re-prompt is skipped).
 Each file gets `takes` candidates with different seeds; pick_sound2.py keeps the best by CLAP text-audio match.
-Models live on F:/ComfyModels (see E:/ComfyUI/extra_model_paths.yaml).
+Models live in E:/ComfyUI/models.
 """
 import json, os, sys, time, zlib
 from gen_sfx import post, wait, fetch

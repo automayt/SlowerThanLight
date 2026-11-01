@@ -50,7 +50,7 @@ The music director in `src/render/sound.ts` plays one bed per screen: `shanty` (
 ## Second pass: dedicated audio models (jobs_sound2.json)
 
 Everything the adaptive mixer plays (music beds, stings, ambience layers, effects) was regenerated with models made for
-audio instead of LTX's video soundtrack. The models live on `F:/ComfyModels` (listed in `E:/ComfyUI/extra_model_paths.yaml`).
+audio instead of LTX's video soundtrack. The models live in `E:/ComfyUI/models`.
 
 - **Music and stings:** ACE-Step 1.5 XL turbo, 8 steps, `[Instrumental]` lyrics; tags, BPM, key and metre per track
   in `jobs_sound2.json`. A 150 s bed takes about 33 s on the 3090.
