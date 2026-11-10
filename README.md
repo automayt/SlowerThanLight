@@ -69,6 +69,7 @@ Two or three friends crew one ship. One machine runs the server; everyone opens 
 - **Bringing guns to bear:** a ship whose helm is wrecked or unmanned reloads at half speed, so her helm is as good a target as her gun deck. Round and hot shot striking a gun deck only disable guns half the time; chain wrecks them reliably.
 - **Stout sides:** Spanish treasure galleons are built of thick oak: light (1-damage) round and hot shot glances off 40% of the time. Use heavier guns, chain, grape or boarders.
 - **Alerts:** the red bar above the gun cards names the most urgent problem aboard and what to do about it.
+- **A ship lost:** she lists and goes down by the head or the stern, her masts going by the board one by one and her people diving over the side to swim for it, until only flotsam and her ensign are left; a ship blown apart throws burning wreckage across the water. Click or press a key to skip on to the result.
 - **Escape:** once *Make Sail* is fully charged you can flee the fight.
 
 ## Code layout
