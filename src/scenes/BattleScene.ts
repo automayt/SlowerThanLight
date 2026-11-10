@@ -12,6 +12,9 @@ import { playSfx, setMood, toggleMute } from '../render/sound';
 import { currentRun, setRun } from '../render/RunBar';
 import { shipGeometry } from '../render/ShipArt';
 import { ShipView, type AimMark } from '../render/ShipView';
+import type { WreckHooks } from '../render/ShipWreck';
+import { FINALE_HOLD, TITLE_AT } from '../render/wreckPlan';
+import { reducedMotion } from '../render/screen';
 import { escHandled } from '../render/escape';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
@@ -380,7 +383,12 @@ export class BattleScene extends Phaser.Scene {
     for (const view of [this.playerView, this.enemyView]) {
       for (const room of view.ship.rooms.values()) {
         if (room.fire <= 0) continue;
-        room.flames.forEach((f, i) => f > 0 && this.fxs.burning(`${view.ship.side}:${room.def.id}:${i}`, view.tileRect(room.def.id, i), f / 100, delta / 1000));
+        room.flames.forEach((f, i) => {
+          if (f <= 0) return;
+          const r = view.tileRect(room.def.id, i);
+          // Once she is going down, only what is still above water burns.
+          if (view.afloat(r.centerX, r.centerY)) this.fxs.burning(`${view.ship.side}:${room.def.id}:${i}`, r, f / 100, delta / 1000);
+        });
       }
     }
 
@@ -873,9 +881,19 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 1100, onComplete: () => t.destroy() });
   }
 
-  /** The payoff: her magazine going up in a chain of blasts, or spray and smoke boiling up as she goes down. */
+  /** What a wreck needs from the battle: spray and sound where it happens, and a jolt of the camera. */
+  private wreckHooks(): WreckHooks {
+    return {
+      splash: (x, y, big) => (big ? this.splash(x, y) : this.fxs.splash(x, y)),
+      sound: (name, volume, x) => playSfx(this, name, { volume, x }),
+      shake: (ms, intensity) => !reducedMotion() && this.cam.shake(ms, intensity),
+      burn: (key, r, heat, dt) => this.fxs.burning(key, r, heat, dt),
+    };
+  }
+
+  /** The payoff: her magazine going up in a chain of blasts (the wreck itself does the rest, see ShipWreck). */
   private finaleFx(view: ShipView | null, blowUp: boolean): void {
-    if (!view) return;
+    if (!view || !blowUp) return;
     const rooms = [...view.ship.rooms.keys()];
     const somewhere = () => {
       const c = view.roomCenter(rooms[Math.floor(Math.random() * rooms.length)]);
@@ -889,19 +907,11 @@ export class BattleScene extends Phaser.Scene {
         this.time.delayedCall(ms, () => {
           const p = somewhere();
           this.fxs.explosion(p.x, p.y);
-          if (i % 2) this.cam.shake(160, 0.004);
+          if (i === 1 || i === 3) playSfx(this, 'explosion', { volume: 0.35, x: p.x });
+          if (i % 2 && !reducedMotion()) this.cam.shake(160, 0.004);
         }),
       );
     }
-    this.time.addEvent({
-      delay: 140,
-      repeat: 22,
-      callback: () => {
-        const p = somewhere();
-        this.fxs.churn(p.x, p.y);
-        if (Math.random() < 0.5) this.fxs.burning('finale', new Phaser.Geom.Rectangle(p.x - 10, p.y - 10, 20, 20), 1, 0.4);
-      },
-    });
   }
 
   private endBattle(): void {
@@ -931,12 +941,16 @@ export class BattleScene extends Phaser.Scene {
       for (const line of report.lines) this.hud.addLog(line, COLORS.textWarn);
     }
     const now = this.time.now;
+    // Her people swim for the victor.
+    const hooks = this.wreckHooks();
+    const toPlayer = { toward: this.playerView.center(), hooks };
+    const toEnemy = { toward: this.enemyView.center(), hooks };
     switch (o.kind) {
       case 'victory':
-        this.enemyView.startFinale('explode', now);
+        this.enemyView.startFinale('explode', now, toPlayer);
         break;
       case 'enemySunk':
-        this.enemyView.startFinale('sink', now);
+        this.enemyView.startFinale('sink', now, toPlayer);
         break;
       case 'enemyEscaped':
         this.enemyView.startFinale('sail', now);
@@ -946,24 +960,52 @@ export class BattleScene extends Phaser.Scene {
         break;
       case 'defeat':
       case 'sunk':
-        this.playerView.startFinale('sink', now);
+        this.playerView.startFinale('sink', now, toEnemy);
         break;
     }
-    if (o.kind === 'victory' || o.kind === 'defeat') this.cam.shake(500, 0.006);
+    if ((o.kind === 'victory' || o.kind === 'defeat') && !reducedMotion()) this.cam.shake(500, 0.006);
     this.finaleFx(o.kind === 'victory' ? this.enemyView : o.kind === 'enemySunk' ? this.enemyView : o.kind === 'defeat' || o.kind === 'sunk' ? this.playerView : null, o.kind === 'victory');
-    // Let the finale play, then dim the scene and name the outcome.
-    this.time.delayedCall(1400, () => {
+    // A ship lost gets a few seconds to go down in; then (or at a click or a key) on to the account of the fight.
+    const wrecked = o.kind === 'victory' || o.kind === 'enemySunk' || o.kind === 'defeat' || o.kind === 'sunk';
+    const timing = o.kind === 'victory' ? 'explode' : wrecked ? 'sink' : 'sail';
+    let gone = false;
+    const onward = () => {
+      if (gone || !this.scene.isActive()) return;
+      gone = true;
+      this.scene.start('Result', { battle: this.battle, report } satisfies ResultData);
+    };
+    // Let the finale play, then dim the scene and name the outcome; over a wreck, fading in over the last of her.
+    this.time.delayedCall(TITLE_AT[timing] * 1000, () => {
       const shade = this.add.rectangle(0, 0, SCREEN.w, SCREEN.h, 0x000000, 0).setOrigin(0).setDepth(OVERLAY_DEPTH);
-      this.tweens.add({ targets: shade, fillAlpha: 0.45, duration: 600 });
+      this.tweens.add({ targets: shade, fillAlpha: wrecked ? 0.3 : 0.45, duration: wrecked ? 1500 : 600 });
       const title = this.add
         .text(SCREEN.w / 2, SCREEN.h / 2 - 60, o.title, { fontFamily: TITLE_FONT, fontSize: '56px', color: o.won ? COLORS.gold : COLORS.textWarn, stroke: '#000000', strokeThickness: 6 })
         .setOrigin(0.5)
         .setDepth(OVERLAY_DEPTH + 1)
         .setAlpha(0)
-        .setScale(0.85);
-      this.tweens.add({ targets: title, alpha: 1, scale: 1, duration: 500, ease: 'Back.easeOut' });
+        .setScale(wrecked ? 0.94 : 0.85);
+      this.tweens.add(wrecked ? { targets: title, alpha: 1, scale: 1, duration: 1300, ease: 'Sine.easeOut' } : { targets: title, alpha: 1, scale: 1, duration: 500, ease: 'Back.easeOut' });
+      if (wrecked) {
+        const hint = this.add
+          .text(SCREEN.w / 2, SCREEN.h / 2 - 16, 'Click or press a key to go on', textStyle(15, COLORS.text, { fontStyle: 'italic', stroke: '#000000', strokeThickness: 3 }))
+          .setOrigin(0.5)
+          .setDepth(OVERLAY_DEPTH + 1)
+          .setAlpha(0);
+        this.tweens.add({ targets: hint, alpha: 0.85, delay: 700, duration: 900 });
+      }
     });
-    this.time.delayedCall(3800, () => this.scene.start('Result', { battle: this.battle, report } satisfies ResultData));
+    this.time.delayedCall(FINALE_HOLD[timing] * 1000, onward);
+    // Skipping: any click on the sea or the ships, or any key but those that work the game itself (options,
+    // fullscreen, mute). A moment's grace first, so the click that fired the last shot doesn't skip it.
+    this.time.delayedCall(350, () => {
+      this.input.on('pointerdown', (_ptr: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+        if (!over.length) onward();
+      });
+      this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+        if (e.repeat || ['Escape', 'F11', 'm', 'M', 'Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key)) return;
+        onward();
+      });
+    });
   }
 }
 

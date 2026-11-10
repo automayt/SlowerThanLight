@@ -4,6 +4,7 @@ import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
 import { ART_SCALE, paintFurls, paintShip, playerColours, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
 import { motionScale } from './screen';
+import { NO_WRECK_HOOKS, ShipWreck, type HullPiece, type WreckHooks } from './ShipWreck';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 
 export interface ShipViewState {
@@ -28,6 +29,13 @@ export interface AimMark {
 
 /** How a ship leaves the fight: going down, or sailing off over the horizon. */
 export type Finale = 'sink' | 'explode' | 'sail';
+
+export interface FinaleOptions {
+  /** Where her people swim for when she goes down: the victor. */
+  toward?: Vec | null;
+  /** Spray, sound and camera for the death scene. */
+  hooks?: WreckHooks;
+}
 
 export interface ShipViewOptions {
   showLabels?: boolean;
@@ -127,6 +135,11 @@ export class ShipView {
   private wreck: Phaser.GameObjects.Image | null = null;
   /** Where she broke, in screen pixels from the left of her painted hull. */
   private breakX = 0;
+  /** Her death scene, once she is going down or has blown up. */
+  private wreckFx: ShipWreck | null = null;
+  /** Listing, her deck seen foreshortened athwartships about the keel, and shifted toward the low side (pixels). */
+  private sy = 1;
+  private sdy = 0;
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -199,13 +212,20 @@ export class ShipView {
   toTile(px: number, py: number): Vec {
     const l = this.unturn(px, py);
     const x = (l.x - this.ox - this.fx) / this.tile;
-    return { x: this.flip ? this.ship.width - x : x, y: (l.y - this.oy - this.bob - this.fy) / this.tile };
+    const mid = this.ship.height / 2;
+    return { x: this.flip ? this.ship.width - x : x, y: mid + ((l.y - this.oy - this.bob - this.fy - this.sdy) / this.tile - mid) / this.sy };
   }
 
   /** Tile coordinates to pixels in her own frame, before the yaw: where her deck graphics draw. */
   private local(p: Vec): Vec {
     const x = this.flip ? this.ship.width - p.x : p.x;
-    return { x: this.ox + this.fx + x * this.tile, y: this.oy + this.bob + this.fy + p.y * this.tile };
+    return { x: this.ox + this.fx + x * this.tile, y: this.deckY(p.y) };
+  }
+
+  /** Tile y to pixels in her frame: about the keel, squeezed and shifted as she lists. */
+  private deckY(y: number): number {
+    const mid = this.ship.height / 2;
+    return this.oy + this.bob + this.fy + (mid + (y - mid) * this.sy) * this.tile + this.sdy;
   }
 
   /** Her frame to the screen: turned by the yaw about her middle. */
@@ -349,26 +369,114 @@ export class ShipView {
     this.fx = (this.flip ? 1 : -1) * 600;
   }
 
-  /** Begin the ship's exit: sinking, blowing apart, or sailing off. */
-  startFinale(kind: Finale, nowMs: number): void {
+  /**
+   * Begin the ship's exit: sinking, blowing apart, or sailing off. Going down or blown up, the death scene takes over
+   * her hull, masts, crew and colours (see ShipWreck); `opts` says where survivors swim and how to make spray and noise.
+   */
+  startFinale(kind: Finale, nowMs: number, opts: FinaleOptions = {}): void {
     if (this.finale) return;
     this.finale = { kind, t0: nowMs / 1000 };
     this.nameText?.setVisible(false);
     for (const b of this.badges.values()) b.setVisible(false);
-    if (kind === 'explode') this.breakUp();
+    if (kind === 'sail') return;
+    const g = this.geom;
+    const u = this.tile * ART_SCALE;
+    const src = this.scene.textures.get(this.keys[0]).getSourceImage() as HTMLCanvasElement;
+    const W = src.width;
+    // Tile x to x in her hull as it shows (mirrored if she is flipped).
+    const full = (x: number) => (this.flip ? W - (x + g.padL) * u : (x + g.padL) * u);
+    let pieces: HullPiece[];
+    if (kind === 'explode') {
+      const at = this.breakUp(src);
+      const cutX = this.ship.width * 0.55;
+      // The bow and stern halves, each going under from the break; flipped, the bow is the left-hand piece.
+      pieces = [
+        { img: this.base, lo: cutX, hi: g.sprit, wetLo: true, tex: (x) => full(x) - (this.flip ? 0 : at) },
+        { img: this.wreck!, lo: g.stern, hi: cutX, wetLo: false, tex: (x) => full(x) - (this.flip ? at : 0) },
+      ];
+    } else {
+      if (this.flip) this.base.setTexture(this.mirrorKey()).setFlipX(false);
+      // Settling by the head or by the stern.
+      const byStern = Math.random() < 0.4;
+      pieces = [{ img: this.base, lo: g.stern - 0.1, hi: g.sprit, wetLo: byStern, tex: full }];
+    }
+    this.rig.setVisible(false);
+    this.placeImages();
+    const crew = this.ship.crew.flatMap((c) => {
+      const sprite = this.sprites.get(c.id);
+      return sprite ? [{ crew: c, sprite, prefix: crewTextures(this.scene, c) }] : [];
+    });
+    this.sprites.clear();
+    this.facing.clear();
+    this.wreckFx = new ShipWreck(
+      {
+        scene: this.scene,
+        ship: this.ship,
+        geom: g,
+        tile: this.tile,
+        flip: this.flip,
+        keyPrefix: `${this.keys[0]}`,
+        pieces,
+        marks: kind === 'sink' ? this.marks : null,
+        set: [...this.set],
+        furls: this.furls,
+        crew,
+        strips: this.strips,
+        ensign: this.ensign,
+        roll: () => this.roll,
+        toward: opts.toward ?? null,
+        hooks: opts.hooks ?? NO_WRECK_HOOKS,
+      },
+      kind,
+    );
   }
 
-  /** Crack the hull in two at the waist: each half is cut out into a texture of its own, so the halves can part. */
-  private breakUp(): void {
+  /** Her middle on screen. */
+  center(): Vec {
+    return { x: this.pivot.x, y: this.pivot.y };
+  }
+
+  /** Whether a point of her (screen pixels) is still above water: false once she is lost and it has gone under. */
+  afloat(px: number, py: number): boolean {
+    if (!this.wreckFx) return true;
+    return this.finale?.kind === 'sink' && this.wreckFx.dry(this.toTile(px, py).x);
+  }
+
+  private mirrorKey(): string {
+    const src = this.keys[0];
+    const key = `${src}-mirror`;
+    if (this.scene.textures.exists(key)) return key;
+    const img = this.scene.textures.get(src).getSourceImage() as HTMLCanvasElement;
+    const tex = this.scene.textures.createCanvas(key, img.width, img.height)!;
+    const ctx = tex.getContext();
+    ctx.translate(img.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+    tex.refresh();
+    this.keys.push(key);
+    return key;
+  }
+
+  /**
+   * Crack the hull in two at the waist: each half is cut out of her painted hull `src` into a texture of its own, as
+   * it shows on screen (mirrored if she is flipped, so the halves need no flip), so the halves can part. Returns
+   * where she broke, in pixels from the left of her hull as it shows.
+   */
+  private breakUp(src: HTMLCanvasElement): number {
     const g = this.geom;
-    const src = this.base.texture.getSourceImage() as HTMLCanvasElement;
     const cut = Math.round((this.ship.width * 0.55 + g.padL) * this.tile * ART_SCALE);
+    const at = this.flip ? src.width - cut : cut;
     const half = (suffix: string, x: number, w: number) => {
-      const key = `${this.base.texture.key}-${suffix}`;
+      const key = `${this.keys[0]}-${suffix}`;
       if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
       const tex = this.scene.textures.createCanvas(key, w, src.height)!;
       const ctx = tex.getContext();
-      ctx.drawImage(src, x, 0, w, src.height, 0, 0, w, src.height);
+      if (this.flip) {
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(src, src.width - x - w, 0, w, src.height, 0, 0, w, src.height);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      } else ctx.drawImage(src, x, 0, w, src.height, 0, 0, w, src.height);
       // Splintered timbers along the break, not a clean saw cut.
       const edge = x === 0 ? w : 0;
       const inward = x === 0 ? -1 : 1;
@@ -384,14 +492,16 @@ export class ShipView {
       this.keys.push(key);
       return key;
     };
-    const sternKey = half('stern', 0, cut);
-    const bowKey = half('bow', cut, src.width - cut);
-    // Both halves pivot about the break, on the keel; flipped, each break edge is on the other side.
+    const leftKey = half('left', 0, at);
+    const rightKey = half('right', at, src.width - at);
+    // Both halves pivot about the break, on the keel: the left-hand one by its right edge, the other by its left.
     const oy = (g.padT + this.ship.height / 2) / (g.padT + this.ship.height + g.padB);
-    this.wreck = this.scene.add.image(0, 0, sternKey).setScale(1 / ART_SCALE).setFlipX(this.flip).setDepth(DEPTH.base).setOrigin(this.flip ? 0 : 1, oy);
-    this.base.setTexture(bowKey).setOrigin(this.flip ? 1 : 0, oy);
-    this.breakX = (this.flip ? src.width - cut : cut) / ART_SCALE;
+    const [bowKey, sternKey] = this.flip ? [leftKey, rightKey] : [rightKey, leftKey];
+    this.wreck = this.scene.add.image(0, 0, sternKey).setScale(1 / ART_SCALE).setDepth(DEPTH.base).setOrigin(this.flip ? 0 : 1, oy);
+    this.base.setTexture(bowKey).setFlipX(false).setOrigin(this.flip ? 1 : 0, oy);
+    this.breakX = at / ART_SCALE;
     this.marks?.setVisible(false);
+    return at;
   }
 
   /**
@@ -413,6 +523,7 @@ export class ShipView {
   }
 
   destroy(): void {
+    this.wreckFx?.destroy();
     for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
   }
@@ -421,7 +532,8 @@ export class ShipView {
     const g = this.geom;
     const T = this.tile;
     const left = (this.flip ? this.ox - g.padR * T : this.ox - g.padL * T) + this.fx;
-    const top = this.oy + this.bob + this.fy - g.padT * T;
+    const top = this.deckY(-g.padT);
+    if (this.sy !== 1) this.base.setScale(1 / ART_SCALE, this.sy / ART_SCALE);
     this.left0 = left;
     this.top0 = top;
     if (this.wreck && this.finale) {
@@ -468,12 +580,33 @@ export class ShipView {
     this.yaw = (Math.sin(t * 0.52 + this.phase * 1.3) * 0.0065 + Math.sin(t * 1.17 + this.phase) * 0.0022) * calm * (1 + 0.7 * p) + this.yawKick;
     this.roll = (Math.sin(t * 0.7 + this.phase * 1.7) * (2.2 + 1.6 * p) - (1 + 5 * p)) * calm;
     const fin = this.finaleProgress(t);
+    const wreck = this.wreckFx;
+    if (wreck && fin) {
+      // Listing: the deck foreshortened and pushed over toward the low side, the masts leaning out further over it.
+      const list = wreck.list(fin.age);
+      this.sy = 1 - 0.1 * list;
+      this.sdy = wreck.listDir * list * this.tile * 0.15;
+      this.roll = this.roll * (1 - list) + wreck.listDir * list * this.tile * 0.55;
+    }
     this.updatePivot();
     this.placeImages();
     for (const g of [this.wake, this.over, this.sails, this.ui]) this.seat(g);
     if (this.nameText) {
       const n = this.turn(this.pivot.x, this.oy + this.bob + this.fy - (this.geom.beam - this.ship.height / 2) * this.tile - 22);
       this.nameText.setPosition(n.x, n.y);
+    }
+
+    if (wreck && fin) {
+      // Her death scene has her hull, masts, crew and colours now; what was on her deck fades as the sea comes aboard.
+      this.over.setAlpha(Math.max(0, 1 - fin.age / 1.4));
+      if (fin.kind === 'sink') this.drawMarks(1);
+      this.wake.clear();
+      this.sails.clear();
+      this.ui.clear();
+      if (this.over.alpha > 0) this.drawOverlay(t, state);
+      else this.over.clear();
+      wreck.update(fin.age, dt);
+      return;
     }
 
     const fade = fin && fin.kind !== 'sail' ? 1 - fin.k * 0.92 : 1;
@@ -496,7 +629,7 @@ export class ShipView {
     this.drawSails(t, dt, rigFade);
     this.drawOverlay(t, state);
     this.drawCrew(t, state, fade);
-    if (fin) this.drawFinale(fin);
+    if (fin) this.drawFinale();
     else this.drawUi(t, state);
   }
 
@@ -516,51 +649,17 @@ export class ShipView {
       this.fx = (this.flip ? 1 : -1) * k * k * 520;
       this.fy = 0;
     } else {
-      // Settle, then slide under.
-      this.fy = Math.pow(k, 1.6) * this.tile * 0.9;
-      this.fx = (this.flip ? 1 : -1) * k * this.tile * 0.3;
+      // Dead in the water, settling a little and drifting astern; the sea takes her from one end (see ShipWreck).
+      const d = Math.min(1, age / 5);
+      this.fy = kind === 'sink' ? d * this.tile * 0.12 : 0;
+      this.fx = (this.flip ? 1 : -1) * d * this.tile * 0.25;
     }
     return { kind, k, age };
   }
 
-  /** Smoke, fire and swirling water as she goes down; the markers and pips are gone by now. */
-  private drawFinale(fin: { kind: Finale; k: number; age: number }): void {
-    const g = this.ui;
-    const T = this.tile;
-    const geo = this.geom;
-    const mid = this.ship.height / 2;
-    g.clear();
-    if (fin.kind === 'sail') return;
-    const c = this.local({ x: (geo.stern + geo.tip) / 2, y: mid });
-    const len = (geo.tip - geo.stern) * T;
-    // Churning water closing over her.
-    for (let i = 0; i < 3; i++) {
-      const kk = (fin.age * 0.6 + i / 3) % 1;
-      g.lineStyle(2.5, 0xe8f4f8, 0.5 * (1 - kk) * Math.min(1, fin.k * 3));
-      g.strokeEllipse(c.x, c.y, len * (0.8 + kk * 0.5), geo.beam * 2 * T * (0.9 + kk * 0.6));
-    }
-    for (let i = 0; i < 14; i++) {
-      const kk = (fin.age * 0.8 + i / 14) % 1;
-      const bx = c.x + Math.sin(i * 7.3) * len * 0.42;
-      const by = c.y + Math.cos(i * 3.1) * geo.beam * T * 0.8 - kk * 10;
-      g.fillStyle(0xe8f4f8, 0.6 * (1 - kk) * fin.k).fillCircle(bx, by, 2 + kk * 3);
-    }
-    // Black smoke boiling up from the wreck.
-    for (let i = 0; i < 8; i++) {
-      const kk = (fin.age * 0.35 + i / 8) % 1;
-      const sx = c.x + Math.sin(i * 2.4) * len * 0.3 + kk * 30;
-      const sy = c.y - kk * 140;
-      g.fillStyle(0x1c1a18, 0.42 * (1 - kk) * (1 - fin.k * 0.5)).fillCircle(sx, sy, 10 + kk * 34);
-    }
-    if (fin.kind === 'explode' && fin.age < 1.6) {
-      for (let i = 0; i < 6; i++) {
-        const kk = (fin.age * 1.8 + i / 6) % 1;
-        const ex = c.x + Math.sin(i * 5.1) * len * 0.35;
-        const ey = c.y + Math.cos(i * 2.7) * geo.beam * T * 0.5;
-        g.fillStyle(0xffc040, 0.8 * (1 - kk)).fillCircle(ex, ey, 6 + kk * 26);
-        g.fillStyle(0xff5a1f, 0.6 * (1 - kk)).fillCircle(ex, ey, 3 + kk * 16);
-      }
-    }
+  /** Sailing off, the markers and pips are gone; going down, the death scene draws everything (see ShipWreck). */
+  private drawFinale(): void {
+    this.ui.clear();
   }
 
   // --- Layers --------------------------------------------------------------
@@ -571,7 +670,7 @@ export class ShipView {
   private aloft(x: number, y: number): Vec {
     const p = this.tmp;
     p.x = this.ox + this.fx + (this.flip ? this.ship.width - x : x) * this.tile;
-    p.y = this.oy + this.bob + this.fy + this.roll + y * this.tile;
+    p.y = this.deckY(y) + this.roll;
     return p;
   }
 
