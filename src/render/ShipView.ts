@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import type { Crew, Ship } from '../sim/Ship';
 import type { RoomDef, SystemId, Vec } from '../sim/types';
-import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
+import { partyStrength, type BlowKind } from '../sim/Boarding';
+import { CREW_ORIGIN, crewFrame, crewTextures, type CrewFrame } from './CrewArt';
 import { ART_SCALE, paintFurls, paintShip, playerColours, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
-import { motionScale } from './screen';
+import { motionScale, reducedMotion } from './screen';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 
 export interface ShipViewState {
@@ -39,6 +40,14 @@ export interface ShipViewOptions {
  * crew so they never hide who is where; furled canvas lies along the spars just under them.
  */
 const DEPTH = { wake: 1, base: 2, over: 3, sails: 3.95, crew: 4, furl: 4.99, rig: 5, ui: 6 } as const;
+/** The two sides of a melee in the read-out over a contested room: our people, and hers. */
+const MELEE_OURS = 0x4fb0e8;
+const MELEE_THEIRS = 0xe0452f;
+/** Seconds a lunge takes (out and back), a pistol held levelled, and a heavy blow's stagger. */
+const LUNGE_TIME = 0.26;
+const AIM_TIME = 0.45;
+const JOLT_TIME = 0.4;
+
 /** Strips the ensign is cut into to make it ripple. */
 const FLAG_STRIPS = 8;
 /** Canvas colour, its sunlit belly and its seams. */
@@ -69,6 +78,15 @@ export class ShipView {
   private readonly badges = new Map<SystemId, Phaser.GameObjects.Image>();
   private readonly sprites = new Map<number, Phaser.GameObjects.Image>();
   private readonly facing = new Map<number, { x: number; dir: number }>();
+  /** Where each sailor is drawn, off their tile: fighters step in toward their foe (eased, in pixels). */
+  private readonly stepIn = new Map<number, { x: number; y: number }>();
+  /** Melee moments by crew id (seconds): their last blow, the pistol they last fired, the heavy blow they took. */
+  private readonly lunges = new Map<number, number>();
+  private readonly aims = new Map<number, number>();
+  private readonly jolts = new Map<number, number>();
+  /** "3 v 2" over each contested room. */
+  private readonly frayLabels = new Map<string, Phaser.GameObjects.Text>();
+  private frameDt = 0;
   private readonly scorches: Scorch[] = [];
   private readonly scars: Scorch[] = [];
   /** Scorches and hull scars, painted into a texture only when one is added, which then rides with the ship. */
@@ -413,7 +431,7 @@ export class ShipView {
   }
 
   destroy(): void {
-    for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
+    for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values(), ...this.frayLabels.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
   }
 
@@ -455,6 +473,7 @@ export class ShipView {
     const t = timeMs / 1000;
     const dt = Math.min(0.1, Math.max(0, t - this.lastT));
     this.lastT = t;
+    this.frameDt = dt;
     this.kick *= Math.exp(-dt * 7);
     this.yawKick *= Math.exp(-dt * 2.5);
     for (let i = 0; i < this.gunKick.length; i++) this.gunKick[i] = Math.max(0, (this.gunKick[i] ?? 0) - dt / 1.1);
@@ -961,15 +980,46 @@ export class ShipView {
       }
       const p = this.toScreen(c.pos);
       const fy = p.y + T * 0.3;
-      const frame = `${prefix}:${crewFrame(c, t)}`;
-      if (sprite.texture.key !== frame) sprite.setTexture(frame);
-      sprite.setPosition(p.x, fy).setDepth(DEPTH.crew + fy / 10000);
-
       // Face the way they walk; otherwise keep facing as they were (bow-ward to start).
       const f = this.facing.get(c.id) ?? { x: p.x, dir: (this.flip ? -1 : 1) * (c.side === this.ship.side ? 1 : -1) };
       if (Math.abs(p.x - f.x) > 0.3) f.dir = Math.sign(p.x - f.x);
       f.x = p.x;
       this.facing.set(c.id, f);
+
+      // In a melee: square up to their foe, a step in toward them, and lunge on each blow.
+      const foe = c.foe !== undefined && c.task === 'fight' && !c.waypoints.length ? this.ship.crew.find((x) => x.id === c.foe) : undefined;
+      let want = { x: 0, y: 0 };
+      let lunge = { x: 0, y: 0 };
+      let frame: CrewFrame = crewFrame(c, t);
+      if (foe) {
+        const q = this.toScreen(foe.pos);
+        const dx = q.x - p.x;
+        const dy = q.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (Math.abs(dx) > 1) f.dir = Math.sign(dx);
+        const step = Math.min(T * 0.3, d * 0.3);
+        want = { x: (dx / d) * step, y: (dy / d) * step * 0.6 };
+        const since = t - (this.lunges.get(c.id) ?? -9);
+        if (since < LUNGE_TIME && !reducedMotion()) {
+          const reach = Math.sin((since / LUNGE_TIME) * Math.PI) * Math.min(T * 0.28, d * 0.3);
+          lunge = { x: (dx / d) * reach, y: (dy / d) * reach * 0.5 };
+        }
+        frame = t - (this.aims.get(c.id) ?? -9) < AIM_TIME ? 'shoot' : since < LUNGE_TIME * 0.9 ? 'fight0' : 'fight1';
+      } else if (c.waypoints.length && c.shaken) {
+        // Broken and running: legs going twice as fast.
+        frame = `walk${Math.floor(t * 14 + c.id) % 4}` as CrewFrame;
+      }
+      const at = this.stepIn.get(c.id) ?? { x: 0, y: 0 };
+      const ease = Math.min(1, this.frameDt * 9);
+      at.x += (want.x - at.x) * ease;
+      at.y += (want.y - at.y) * ease;
+      this.stepIn.set(c.id, at);
+      let jx = 0;
+      const jolt = t - (this.jolts.get(c.id) ?? -9);
+      if (jolt < JOLT_TIME && !reducedMotion()) jx = Math.sin(jolt * 55) * 3.5 * (1 - jolt / JOLT_TIME);
+      const key = `${prefix}:${frame}`;
+      if (sprite.texture.key !== key) sprite.setTexture(key);
+      sprite.setPosition(p.x + at.x + lunge.x + jx, fy + at.y + lunge.y).setDepth(DEPTH.crew + fy / 10000);
       sprite.setFlipX(f.dir < 0);
       sprite.setAlpha((c.hp <= 0 ? 0.4 : 1) * fade);
       if (state.selected?.has(c.id)) sprite.setTint(0xfff4c8);
@@ -978,6 +1028,7 @@ export class ShipView {
     for (const [id, s] of this.sprites) {
       if (live.has(id)) continue;
       this.sprites.delete(id);
+      this.stepIn.delete(id);
       const dir = this.facing.get(id)?.dir ?? 1;
       this.facing.delete(id);
       if (state.alive && !state.alive.has(id)) {
@@ -1020,9 +1071,16 @@ export class ShipView {
       }
     }
 
+    this.drawFrays(g);
+
     // Crew health and what they're doing, over their heads.
     for (const c of ship.crew) {
       const p = this.local(c.pos);
+      const off = this.stepIn.get(c.id);
+      if (off) {
+        p.x += off.x;
+        p.y += off.y;
+      }
       const headY = p.y + T * 0.3 - T * 0.95;
       const hurt = c.hp < c.maxHp;
       if (hurt || state.selected?.has(c.id)) {
@@ -1031,7 +1089,8 @@ export class ShipView {
         g.fillStyle(0x000000, 0.75).fillRect(p.x - bw / 2 - 1, headY - 1, bw + 2, 5);
         g.fillStyle(frac > 0.6 ? 0x6fd35a : frac > 0.3 ? 0xe5c23a : 0xe0452f, 1).fillRect(p.x - bw / 2, headY, bw * frac, 3);
       }
-      const icon = c.task === 'fire' ? 0xff7a2a : c.task === 'breach' ? 0x6fb8ff : c.task === 'repair' ? 0xf0b040 : c.task === 'fight' ? 0xff4040 : c.task === 'sabotage' ? 0xb070ff : 0;
+      const icon = c.task === 'fire' ? 0xff7a2a : c.task === 'breach' ? 0x6fb8ff : c.task === 'repair' ? 0xf0b040 : c.task === 'sabotage' ? 0xb070ff : 0;
+      // (No icon for a fight: the melee read-out over the room and their stance say it.)
       if (icon) {
         const ix = p.x + T * 0.3;
         const iy = headY - 5;
@@ -1090,6 +1149,79 @@ export class ShipView {
       g.lineStyle(2, COLORS.select, 0.9 * (1 - k)).strokeEllipse(p.x, p.y + T * 0.3, T * (0.3 + k * 0.6), T * (0.12 + k * 0.24));
     }
     this.moveMarks = this.moveMarks.filter((mk) => t - mk.t0 < 0.9);
+  }
+
+  /**
+   * Who is winning each melee aboard, at a glance: a tug-of-war bar along the room's foot (our strength against
+   * hers) and the count, ours first.
+   */
+  private drawFrays(g: Phaser.GameObjects.Graphics): void {
+    const ship = this.ship;
+    const seen = new Set<string>();
+    if (ship.crew.some((c) => c.side !== ship.side)) {
+      for (const room of ship.rooms.values()) {
+        const id = room.def.id;
+        const here = ship.crew.filter((c) => c.room === id && !c.waypoints.length && c.hp > 0);
+        const own = here.filter((c) => c.side === ship.side);
+        const boarders = here.filter((c) => c.side !== ship.side);
+        if (!own.length || !boarders.length) continue;
+        seen.add(id);
+        const mine = ship.side === 'player';
+        const ours = mine ? own : boarders;
+        const theirs = mine ? boarders : own;
+        const a = partyStrength(ours, mine);
+        const b = partyStrength(theirs, !mine);
+        const k = a + b > 0 ? a / (a + b) : 0.5;
+        const r = this.localRoomRect(id);
+        const w = Math.max(36, Math.min(76, r.width - 14));
+        const x = r.centerX - w / 2;
+        const y = r.bottom - 4;
+        g.fillStyle(0x0b1622, 0.85).fillRoundedRect(x - 3, y - 3, w + 6, 8, 3);
+        g.fillStyle(MELEE_OURS, 1).fillRect(x, y - 1, w * k, 4);
+        g.fillStyle(MELEE_THEIRS, 1).fillRect(x + w * k, y - 1, w * (1 - k), 4);
+        g.fillStyle(0xffffff, 0.95).fillRect(x + w * k - 1, y - 3, 2, 8);
+        let label = this.frayLabels.get(id);
+        if (!label) {
+          label = this.scene.add
+            .text(0, 0, '', textStyle(12, '#f4ead0', { fontStyle: 'bold', stroke: '#0b1622', strokeThickness: 4 }))
+            .setOrigin(0.5, 1)
+            .setDepth(DEPTH.ui + 0.5);
+          this.frayLabels.set(id, label);
+        }
+        const text = `${ours.length} v ${theirs.length}`;
+        if (label.text !== text) label.setText(text);
+        label.setColor(k >= 0.55 ? '#9fdcff' : k <= 0.45 ? '#ff9a88' : '#f4ead0');
+        const at = this.turn(r.centerX, y - 3);
+        label.setPosition(at.x, at.y).setVisible(true);
+      }
+    }
+    for (const [id, label] of this.frayLabels) if (!seen.has(id)) label.setVisible(false);
+  }
+
+  /** A blow in a melee aboard: the striker lunges (or levels a pistol), and a heavy blow staggers its victim. */
+  strike(from: number, to: number, kind: BlowKind): void {
+    const t = this.scene.time.now / 1000;
+    if (kind === 'shot' || kind === 'miss') this.aims.set(from, t);
+    else this.lunges.set(from, t);
+    if (kind === 'crit') this.jolts.set(to, t + 0.08);
+  }
+
+  /** Where a sailor aboard is drawn (their chest, with any step-in), or null if they are not aboard. */
+  crewPoint(id: number): Vec | null {
+    const s = this.sprites.get(id);
+    if (!s) return null;
+    return { x: s.x, y: s.y - this.tile * 0.42 };
+  }
+
+  /** A point on her rail `back` tiles aft of the stem, on her upper (-1) or lower (+1) side, on screen. */
+  railPoint(back: number, side: number): Vec {
+    const x = this.geom.tip - back;
+    return this.toScreen({ x, y: this.ship.height / 2 + side * this.geom.half(x, 0.12) });
+  }
+
+  /** Which way a sailor aboard faces: 1 right, -1 left. */
+  crewFacing(id: number): number {
+    return this.facing.get(id)?.dir ?? 1;
   }
 
   /** Light up the bulwark rings: a ball was stopped. */

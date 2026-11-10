@@ -5,13 +5,26 @@ import { Battle, STEP } from '../../src/sim/Battle';
 import { scaleEnemy } from '../../src/sim/Run';
 import type { Ship } from '../../src/sim/Ship';
 
+/** The first crew id a battle handed out: ids count up from it, so ids less it are the same in every replay. */
+const firstId = new WeakMap<Battle, number>();
+function track(b: Battle): Battle {
+  firstId.set(b, Math.min(...b.crewOf('player').map((c) => c.id), ...b.crewOf('enemy').map((c) => c.id)));
+  return b;
+}
+const rel = (b: Battle, id: number | undefined) => (id === undefined ? undefined : id - firstId.get(b)!);
+
+/** A battle's events with the crew ids in melee blows made relative, so two replays compare equal. */
+function events(b: Battle) {
+  return b.drainEvents().map((e) => (e.t === 'blow' ? { ...e, from: rel(b, e.from), to: rel(b, e.to) } : e));
+}
+
 /** Everything that matters about a fight's state, without the per-process crew ids. */
 function snapshot(b: Battle) {
   const ship = (s: Ship) => ({
     hull: s.hull,
     layers: s.layers,
     escape: s.escape,
-    crew: s.crew.map(({ id: _id, ...c }) => c),
+    crew: s.crew.map(({ id: _id, foe, ...c }) => ({ ...c, foe: rel(b, foe) })),
     rooms: [...s.rooms.values()].map(({ def: _def, ...r }) => r),
     systems: [...s.systems.values()],
     guns: s.guns.map(({ def, ...g }) => ({ ...g, weapon: def.id })),
@@ -21,7 +34,7 @@ function snapshot(b: Battle) {
 
 /** A captain's orders given at set moments of the fight: aim, change shot, man stations, board and recall. */
 function scripted(seed: number): Battle {
-  const b = new Battle(playerShip('wolf'), MERCHANT_BRIG, { seed, enemyAI: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 } });
+  const b = track(new Battle(playerShip('wolf'), MERCHANT_BRIG, { seed, enemyAI: { fleeAt: 0, surrenderChance: 0, surrenderAt: 0 } }));
   const orders: [number, () => void][] = [
     [0.5, () => b.player.guns.forEach((_, i) => b.aimGun(i, i % 2 ? 'helm' : 'sails'))],
     [3, () => b.setShot(1, 'chain')],
@@ -45,10 +58,12 @@ describe('battle determinism', () => {
     expect(a.outcome).not.toBeNull();
     expect(snapshot(b)).toEqual(snapshot(a));
     // The orders really were carried out: a party went across and the chain shot was loaded.
-    const events = a.drainEvents();
-    expect(events.some((e) => e.t === 'board' && e.side === 'player')).toBe(true);
-    expect(events.some((e) => e.t === 'shot' && e.side === 'player' && e.shot === 'chain')).toBe(true);
-    expect(b.drainEvents()).toEqual(events);
+    const told = events(a);
+    expect(told.some((e) => e.t === 'board' && e.side === 'player')).toBe(true);
+    expect(told.some((e) => e.t === 'shot' && e.side === 'player' && e.shot === 'chain')).toBe(true);
+    // The party fought hand to hand, blow by blow, and the same blows fell in the replay.
+    expect(told.some((e) => e.t === 'blow')).toBe(true);
+    expect(events(b)).toEqual(told);
   });
 
   it('a different seed gives a different fight', () => {
@@ -57,7 +72,7 @@ describe('battle determinism', () => {
 
   it('does not depend on the frame rate: real time is cut into fixed steps', () => {
     const fight = (fps: number) => {
-      const b = new Battle(playerShip('gull'), NAVY_CUTTER, { seed: 9, autoPlayer: true });
+      const b = track(new Battle(playerShip('gull'), NAVY_CUTTER, { seed: 9, autoPlayer: true }));
       while (!b.outcome && b.time < 900) b.update(1 / fps);
       return snapshot(b);
     };
@@ -71,7 +86,7 @@ describe('battle determinism', () => {
   it('an AI-captained fight replays exactly whatever the ships, sector or difficulty', () => {
     for (const def of PLAYER_SHIPS) {
       const foe = ENEMY_LIST[def.id.length % ENEMY_LIST.length];
-      const make = () => new Battle(def, scaleEnemy(foe.ship, 2), { seed: 5, autoPlayer: true, enemyAI: foe.ai, enemyReload: 1.15, playerReload: 1.1, playerNets: true });
+      const make = () => track(new Battle(def, scaleEnemy(foe.ship, 2), { seed: 5, autoPlayer: true, enemyAI: foe.ai, enemyReload: 1.15, playerReload: 1.1, playerNets: true }));
       const a = make();
       a.runToEnd(900);
       const b = make();

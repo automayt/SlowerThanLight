@@ -2,7 +2,7 @@ import type { Battle, Outcome } from './Battle';
 import type { CombatStats, Projectile } from './Combat';
 import type { BattleEvent } from './events';
 import type { ShipOrders } from './Orders';
-import type { Crew, Ship } from './Ship';
+import type { Crew, Fray, Ship } from './Ship';
 import type { ShotType, Side, SystemId } from './types';
 
 /**
@@ -37,7 +37,7 @@ interface ShipSnapshot {
   boardingNets: boolean;
   escape: number;
   orders: ShipOrders;
-  rooms: { id: string; flames: number[]; burn: number; water: number; breach: boolean; breachProgress: number; sabotage: number }[];
+  rooms: { id: string; flames: number[]; burn: number; water: number; breach: boolean; breachProgress: number; sabotage: number; fray?: Fray | null }[];
   systems: { id: SystemId; max: number; damage: number; hands: number; wanted: number; repair: number }[];
   guns: { powered: boolean; wanted: boolean; charge: number; target: string | null; shot: ShotType }[];
   crew: Crew[];
@@ -55,7 +55,7 @@ function shipSnapshot(s: Ship): ShipSnapshot {
     boardingNets: s.boardingNets,
     escape: s.escape,
     orders: { rake: { ...s.orders.rake }, sail: { ...s.orders.sail }, steel: { ...s.orders.steel } },
-    rooms: [...s.rooms.values()].map((r) => ({ id: r.def.id, flames: [...r.flames], burn: r.burn, water: r.water, breach: r.breach, breachProgress: r.breachProgress, sabotage: r.sabotage })),
+    rooms: [...s.rooms.values()].map((r) => ({ id: r.def.id, flames: [...r.flames], burn: r.burn, water: r.water, breach: r.breach, breachProgress: r.breachProgress, sabotage: r.sabotage, fray: r.fray && { ...r.fray } })),
     systems: [...s.systems.values()].map((x) => ({ id: x.id, max: x.max, damage: x.damage, hands: x.hands, wanted: x.wanted, repair: x.repair })),
     guns: s.guns.map((g) => ({ powered: g.powered, wanted: g.wanted, charge: g.charge, target: g.target, shot: g.shot })),
     crew: s.crew.map(copyCrew),
@@ -88,7 +88,10 @@ export function applySnapshot(b: Battle, s: BattleSnapshot, events: BattleEvent[
   const crew = (c: Crew): Crew => {
     const mine = known.get(c.id);
     const fresh = copyCrew(c);
-    return mine ? Object.assign(mine, fresh) : fresh;
+    if (!mine) return fresh;
+    // Optional state the server has since dropped (a fight over, a fright passed) goes from the copy too.
+    for (const k of Object.keys(mine) as (keyof Crew)[]) if (!(k in fresh)) delete mine[k];
+    return Object.assign(mine, fresh);
   };
   const ship = (ship: Ship, x: ShipSnapshot) => {
     ship.hull = x.hull;
@@ -108,6 +111,7 @@ export function applySnapshot(b: Battle, s: BattleSnapshot, events: BattleEvent[
       room.breach = r.breach;
       room.breachProgress = r.breachProgress;
       room.sabotage = r.sabotage;
+      room.fray = r.fray ? { ...r.fray } : null;
     }
     for (const y of x.systems) {
       const sys = ship.systems.get(y.id);

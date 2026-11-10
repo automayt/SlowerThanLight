@@ -255,7 +255,8 @@ export class ShipAI {
     const assigned = new Map<string, number>();
     for (const c of alive) if (workIds.has(destination(c))) assigned.set(destination(c), (assigned.get(destination(c)) ?? 0) + 1);
 
-    const free = (c: Crew) => !workIds.has(destination(c)) && c.hp > 30;
+    // Anyone who broke in a melee a moment ago is not sent straight back in.
+    const free = (c: Crew) => !workIds.has(destination(c)) && c.hp > 30 && !c.shaken;
     for (const w of work) {
       const candidates = alive.filter(free).sort((a, b) => this.distance(a, w.id) - this.distance(b, w.id));
       for (const c of candidates) {
@@ -267,7 +268,7 @@ export class ShipAI {
     const surgeon = ship.system('surgeon');
     const surgeonOpen = surgeon && ship.level('surgeon') > 0;
     for (const c of alive) {
-      if (workIds.has(destination(c))) continue;
+      if (workIds.has(destination(c)) || c.shaken) continue;
       const wounded = c.hp < 45 || (c.hp < c.maxHp && destination(c) === surgeon?.room);
       const goal = wounded && surgeonOpen ? surgeon!.room : c.home;
       if (destination(c) !== goal) orderMove(ship, c, goal);

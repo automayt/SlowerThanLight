@@ -22,6 +22,18 @@ export interface RoomState {
   breachProgress: number;
   /** Progress (0..100) of unopposed boarders wrecking this room's system. */
   sabotage: number;
+  /** The hand-to-hand fight going on in here, if any (see Boarding). */
+  fray: Fray | null;
+}
+
+/** How a melee in one room is going: the most fighters each side has had in it, and the clock for the next morale check. */
+export interface Fray {
+  /** Most of the ship's own people standing in the fight at once. */
+  own: number;
+  /** Most boarders standing in the fight at once. */
+  boarders: number;
+  /** Seconds until each side's nerve is tested again. */
+  check: number;
 }
 
 /** A room's state at the start of a fight: dry, whole and not burning. */
@@ -42,6 +54,7 @@ function roomState(def: RoomDef): RoomState {
     breach: false,
     breachProgress: 0,
     sabotage: 0,
+    fray: null,
   };
 }
 
@@ -106,6 +119,14 @@ export interface Crew {
   xp: SkillXp;
   /** Where they learned the trade (data/traits.ts), if anywhere in particular. */
   trait?: string;
+  /** In a melee: the id of the foe they are fighting (see Boarding). */
+  foe?: number;
+  /** In a melee: seconds until their next blow (or pistol shot). */
+  swing?: number;
+  /** In a melee: their pistol is spent (one shot a fight). */
+  fired?: boolean;
+  /** Seconds they stay shaken after breaking in a melee: their captain will not send them straight back in. */
+  shaken?: number;
 }
 
 /** A crew member as remembered between battles. */

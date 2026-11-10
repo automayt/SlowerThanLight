@@ -63,6 +63,20 @@ export function fxTextures(scene: Phaser.Scene): void {
       [1, 'rgba(200,40,0,0)'],
     ]),
   );
+  canvasTexture(scene, 'fx:steel', 8, 8, (c) =>
+    radial(c, 4, 4, 4, [
+      [0, 'rgba(255,255,255,1)'],
+      [0.45, 'rgba(225,238,255,0.9)'],
+      [1, 'rgba(200,220,255,0)'],
+    ]),
+  );
+  canvasTexture(scene, 'fx:blood', 10, 10, (c) =>
+    radial(c, 5, 5, 5, [
+      [0, 'rgba(255,90,70,1)'],
+      [0.5, 'rgba(200,24,18,0.9)'],
+      [1, 'rgba(140,10,8,0)'],
+    ]),
+  );
   canvasTexture(scene, 'fx:drop', 10, 10, (c) =>
     radial(c, 5, 5, 5, [
       [0, 'rgba(250,253,255,1)'],
@@ -126,6 +140,10 @@ export class BattleFx {
   private readonly embers: Emitter;
   private readonly splinters: Emitter;
   private readonly drops: Emitter;
+  /** Hand to hand: white sparks off crossed steel, a red spray for a heavy blow, and the little smoke of a pistol. */
+  private readonly steel: Emitter;
+  private readonly blood: Emitter;
+  private readonly puffs: Emitter;
   /** Banks of spent powder smoke that hang between the ships and drift off downwind. */
   private readonly haze: Emitter;
   /** Direction the next burst of gunsmoke is blown out in. */
@@ -210,6 +228,32 @@ export class BattleFx {
       alpha: { onUpdate: (_p: Particle, _k: string, t: number) => (t < 0.7 ? 1 : (1 - t) / 0.3) },
       maxAliveParticles: 120,
     });
+    this.steel = add('fx:steel', 11, {
+      lifespan: { min: 140, max: 320 },
+      speed: { min: 50, max: 170 },
+      scale: { start: 0.9, end: 0 },
+      blendMode: Phaser.BlendModes.ADD,
+      maxAliveParticles: 80,
+    });
+    this.blood = add('fx:blood', 11, {
+      lifespan: { min: 260, max: 520 },
+      speed: { min: 40, max: 150 },
+      gravityY: 220,
+      scale: { start: 0.9, end: 0.2 },
+      alpha: { start: 1, end: 0 },
+      maxAliveParticles: 60,
+    });
+    this.puffs = add('fx:smoke', 11, {
+      lifespan: { min: 700, max: 1200 },
+      speedX: { onEmit: () => this.dir.x * rnd(14, 40) + rnd(-6, 6) },
+      speedY: { onEmit: () => rnd(-16, -4) },
+      accelerationX: WIND.x * 0.6,
+      accelerationY: WIND.y,
+      scale: { start: 0.12, end: 0.55, ease: 'Quad.easeOut' },
+      alpha: { onUpdate: billow(0.75) },
+      rotate: { min: 0, max: 360 },
+      maxAliveParticles: 40,
+    });
     this.drops = add('fx:drop', 11, {
       lifespan: { min: 420, max: 760 },
       speed: { min: 40, max: 140 },
@@ -268,6 +312,37 @@ export class BattleFx {
     this.splinters.explode(22, x, y);
     this.embers.explode(22, x, y);
     this.soot.explode(8, x, y);
+  }
+
+  /** Steel on steel in a melee: a spit of sparks; a parry throws white ones and a flash. */
+  clash(x: number, y: number, parried: boolean): void {
+    if (parried) {
+      this.flash.explode(1, x, y);
+      this.steel.explode(9, x, y);
+    } else {
+      this.steel.explode(3, x, y);
+      this.sparks.explode(3, x, y);
+    }
+  }
+
+  /** A heavy blow: a red burst at the victim and a flash of steel. */
+  gore(x: number, y: number): void {
+    this.blood.explode(12, x, y);
+    this.steel.explode(5, x, y);
+    this.flash.explode(1, x, y);
+  }
+
+  /** A pistol fired at (x, y) facing `dir` (1 right, -1 left): a flash at the muzzle and a puff of white smoke. */
+  pistol(x: number, y: number, dir: number): void {
+    this.dir = { x: dir, y: 0 };
+    this.flash.explode(1, x + dir * 4, y);
+    this.sparks.explode(2, x + dir * 4, y);
+    for (let i = 0; i < 4; i++) this.puffs.emitParticleAt(x + dir * (4 + i * 3) + rnd(-2, 2), y + rnd(-2, 2), 1);
+  }
+
+  /** A pistol ball striking home: a little red spray. */
+  wound(x: number, y: number): void {
+    this.blood.explode(6, x, y);
   }
 
   /** Bubbles and spray where a ship has gone down. */

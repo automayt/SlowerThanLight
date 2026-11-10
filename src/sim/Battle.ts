@@ -285,7 +285,7 @@ export class Battle {
       [this.enemy, this.player],
     ] as const) {
       updateCrew(ship, dt);
-      updateBoarding(ship, dt, this.events, fury);
+      updateBoarding(ship, dt, this.events, { rng: this.rng, fury, flee: (c) => this.recall(c.side, c), foeName: foe.def.name });
       updateHazards(ship, dt, this.rng, this.events);
       // The enemy only starts making sail once it decides to run, and nobody gets away while grappled.
       const sailing = (ship === this.player && this.allowEscape) || (ship === this.enemy && this.enemyAI.fleeing);

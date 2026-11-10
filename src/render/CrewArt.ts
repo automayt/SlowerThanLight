@@ -8,8 +8,8 @@ import type { Side } from '../sim/types';
  */
 
 export type CrewStyle = 'pirate' | 'navy' | 'merchant';
-export type CrewFrame = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'walk2' | 'walk3' | 'work0' | 'work1' | 'fight0' | 'fight1';
-const FRAMES: CrewFrame[] = ['idle0', 'idle1', 'walk0', 'walk1', 'walk2', 'walk3', 'work0', 'work1', 'fight0', 'fight1'];
+export type CrewFrame = 'idle0' | 'idle1' | 'walk0' | 'walk1' | 'walk2' | 'walk3' | 'work0' | 'work1' | 'fight0' | 'fight1' | 'shoot';
+const FRAMES: CrewFrame[] = ['idle0', 'idle1', 'walk0', 'walk1', 'walk2', 'walk3', 'work0', 'work1', 'fight0', 'fight1', 'shoot'];
 
 /** Frame size in canvas pixels; shown at half size. */
 export const CREW_W = 56;
@@ -130,7 +130,7 @@ export function crewTextures(scene: Phaser.Scene, c: Pick<Crew, 'name' | 'side' 
   const look = lookFor(c.name, c.side, c.home);
   id = `crew:${hash(JSON.stringify(look)).toString(36)}`;
   lookIds.set(memo, id);
-  if (scene.textures.exists(`${id}:idle0`)) return id;
+  if (scene.textures.exists(`${id}:${FRAMES[FRAMES.length - 1]}`)) return id;
   for (const f of FRAMES) {
     const key = `${id}:${f}`;
     if (scene.textures.exists(key)) scene.textures.remove(key);
@@ -224,7 +224,7 @@ function paintFrame(ctx: CanvasRenderingContext2D, k: Look, f: CrewFrame): void 
   const armSwing = walk >= 0 ? -swing : 0;
   const sleeve = k.coat ?? k.shirt;
   if (f.startsWith('work')) limb(ctx, cx - 8, shoulderY + 3, 13, f === 'work0' ? 2.4 : 2.0, 6, sleeve, k.skin);
-  else if (!f.startsWith('fight')) limb(ctx, cx - 9, shoulderY + 3, 14, armSwing * 0.8 + 0.12, 6, sleeve, k.skin);
+  else if (!f.startsWith('fight') && f !== 'shoot') limb(ctx, cx - 9, shoulderY + 3, 14, armSwing * 0.8 + 0.12, 6, sleeve, k.skin);
 
   // Torso.
   rr(ctx, cx - 10, shoulderY, 20, hipY - shoulderY + 2, 6);
@@ -325,7 +325,30 @@ function paintFrame(ctx: CanvasRenderingContext2D, k: Look, f: CrewFrame): void 
   paintHat(ctx, k, cx + 1, headY);
 
   // Front arm, holding whatever the job needs.
-  if (f.startsWith('fight')) {
+  if (f === 'shoot') {
+    // Arm out straight, pistol (or musket) levelled at the foe.
+    const hand = limb(ctx, cx + 6, shoulderY + 3, 15, -1.62, 6, sleeve, k.skin);
+    if (k.weapon === 'musket') {
+      ctx.strokeStyle = '#5a3a1e';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(hand.x - 8, hand.y + 2);
+      ctx.lineTo(hand.x + 20, hand.y - 1);
+      ctx.stroke();
+      ctx.strokeStyle = '#3b3b3b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(hand.x + 8, hand.y - 1);
+      ctx.lineTo(hand.x + 21, hand.y - 2);
+      ctx.stroke();
+    } else {
+      rr(ctx, hand.x - 2, hand.y - 3.5, 12, 3.6, 1.2);
+      fillInk(ctx, '#3b3b3b');
+      rr(ctx, hand.x - 3, hand.y - 1, 4, 6, 1.5);
+      fillInk(ctx, '#6b4321');
+    }
+    limb(ctx, cx - 8, shoulderY + 3, 13, 0.35, 6, sleeve, k.skin);
+  } else if (f.startsWith('fight')) {
     const lunge = f === 'fight0';
     const hand = limb(ctx, cx + 6, shoulderY + 3, 14, lunge ? -1.9 : -1.2, 6, sleeve, k.skin);
     ctx.strokeStyle = '#d9dde2';

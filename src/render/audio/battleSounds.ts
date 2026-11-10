@@ -8,8 +8,14 @@ import { playSfx } from '../sound';
 
 type Views = (side: Side) => ShipView;
 
-/** Seconds between the cutlass clashes of a melee, the pumps' strokes, the surgeon's and the carpenter's work. */
-const SWORDS_EVERY = [0.8, 1.6];
+/**
+ * Shortest seconds between two of each melee sound, so a crowded fight rings out without machine-gunning: a clash of
+ * steel, a heavy blow and a pistol shot.
+ */
+const CLASH_EVERY = 0.24;
+const HEAVY_EVERY = 0.5;
+const PISTOL_EVERY = 0.14;
+/** Seconds between the pumps' strokes, the surgeon's and the carpenter's work. */
 const PUMP_EVERY = 3.6;
 const HEAL_EVERY = 4.5;
 const HAMMER_EVERY = 1.6;
@@ -24,7 +30,7 @@ export class BattleSounds {
   private readonly swamped = new Map<string, boolean>();
   private readonly damage = new Map<string, number>();
   private readonly hp = new Map<number, number>();
-  private next = { swords: 0, pump: 0, heal: 0, hammer: 0 };
+  private next = { swords: 0, heavy: 0, pistol: 0, pump: 0, heal: 0, hammer: 0 };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -120,7 +126,37 @@ export class BattleSounds {
       case 'rally':
         this.play('bell', 0.6, 960);
         break;
+      case 'blow':
+        this.blow(ev);
+        break;
+      case 'rout':
+        // A roar as they go: ours cheering their backs, or theirs.
+        if (ev.broke === 'enemy') this.play('cheer', 0.35, this.x(ev.side, ev.room));
+        else this.play('boarders', 0.3, this.x(ev.side, ev.room));
+        break;
     }
+  }
+
+  /** One blow of a melee: a clang of steel (a parry rings brighter), a heavy blow's crunch, or a pistol's crack. */
+  private blow(ev: Extract<BattleEvent, { t: 'blow' }>): void {
+    const now = this.scene.time.now / 1000;
+    const at = this.view(ev.side).crewPoint(ev.from);
+    const x = at?.x ?? this.x(ev.side, ev.room);
+    const near = ev.side === 'player' ? 1 : 0.8;
+    if (ev.kind === 'shot' || ev.kind === 'miss') {
+      if (now < this.next.pistol) return;
+      this.next.pistol = now + PISTOL_EVERY;
+      this.play('musket', 0.32 * near, x);
+      return;
+    }
+    if (ev.kind === 'crit' && now >= this.next.heavy) {
+      this.next.heavy = now + HEAVY_EVERY;
+      this.play('crit', 0.3 * near, x);
+      this.play('hit-wood', 0.25 * near, x);
+    }
+    if (now < this.next.swords) return;
+    this.next.swords = now + CLASH_EVERY;
+    this.play('swords', (ev.kind === 'parry' ? 0.36 : 0.28) * near, x);
   }
 
   /** Watch for what the events don't announce. `now` in seconds. */
@@ -159,22 +195,8 @@ export class BattleSounds {
       for (const c of this.battle.player.own()) this.hp.set(c.id, c.hp);
       return;
     }
-    this.melee(now);
     this.pumps(now);
     this.surgeon(now);
-  }
-
-  /** Cutlasses clash wherever crews are fighting hand to hand. */
-  private melee(now: number): void {
-    if (now < this.next.swords) return;
-    for (const side of ['player', 'enemy'] as const) {
-      const fighter = this.battle.ships[side].crew.find((c) => c.task === 'fight' && c.hp > 0);
-      if (!fighter) continue;
-      const [lo, hi] = SWORDS_EVERY;
-      this.next.swords = now + lo + Math.random() * (hi - lo);
-      this.play('swords', side === 'player' ? 0.4 : 0.3, this.view(side).toScreen(fighter.pos).x);
-      return;
-    }
   }
 
   /** The pumps at work while our ship has water in her and hands on them. */

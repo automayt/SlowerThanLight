@@ -28,6 +28,25 @@ describe('co-op battle snapshots', () => {
     expect(battleSnapshot(client)).toEqual(battleSnapshot(server));
   });
 
+  it('carries a melee across: who fights whom, their blows, and the fray, even once a fight is over', () => {
+    const { server, client } = pair(8);
+    for (const g of [...server.player.guns, ...server.enemy.guns]) g.powered = g.wanted = false;
+    server.enemy.damageSystem('sails', 9);
+    const party = server.player.own().slice(1, 4);
+    server.board('player', party, server.enemy.system('guns')!.room);
+    let fought = false;
+    for (let i = 0; i < 1200 && !server.outcome; i++) {
+      server.step(0.05);
+      const events = server.drainEvents();
+      const all = [...server.player.crew, ...server.enemy.crew, ...server.transit.map((t) => t.crew)];
+      fought ||= all.some((c) => c.foe !== undefined);
+      applySnapshot(client, JSON.parse(JSON.stringify(battleSnapshot(server))), events);
+      expect(battleSnapshot(client)).toEqual(battleSnapshot(server));
+      expect(client.drainEvents()).toEqual(events);
+    }
+    expect(fought).toBe(true);
+  });
+
   it('keeps crew objects by id, so views that hold them stay valid', () => {
     const { server, client } = pair();
     applySnapshot(client, battleSnapshot(server));

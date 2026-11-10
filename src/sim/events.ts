@@ -1,3 +1,4 @@
+import type { BlowKind } from './Boarding';
 import type { CritKind } from './Crits';
 import type { OrderId } from './Orders';
 import type { ShotType, Side } from './types';
@@ -26,4 +27,11 @@ export type BattleEvent =
   /** `side` gives one of the captain's orders (see Orders.ts). */
   | { t: 'order'; side: Side; order: OrderId }
   /** A critical hit on `side`'s ship (see Crits.ts); `name` is whoever it struck down, if anyone in particular. */
-  | { t: 'crit'; side: Side; room: string; kind: CritKind; name?: string };
+  | { t: 'crit'; side: Side; room: string; kind: CritKind; name?: string }
+  /**
+   * One act in a melee aboard `side`'s ship, in `room`: crew `from` strikes at crew `to` (ids), for `dmg` HP. A pistol
+   * shot opens each fighter's fight ('shot' if it hits, 'miss' if not); then steel: a 'hit', a 'parry' or a heavy 'crit'.
+   */
+  | { t: 'blow'; side: Side; room: string; from: number; to: number; dmg: number; kind: BlowKind }
+  /** A melee party breaks aboard `side`'s ship: `broke` is whose people they are (boarders run home, defenders fall back). */
+  | { t: 'rout'; side: Side; room: string; broke: Side; count: number };

@@ -52,9 +52,13 @@ describe("captain's orders", () => {
       intruder.room = ship.crew[0].room;
       intruder.slot = { x: -1, y: -1 };
       intruder.waypoints = [];
+      intruder.hp = intruder.maxHp = 1000;
       ship.crew.push(intruder);
-      updateBoarding(ship, 1, [], { player: fury });
-      return 100 - intruder.hp;
+      // Pistols already spent: steel only, and the same rolls for both fights.
+      for (const c of ship.crew) c.fired = true;
+      const rng = new Rng(3);
+      for (let t = 0; t < 3; t += 0.05) updateBoarding(ship, 0.05, [], { rng, fury: { player: fury } });
+      return 1000 - intruder.hp;
     };
     expect(fight(1.5)).toBeCloseTo(fight(1) * 1.5);
   });

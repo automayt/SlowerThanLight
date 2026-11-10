@@ -15,6 +15,7 @@ import { ShipView, type AimMark } from '../render/ShipView';
 import { escHandled } from '../render/escape';
 import { COLORS, SCREEN, TITLE_FONT, textStyle } from '../render/theme';
 import { Sea } from '../render/ui';
+import { reducedMotion } from '../render/screen';
 import { coop, type CoopClient } from '../net/CoopClient';
 import type { Battle } from '../sim/Battle';
 import { applyBattle, battleRole, ROLE_NAMES, ROLES, type BattleCommand } from '../sim/commands';
@@ -557,8 +558,11 @@ export class BattleScene extends Phaser.Scene {
       this.swingers.clear();
       return;
     }
-    // Boarders swinging across on lines between the ships.
+    // While anyone is aboard the other ship or crossing, the ships lie lashed together by grappling lines.
+    if (this.battle.grappled) this.drawGrapples(g);
+    // Boarders swinging across on lines between the ships; broken ones scrambling back along the grapples.
     const swinging = new Set<number>();
+    const now = this.time.now / 1000;
     for (const tr of this.battle.transit) {
       const fromView = this.viewFor(tr.to === 'player' ? 'enemy' : 'player');
       const toView = this.viewFor(tr.to);
@@ -566,9 +570,10 @@ export class BattleScene extends Phaser.Scene {
       const a = fromView.roomCenter(fromView.ship.rooms.has(fromRoom) ? fromRoom : [...fromView.ship.rooms.keys()][0]);
       const b = toView.roomCenter(tr.room);
       const k = 1 - Math.max(0, tr.t) / BOARD_TIME;
+      const running = !!tr.crew.shaken;
       const x = a.x + (b.x - a.x) * k;
-      const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 50;
-      g.lineStyle(1.5, 0xd8c8a0, 0.7).lineBetween((a.x + b.x) / 2, Math.min(a.y, b.y) - 120, x, y - 30);
+      const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * (running ? 14 : 50);
+      if (!running) g.lineStyle(1.5, 0xd8c8a0, 0.7).lineBetween((a.x + b.x) / 2, Math.min(a.y, b.y) - 120, x, y - 30);
       swinging.add(tr.crew.id);
       const prefix = crewTextures(this, tr.crew);
       let img = this.swingers.get(tr.crew.id);
@@ -576,7 +581,8 @@ export class BattleScene extends Phaser.Scene {
         img = this.add.image(x, y, `${prefix}:walk1`).setOrigin(CREW_ORIGIN.x, CREW_ORIGIN.y).setScale(0.5).setDepth(9);
         this.swingers.set(tr.crew.id, img);
       }
-      img.setTexture(`${prefix}:${crewFrame(tr.crew, this.time.now / 1000)}`).setPosition(x, y).setFlipX(b.x < a.x);
+      const frame = running ? `walk${Math.floor(now * 14 + tr.crew.id) % 4}` : crewFrame(tr.crew, now);
+      img.setTexture(`${prefix}:${frame}`).setPosition(x, y).setFlipX(b.x < a.x);
     }
     for (const [id, img] of this.swingers) {
       if (swinging.has(id)) continue;
@@ -624,6 +630,95 @@ export class BattleScene extends Phaser.Scene {
           g.fillStyle(0x8a8a88, 0.8).fillCircle(x - 1.6 * s, y - 1.6 * s, 1.6 * s);
       }
     }
+  }
+
+  /**
+   * Grappling lines from rail to rail between the two bows, sagging and swaying with the swell, each with an iron hook
+   * bitten into her side.
+   */
+  private drawGrapples(g: Phaser.GameObjects.Graphics): void {
+    const t = this.time.now / 1000;
+    const calm = reducedMotion() ? 0.3 : 1;
+    // Two lines near the stem and two further aft, on either bow.
+    const rail = (view: ShipView, i: number) => view.railPoint([1.9, 0.9, 0.9, 1.9][i], i < 2 ? -1 : 1);
+    for (let i = 0; i < 4; i++) {
+      const a = rail(this.playerView, i);
+      const b = rail(this.enemyView, i);
+      const sag = 16 + Math.sin(t * 1.1 + i * 1.7) * 5 * calm;
+      const sway = Math.sin(t * 0.8 + i * 2.3) * 4 * calm;
+      const cx = (a.x + b.x) / 2 + sway;
+      const cy = (a.y + b.y) / 2 + sag;
+      const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(a.x, a.y), new Phaser.Math.Vector2(cx, cy), new Phaser.Math.Vector2(b.x, b.y));
+      const pts = curve.getPoints(14);
+      g.lineStyle(3, 0x2a1a0e, 0.55).strokePoints(pts);
+      g.lineStyle(1.6, 0xd8c8a0, 0.95).strokePoints(pts);
+      for (const end of [a, b]) {
+        g.fillStyle(0x1d1d1d, 1).fillCircle(end.x, end.y, 2.6);
+        g.lineStyle(1.4, 0x3a3a3a, 1).strokeCircle(end.x, end.y, 3.6);
+      }
+    }
+  }
+
+  /** A blow in a melee: the striker lunges, and steel, smoke or blood shows what it did. */
+  private onBlow(ev: Extract<BattleEvent, { t: 'blow' }>): void {
+    const view = this.viewFor(ev.side);
+    const a = view.crewPoint(ev.from);
+    const b = view.crewPoint(ev.to);
+    view.strike(ev.from, ev.to, ev.kind);
+    if (!a || !b) return;
+    const dir = Math.abs(b.x - a.x) > 1 ? Math.sign(b.x - a.x) : view.crewFacing(ev.from);
+    const mid = { x: a.x + (b.x - a.x) * 0.55, y: a.y + (b.y - a.y) * 0.55 };
+    switch (ev.kind) {
+      case 'hit':
+        this.fxs.clash(mid.x, mid.y, false);
+        break;
+      case 'parry':
+        this.fxs.clash(mid.x, mid.y, true);
+        break;
+      case 'crit':
+        this.fxs.gore(b.x, b.y);
+        this.meleeText(b.x, b.y - 16, `-${Math.round(ev.dmg)}`, '#ff6a50', 15);
+        break;
+      case 'shot':
+        this.fxs.pistol(a.x + dir * 15, a.y, dir);
+        this.fxs.wound(b.x, b.y);
+        this.meleeText(b.x, b.y - 16, `-${Math.round(ev.dmg)}`, '#ffd27a', 14);
+        break;
+      case 'miss':
+        this.fxs.pistol(a.x + dir * 15, a.y, dir);
+        // The ball whiffs past the target (a little apart, as a party's pistols go off together).
+        this.meleeText(b.x + dir * (8 + Math.random() * 8), b.y - 6 - Math.random() * 10, 'miss', '#cfe8ff', 11);
+        break;
+    }
+  }
+
+  /** A melee party breaks: a cry over the room, and the runners go (the sim moves them). */
+  private onRout(ev: Extract<BattleEvent, { t: 'rout' }>): void {
+    const view = this.viewFor(ev.side);
+    const r = view.roomRect(ev.room);
+    const ours = ev.broke === 'player';
+    const t = this.add
+      .text(Phaser.Math.Clamp(r.centerX, 110, SCREEN.w - 110), r.y - 8, ours ? 'Our lads break!' : 'They break!', {
+        fontFamily: TITLE_FONT,
+        fontSize: '22px',
+        color: ours ? '#ff6a5a' : '#9be37f',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(13)
+      .setScale(0.5);
+    this.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: t.y - 26, alpha: 0, delay: 1500, duration: 700, onComplete: () => t.destroy() });
+    if (ours) this.hud.flash(ev.side === 'player' ? 'OUR PEOPLE FALL BACK' : 'OUR BOARDERS BREAK AND RUN', 2600);
+    else this.bark('player', ev.side === 'enemy' ? 'They run! After them, lads!' : "They're running! Cut 'em down!", this.officer('player'), true);
+  }
+
+  /** A small number or word over a melee: only heavy blows and pistol balls get one, so a crowd stays legible. */
+  private meleeText(x: number, y: number, text: string, color: string, size: number): void {
+    const t = this.add.text(x, y, text, textStyle(size, color, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(12);
+    this.tweens.add({ targets: t, y: y - 22, alpha: 0, delay: 250, duration: 750, onComplete: () => t.destroy() });
   }
 
   private onEvent(ev: BattleEvent): void {
@@ -739,6 +834,12 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'crit':
         this.onCrit(ev);
+        break;
+      case 'blow':
+        this.onBlow(ev);
+        break;
+      case 'rout':
+        this.onRout(ev);
         break;
       case 'log':
         this.hud.addLog(ev.text);
