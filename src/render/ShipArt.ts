@@ -1097,69 +1097,103 @@ function paintRig(p: Painter, ship: Ship, g: ShipGeometry): void {
   }
   ctx.stroke();
 
-  g.spars.forEach((sp) => {
-    const m = sp.mast;
-    const big = sp.main;
-
-    // Shrouds down to the rails.
-    ctx.strokeStyle = 'rgba(25,15,8,0.5)';
-    ctx.lineWidth = 0.02 * u;
-    for (const s of [-1, 1]) {
-      for (let k = 0; k < 3; k++) {
-        const rx = m.x - 0.5 + k * 0.2;
-        ctx.beginPath();
-        ctx.moveTo(X(m.x), Y(m.y));
-        ctx.lineTo(X(rx), Y(mid + s * (g.half(rx) - 0.15)));
-        ctx.stroke();
-      }
-    }
-
-    // The yard or boom, casting its shadow on the deck.
-    const { a, b } = sp;
-    const [w0, w1] = sp.kind === 'square' ? [0.13, 0.09] : sp.kind === 'gaff' ? [0.12, 0.08] : [0.1, 0.05];
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,10,20,0.45)';
-    ctx.shadowBlur = 0.25 * u;
-    ctx.shadowOffsetX = 0.06 * u;
-    ctx.shadowOffsetY = 0.18 * u;
-    if (sp.kind === 'square') {
-      // Tapering to both yardarms.
-      const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      spar(ctx, X(c.x), Y(c.y), X(a.x), Y(a.y), w0 * u, w1 * u);
-      spar(ctx, X(c.x), Y(c.y), X(b.x), Y(b.y), w0 * u, w1 * u);
-    } else spar(ctx, X(a.x), Y(a.y), X(b.x), Y(b.y), w0 * u, w1 * u);
-    ctx.restore();
-
-    // Masthead and fighting top.
-    const topS = (big ? 0.4 : 0.3) * u;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,10,20,0.4)';
-    ctx.shadowBlur = 0.2 * u;
-    ctx.shadowOffsetY = 0.15 * u;
-    ctx.fillStyle = '#5a3a1e';
-    ctx.fillRect(X(m.x) - topS / 2, Y(m.y) - topS / 2, topS, topS);
-    ctx.restore();
-    ctx.strokeStyle = '#1d1007';
-    ctx.lineWidth = 0.03 * u;
-    ctx.strokeRect(X(m.x) - topS / 2, Y(m.y) - topS / 2, topS, topS);
-    ctx.strokeStyle = 'rgba(255,220,170,0.25)';
-    ctx.strokeRect(X(m.x) - topS / 2 + 0.04 * u, Y(m.y) - topS / 2 + 0.04 * u, topS - 0.08 * u, topS - 0.08 * u);
-    const mg = ctx.createRadialGradient(X(m.x) - 0.04 * u, Y(m.y) - 0.04 * u, 0, X(m.x), Y(m.y), 0.11 * u);
-    mg.addColorStop(0, '#b07a46');
-    mg.addColorStop(1, '#4a2c12');
-    ctx.fillStyle = mg;
-    ctx.beginPath();
-    ctx.arc(X(m.x), Y(m.y), 0.11 * u, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#1d1007';
-    ctx.stroke();
-  });
+  for (const sp of g.spars) paintMast(p, g, sp, mid);
 
   // The ensign staff at the taffrail (the flag itself is waved by the view).
   ctx.fillStyle = '#3d2410';
   ctx.beginPath();
   ctx.arc(X(g.stern + 0.1), Y(mid), 0.05 * u, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** A mast painted on its own, and where its head is in its texture. */
+export interface MastPiece extends ShipPiece {
+  headX: number;
+  headY: number;
+}
+
+/**
+ * Each mast with its yard, top and shrouds in a little texture of its own (bow-right, like the rig), so that when
+ * she is lost they can go by the board one after another. Painted only then.
+ */
+export function paintMasts(scene: Phaser.Scene, ship: Ship, g: ShipGeometry, tile: number, keyPrefix: string): MastPiece[] {
+  const u = tile * ART_SCALE;
+  const mid = ship.height / 2;
+  return g.spars.map((sp, i) => {
+    const m = 0.5;
+    const xs = [sp.a.x, sp.b.x, sp.mast.x - 0.6, sp.mast.x + 0.3];
+    const x0 = (Math.min(...xs) - m + g.padL) * u;
+    const y0 = (Math.min(sp.a.y, sp.b.y, mid - g.beam) - m + g.padT) * u;
+    const w = Math.ceil((Math.max(...xs) - Math.min(...xs) + m * 2) * u);
+    const h = Math.ceil((Math.max(sp.a.y, sp.b.y, mid + g.beam) - Math.min(sp.a.y, sp.b.y, mid - g.beam) + m * 2) * u);
+    const key = `${keyPrefix}-mast${i}`;
+    const tex = makeCanvas(scene, key, w, h);
+    const X = (x: number) => (x + g.padL) * u - x0;
+    const Y = (y: number) => (y + g.padT) * u - y0;
+    paintMast({ ctx: tex.getContext(), u, X, Y, rnd: new Rng(hashSeed(ship.def.id) + 7) }, g, sp, mid);
+    tex.refresh();
+    return { key, x: x0, y: y0, w, h, headX: X(sp.mast.x), headY: Y(sp.mast.y) };
+  });
+}
+
+/** One mast as seen from aloft: the shrouds down to the rails, the yard or boom with its shadow, and the top. */
+function paintMast(p: Painter, g: ShipGeometry, sp: Spar, mid: number): void {
+  const { ctx, u, X, Y } = p;
+  const m = sp.mast;
+  const big = sp.main;
+
+  // Shrouds down to the rails.
+  ctx.strokeStyle = 'rgba(25,15,8,0.5)';
+  ctx.lineWidth = 0.02 * u;
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 3; k++) {
+      const rx = m.x - 0.5 + k * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(X(m.x), Y(m.y));
+      ctx.lineTo(X(rx), Y(mid + s * (g.half(rx) - 0.15)));
+      ctx.stroke();
+    }
+  }
+
+  // The yard or boom, casting its shadow on the deck.
+  const { a, b } = sp;
+  const [w0, w1] = sp.kind === 'square' ? [0.13, 0.09] : sp.kind === 'gaff' ? [0.12, 0.08] : [0.1, 0.05];
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,10,20,0.45)';
+  ctx.shadowBlur = 0.25 * u;
+  ctx.shadowOffsetX = 0.06 * u;
+  ctx.shadowOffsetY = 0.18 * u;
+  if (sp.kind === 'square') {
+    // Tapering to both yardarms.
+    const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    spar(ctx, X(c.x), Y(c.y), X(a.x), Y(a.y), w0 * u, w1 * u);
+    spar(ctx, X(c.x), Y(c.y), X(b.x), Y(b.y), w0 * u, w1 * u);
+  } else spar(ctx, X(a.x), Y(a.y), X(b.x), Y(b.y), w0 * u, w1 * u);
+  ctx.restore();
+
+  // Masthead and fighting top.
+  const topS = (big ? 0.4 : 0.3) * u;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,10,20,0.4)';
+  ctx.shadowBlur = 0.2 * u;
+  ctx.shadowOffsetY = 0.15 * u;
+  ctx.fillStyle = '#5a3a1e';
+  ctx.fillRect(X(m.x) - topS / 2, Y(m.y) - topS / 2, topS, topS);
+  ctx.restore();
+  ctx.strokeStyle = '#1d1007';
+  ctx.lineWidth = 0.03 * u;
+  ctx.strokeRect(X(m.x) - topS / 2, Y(m.y) - topS / 2, topS, topS);
+  ctx.strokeStyle = 'rgba(255,220,170,0.25)';
+  ctx.strokeRect(X(m.x) - topS / 2 + 0.04 * u, Y(m.y) - topS / 2 + 0.04 * u, topS - 0.08 * u, topS - 0.08 * u);
+  const mg = ctx.createRadialGradient(X(m.x) - 0.04 * u, Y(m.y) - 0.04 * u, 0, X(m.x), Y(m.y), 0.11 * u);
+  mg.addColorStop(0, '#b07a46');
+  mg.addColorStop(1, '#4a2c12');
+  ctx.fillStyle = mg;
+  ctx.beginPath();
+  ctx.arc(X(m.x), Y(m.y), 0.11 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1d1007';
+  ctx.stroke();
 }
 
 /** A lumpy bundle of canvas lashed along a spar. */
