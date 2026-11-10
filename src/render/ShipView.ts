@@ -4,8 +4,8 @@ import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { CREW_ORIGIN, crewFrame, crewTextures } from './CrewArt';
 import { ART_SCALE, paintFurls, paintShip, playerColours, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
 import { motionScale } from './screen';
-import { NO_WRECK_HOOKS, ShipWreck, type HullPiece, type WreckHooks } from './ShipWreck';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
+import { NO_WRECK_HOOKS, ShipWreck, type HullPiece, type WreckHooks } from './ShipWreck';
 
 export interface ShipViewState {
   selected?: Set<number>;
@@ -523,9 +523,9 @@ export class ShipView {
   }
 
   destroy(): void {
-    this.wreckFx?.destroy();
     for (const o of [this.wake, this.over, this.sails, this.ui, this.base, this.wreck, this.rig, this.nameText, this.marks, this.marksPen, ...this.strips, ...this.furls.map((f) => f.img), ...this.badges.values(), ...this.sprites.values()]) o?.destroy();
     for (const k of this.keys) if (this.scene.textures.exists(k)) this.scene.textures.remove(k);
+    this.wreckFx?.destroy();
   }
 
   private placeImages(): void {
