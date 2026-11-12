@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gunLoadRate, type Battle } from '../sim/Battle';
+import { gunLoadRate, type Battle, type OutcomeKind } from '../sim/Battle';
 import { SHOT_EFFECTS } from '../sim/Combat';
 import { badges } from '../sim/Skills';
 import { SINK_FRACTION } from '../sim/Hazards';
@@ -89,6 +89,9 @@ const BOTTOM_Y = 512;
  * Draw order of the HUD: above the ships (1-6), drag band (25), ambient gulls and cloud shadows, and hit effects,
  * so nothing drifts over a panel; the scene's banners and outcome overlay sit above all of it (60+).
  */
+/** The word over her stats once the fight is decided (none where she simply sails on). */
+const ENEMY_FATE: Partial<Record<OutcomeKind, string>> = { captured: 'PRIZE', surrender: 'STRUCK', enemySunk: 'SUNK', victory: 'BLOWN UP', enemyEscaped: 'ESCAPED' };
+
 export const HUD_DEPTH = { panels: 50, toasts: 51, alert: 52, banner: 53, hint: 54, hover: 55, log: 90 } as const;
 /** Hull bars start this far right of the panel's edge, after the hull icon. */
 const HULL_BAR_DX = 40;
@@ -525,8 +528,12 @@ Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.
     say(es.flood.text, floodPct(enemy));
     // Her people still standing, out of those she began with: the odds for a boarding party.
     say(es.crew.text, `${battle.crewOf('enemy').length}/${battle.crewAtStart.enemy}`);
-    this.fleeLabel.setVisible(battle.enemyFleeing);
-    if (battle.enemyFleeing) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
+    // Once it is over, what became of her instead of what she was doing.
+    const fate = battle.outcome ? ENEMY_FATE[battle.outcome.kind] : null;
+    const flee = battle.enemyFleeing && !battle.outcome;
+    if (fate !== undefined) this.fleeLabel.setText(fate ?? 'FLEEING');
+    this.fleeLabel.setVisible(flee || !!fate);
+    if (flee) drawBar(g, SCREEN.w - 110, 48, 90, 16, enemy.escape / 100, 0xd06a4a);
 
     this.broadsideBtn.setText(player.broadside ? 'Broadside ON' : 'Broadside').setOn(player.broadside);
 
@@ -607,7 +614,8 @@ Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.
     player.guns.forEach((gun, i) => {
       const card = this.cards[i];
       const aiming = state.aimingGun === i;
-      const loadedIdle = gun.powered && gun.charge >= gun.def.loadTime && !gun.target;
+      // Nothing left to shoot at once the fight is decided: no beckoning glow.
+      const loadedIdle = gun.powered && gun.charge >= gun.def.loadTime && !gun.target && !battle.outcome;
       if (aiming || loadedIdle) {
         g.lineStyle(aiming ? 3 : 2 + pulse * 1.5, aiming ? COLORS.select : Phaser.Display.Color.GetColor(242, 160 + Math.round(pulse * 36), 60), 1);
         g.strokeRoundedRect(card.x - 1, BOTTOM_Y - 1, CARD_W + 2, 202, 4);
@@ -631,6 +639,10 @@ Lasts ${def.duration}s, then ${def.cooldown - def.duration}s more to make ready.
                 : 'Idle: man her to load'
           : !working
             ? '! Gun deck out of action'
+            : battle.outcome
+              ? loaded >= 1
+                ? 'Loaded'
+                : 'Guns run in'
             : loaded >= 1
               ? !gun.target
                 ? 'Loaded: pick a target!'

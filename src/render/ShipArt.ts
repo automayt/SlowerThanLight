@@ -1254,6 +1254,28 @@ function furledSail(p: Painter, sp: Spar): void {
 }
 
 /**
+ * Paints other colours into an ensign texture made by paintShip, in place: a prize's new owners hoisting theirs.
+ * `tile` and `mirror` as the ship was painted with.
+ */
+export function repaintEnsign(scene: Phaser.Scene, key: string, tile: number, flag: Ensign, mirror: boolean): void {
+  const tex = scene.textures.get(key) as Phaser.Textures.CanvasTexture;
+  const ctx = tex.getContext?.();
+  if (!ctx) return;
+  const u = tile * ART_SCALE;
+  const fw = tex.width;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, tex.width, tex.height);
+  if (mirror) {
+    ctx.translate(fw, 0);
+    ctx.scale(-1, 1);
+  }
+  paintEnsign(ctx, fw - 0.1 * u, tex.height * 0.42, u, flag);
+  ctx.restore();
+  tex.refresh();
+}
+
+/**
  * A small ensign streaming astern from a staff at (fx, fy): the Jolly Roger, the red ensign, Spain's Burgundy cross
  * or a merchant's house flag. Painted bow-right, so it flies toward -x; the view mirrors it for the enemy.
  */

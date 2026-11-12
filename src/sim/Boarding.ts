@@ -324,10 +324,10 @@ export function updateBoarding(ship: Ship, dt: number, events: BattleEvent[], op
 /** HP a boarder loses climbing through boarding nets. */
 export const NET_DAMAGE = 30;
 
-/** Put an arriving crew member into a room of a ship (the first room with a free tile if that room is full). */
+/** Put an arriving crew member into a room of a ship (the nearest room with a free tile if that room is full). */
 export function land(ship: Ship, crew: Crew, roomId: string): void {
   if (ship.boardingNets && crew.side !== ship.side) crew.hp = Math.max(1, crew.hp - NET_DAMAGE);
-  const room = ship.rooms.has(roomId) && ship.freeSlot(roomId) ? roomId : [...ship.rooms.keys()].find((id) => ship.freeSlot(id)) ?? roomId;
+  const room = ship.rooms.has(roomId) && ship.freeSlot(roomId) ? roomId : nearestFreeRoom(ship, roomId) ?? roomId;
   const slot = ship.freeSlot(room) ?? { x: ship.room(room).def.x, y: ship.room(room).def.y };
   crew.room = room;
   crew.slot = slot;
@@ -336,4 +336,25 @@ export function land(ship: Ship, crew: Crew, roomId: string): void {
   crew.task = 'idle';
   disengage(crew);
   ship.crew.push(crew);
+}
+
+/** The room with a free tile whose middle is nearest the middle of `roomId` (ties to the first), if any. */
+function nearestFreeRoom(ship: Ship, roomId: string): string | undefined {
+  const mid = (id: string) => {
+    const d = ship.room(id).def;
+    return { x: d.x + d.w / 2, y: d.y + d.h / 2 };
+  };
+  const at = ship.rooms.has(roomId) ? mid(roomId) : { x: ship.width / 2, y: ship.height / 2 };
+  let best: string | undefined;
+  let bestD = Infinity;
+  for (const id of ship.rooms.keys()) {
+    if (!ship.freeSlot(id)) continue;
+    const m = mid(id);
+    const d = (m.x - at.x) ** 2 + (m.y - at.y) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return best;
 }

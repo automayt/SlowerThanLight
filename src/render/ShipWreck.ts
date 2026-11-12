@@ -193,6 +193,8 @@ export class ShipWreck {
   private readonly calm: number;
   private readonly gone: number;
   private readonly ensignDown: number;
+  /** When the sea reached her ensign staff, if it came over the stern first: her colours go down with it. */
+  private staffWet = Infinity;
   /** Where she was last seen, for the swirl and the burst of air. */
   private lastSeen: Vec | null = null;
   private nextFlot = 1.3;
@@ -1054,7 +1056,9 @@ export class ShipWreck {
     if (!strips.length) return;
     const p = this.pieceFor(this.geom.stern + 0.1);
     const staff = this.at(p, this.geom.stern + 0.1, this.mid);
-    const k = clamp01((age - this.ensignDown) / 0.5);
+    // Going down by the stern, the sea takes her colours with the taffrail rather than leaving them standing in it.
+    if (this.staffWet === Infinity && !this.dry(this.geom.stern + 0.1)) this.staffWet = age;
+    const k = clamp01((age - Math.min(this.ensignDown, this.staffWet + 0.35)) / 0.5);
     const rot = p.img.rotation;
     const c = Math.cos(rot);
     const s = Math.sin(rot);

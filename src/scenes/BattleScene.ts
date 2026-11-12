@@ -725,7 +725,30 @@ export class BattleScene extends Phaser.Scene {
   /** A small number or word over a melee: only heavy blows and pistol balls get one, so a crowd stays legible. */
   private meleeText(x: number, y: number, text: string, color: string, size: number): void {
     const t = this.add.text(x, y, text, textStyle(size, color, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(12);
+    y = this.clearSpot(t, x, y, 1000);
     this.tweens.add({ targets: t, y: y - 22, alpha: 0, delay: 250, duration: 750, onComplete: () => t.destroy() });
+  }
+
+  /** Words over the action that went up lately, so a new one can step clear of them. */
+  private spots: { x: number; y: number; w: number; h: number; until: number }[] = [];
+
+  /**
+   * Lifts a just-written word (centred on x, y) above any still rising nearby, so a volley of misses or a melee's
+   * blows read one by one instead of printing over each other. Returns where it now starts.
+   */
+  private clearSpot(t: Phaser.GameObjects.Text, x: number, y: number, life: number): number {
+    const now = this.time.now;
+    this.spots = this.spots.filter((s) => s.until > now);
+    const w = t.width;
+    const h = t.height - 4;
+    for (let tries = 0; tries < 4; tries++) {
+      const clash = this.spots.some((s) => Math.abs(s.x - x) < (s.w + w) / 2 && Math.abs(s.y - y) < (s.h + h) / 2);
+      if (!clash) break;
+      y -= h;
+    }
+    this.spots.push({ x, y, w, h, until: now + life * 0.6 });
+    t.setY(y);
+    return y;
   }
 
   private onEvent(ev: BattleEvent): void {
@@ -978,6 +1001,7 @@ export class BattleScene extends Phaser.Scene {
 
   private floatText(x: number, y: number, text: string, color: string): void {
     const t = this.add.text(x, y, text, textStyle(15, color, { fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5).setDepth(12);
+    y = this.clearSpot(t, x, y, 1100);
     this.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 1100, onComplete: () => t.destroy() });
   }
 
@@ -1054,6 +1078,11 @@ export class BattleScene extends Phaser.Scene {
         break;
       case 'enemyEscaped':
         this.enemyView.startFinale('sail', now);
+        break;
+      case 'captured':
+      case 'surrender':
+        // She is ours: down come her colours, and up go our own over her (as the prize sting sounds).
+        this.time.delayedCall(700, () => this.enemyView.hoistColours(this.playerView.colours));
         break;
       case 'escaped':
         this.playerView.startFinale('sail', now);

@@ -3,7 +3,7 @@ import type { Crew, Ship } from '../sim/Ship';
 import type { RoomDef, SystemId, Vec } from '../sim/types';
 import { partyStrength, type BlowKind } from '../sim/Boarding';
 import { CREW_ORIGIN, crewFrame, crewTextures, type CrewFrame } from './CrewArt';
-import { ART_SCALE, paintFurls, paintShip, playerColours, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
+import { ART_SCALE, paintFurls, paintShip, playerColours, repaintEnsign, type EnsignArt, type Ensign, type RigKind, type ShipGeometry, type ShipPiece, type Spar } from './ShipArt';
 import { motionScale, reducedMotion } from './screen';
 import { COLORS, TITLE_FONT, textStyle } from './theme';
 import { NO_WRECK_HOOKS, ShipWreck, type HullPiece, type WreckHooks } from './ShipWreck';
@@ -58,6 +58,8 @@ const JOLT_TIME = 0.4;
 
 /** Strips the ensign is cut into to make it ripple. */
 const FLAG_STRIPS = 8;
+/** Seconds to strike her colours and run up the victor's. */
+const REHOIST_TIME = 1.6;
 /** Canvas colour, its sunlit belly and its seams. */
 const CLOTH = 0xe6dcc0;
 const CLOTH_LIT = 0xf8f2e2;
@@ -129,7 +131,9 @@ export class ShipView {
   private rips = 0;
   /** The headsail, as a spar of its own, and the mast whose hands set it. */
   private readonly jib: { spar: Spar; mast: number } | null;
-  private readonly flag: Ensign;
+  private flag: Ensign;
+  /** Her colours coming down and others going up in their place (a prize taken), from `t0` in seconds. */
+  private rehoist: { t0: number; flag: Ensign; swapped: boolean } | null = null;
   private readonly ensign: EnsignArt;
   private readonly strips: Phaser.GameObjects.Image[] = [];
   /**
@@ -760,11 +764,26 @@ export class ShipView {
     const sw = Math.ceil(ftex.width / FLAG_STRIPS);
     const flyPx = ftex.width / ART_SCALE;
     const left = staff.x - this.ensign.hoistX / ART_SCALE;
-    const top = staff.y - this.ensign.hoistY / ART_SCALE;
+    let top = staff.y - this.ensign.hoistY / ART_SCALE;
+    let shown = alpha;
+    // Struck and rehoisted: hers slides down the staff and fades, ours comes up it.
+    const re = this.rehoist;
+    if (re) {
+      const k = (this.scene.time.now / 1000 - re.t0) / REHOIST_TIME;
+      if (k >= 0.5 && !re.swapped) {
+        re.swapped = true;
+        this.flag = re.flag;
+        repaintEnsign(this.scene, this.ensign.key, this.tile, re.flag, this.flip);
+      }
+      const low = k < 0.5 ? Math.min(1, k * 2) : Math.max(0, 2 - k * 2);
+      top += low * this.tile * 0.7;
+      shown *= 1 - 0.85 * low;
+      if (k >= 1) this.rehoist = null;
+    }
     this.strips.forEach((img, i) => {
       const d = Math.abs((i + 0.5) * sw - this.ensign.hoistX) / ART_SCALE;
       this.seatImage(img, left, top + (d / flyPx) * 2.4 * Math.sin(t * 7.5 - d * 0.16 + this.phase));
-      img.setAlpha(alpha);
+      img.setAlpha(shown);
     });
   }
 
@@ -1271,30 +1290,43 @@ export class ShipView {
         const a = partyStrength(ours, mine);
         const b = partyStrength(theirs, !mine);
         const k = a + b > 0 ? a / (a + b) : 0.5;
-        const r = this.localRoomRect(id);
-        const w = Math.max(36, Math.min(76, r.width - 14));
-        const x = r.centerX - w / 2;
-        const y = r.bottom - 4;
-        g.fillStyle(0x0b1622, 0.85).fillRoundedRect(x - 3, y - 3, w + 6, 8, 3);
-        g.fillStyle(MELEE_OURS, 1).fillRect(x, y - 1, w * k, 4);
-        g.fillStyle(MELEE_THEIRS, 1).fillRect(x + w * k, y - 1, w * (1 - k), 4);
-        g.fillStyle(0xffffff, 0.95).fillRect(x + w * k - 1, y - 3, 2, 8);
         let label = this.frayLabels.get(id);
         if (!label) {
           label = this.scene.add
             .text(0, 0, '', textStyle(12, '#f4ead0', { fontStyle: 'bold', stroke: '#0b1622', strokeThickness: 4 }))
-            .setOrigin(0.5, 1)
+            .setOrigin(1, 0.5)
             .setDepth(DEPTH.ui + 0.5);
           this.frayLabels.set(id, label);
         }
         const text = `${ours.length} v ${theirs.length}`;
         if (label.text !== text) label.setText(text);
         label.setColor(k >= 0.55 ? '#9fdcff' : k <= 0.45 ? '#ff9a88' : '#f4ead0');
-        const at = this.turn(r.centerX, y - 3);
+        // The count and the bar side by side on the room's lower wall, clear of the feet of anyone standing there.
+        const r = this.localRoomRect(id);
+        const lw = label.width - 2;
+        const w = Math.max(30, Math.min(64, r.width - 18 - lw));
+        const x = r.centerX - (w + lw + 4) / 2 + lw + 4;
+        const y = r.bottom - 1;
+        g.fillStyle(0x0b1622, 0.85).fillRoundedRect(x - 3, y - 4, w + 6, 8, 3);
+        g.fillStyle(MELEE_OURS, 1).fillRect(x, y - 2, w * k, 4);
+        g.fillStyle(MELEE_THEIRS, 1).fillRect(x + w * k, y - 2, w * (1 - k), 4);
+        g.fillStyle(0xffffff, 0.95).fillRect(x + w * k - 1, y - 4, 2, 8);
+        const at = this.turn(x - 3, y);
         label.setPosition(at.x, at.y).setVisible(true);
       }
     }
     for (const [id, label] of this.frayLabels) if (!seen.has(id)) label.setVisible(false);
+  }
+
+  /** The colours she flies. */
+  get colours(): Ensign {
+    return this.rehoist?.flag ?? this.flag;
+  }
+
+  /** A prize taken: her colours come down and `flag` goes up in their place. */
+  hoistColours(flag: Ensign): void {
+    if (this.flag === flag || this.rehoist) return;
+    this.rehoist = { t0: this.scene.time.now / 1000, flag, swapped: false };
   }
 
   /** A blow in a melee aboard: the striker lunges (or levels a pistol), and a heavy blow staggers its victim. */

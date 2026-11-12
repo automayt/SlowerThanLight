@@ -127,6 +127,25 @@ describe('boarding', () => {
     expect(events.some((e) => e.t === 'log')).toBe(true);
   });
 
+  it('boarders landing in a full room spill into the nearest room with space', () => {
+    const ship = new Ship(MERCHANT_BRIG, 'enemy');
+    ship.crew = [];
+    const raiders = [...new Ship(playerShip('maw'), 'player').crew, ...new Ship(playerShip('gull'), 'player').crew];
+    const guns = ship.room('guns').def;
+    const tiles = guns.w * guns.h;
+    for (const c of raiders.slice(0, tiles)) land(ship, c, 'guns');
+    const extra = raiders[tiles];
+    land(ship, extra, 'guns');
+    expect(extra.room).not.toBe('guns');
+    const mid = (id: string) => {
+      const d = ship.room(id).def;
+      return { x: d.x + d.w / 2, y: d.y + d.h / 2 };
+    };
+    const dist = (id: string) => (mid(id).x - mid('guns').x) ** 2 + (mid(id).y - mid('guns').y) ** 2;
+    const nearest = Math.min(...[...ship.rooms.keys()].filter((id) => id !== 'guns').map(dist));
+    expect(dist(extra.room)).toBe(nearest);
+  });
+
   it('defenders in the room stop the sabotage and fight instead', () => {
     const ship = new Ship(MERCHANT_BRIG, 'enemy');
     const raider = new Ship(playerShip('maw'), 'player').crew[0];

@@ -172,6 +172,8 @@ export class SeaMapScene extends Phaser.Scene {
   /** Where you can sail next, top to bottom: number keys pick from this. */
   private reach: SeaNode[] = [];
   private ambush = new Set<number>();
+  /** Where the shoals are named on the chart, for other tags to keep clear of. */
+  private shoalTags: { x: number; y: number }[] = [];
   private badges: Phaser.GameObjects.GameObject[] = [];
   private hover: SeaNode | null = null;
   private tip!: Phaser.GameObjects.Text;
@@ -288,10 +290,14 @@ export class SeaMapScene extends Phaser.Scene {
       });
       hit.on('pointerdown', () => this.chooseNode(node));
     }
-    // Each shortcut through the shoals is named along its curve.
+    // Each shortcut through the shoals is named along its curve, where the name covers no seal or other name.
+    this.shoalTags = [];
     for (const n of run.chart.nodes) {
       for (const id of n.reef ?? []) {
-        const at = this.reefCurve(n, nodeById(run.chart, id)).getPoint(0.5);
+        const curve = this.reefCurve(n, nodeById(run.chart, id));
+        const along = [0.5, 0.4, 0.6, 0.3, 0.7].map((f) => curve.getPoint(f));
+        const at = along.find((p) => this.clearOfSeals(p.x, p.y, this.shoalTags)) ?? along[0];
+        this.shoalTags.push({ x: at.x, y: at.y });
         const tag = this.add.text(at.x, at.y, 'shoals', { fontFamily: TITLE_FONT, fontSize: '12px', color: '#1d5a66', fontStyle: 'bold italic' }).setOrigin(0.5).setDepth(1.95);
         this.add.rectangle(tag.x, tag.y, tag.width + 8, tag.height, PAPER, 0.8).setDepth(1.9);
       }
@@ -376,6 +382,9 @@ export class SeaMapScene extends Phaser.Scene {
     // Number badges beside each seal you can sail to.
     for (const o of this.badges) o.destroy();
     this.badges = [];
+    // Wind tags go along their leg where they cover no seal (with its name under it) and no other tag.
+    const tags = [...this.shoalTags];
+    const clear = (x: number, y: number) => this.clearOfSeals(x, y, tags);
     this.reach.forEach((n, i) => {
       const { x, y } = this.pos(n);
       const r = n.kind === 'boss' || n.kind === 'exit' ? NODE_R + 6 : NODE_R;
@@ -388,8 +397,16 @@ export class SeaMapScene extends Phaser.Scene {
       const sail = run.pointOfSail(run.node, n);
       if (sail !== 'beam') {
         const from = this.pos(run.node);
+        // Along the leg as drawn: the curve through the shoals, or the straight run.
+        const curve = run.isReef(n) ? this.reefCurve(run.node, n) : null;
+        const along = [0.5, 0.4, 0.6, 0.32, 0.68, 0.25].map((f) => {
+          const p = curve ? curve.getPoint(f) : { x: from.x + (x - from.x) * f, y: from.y + (y - from.y) * f };
+          return { x: p.x, y: p.y - 10 };
+        });
+        const at = along.find((p) => clear(p.x, p.y)) ?? along[0];
+        tags.push(at);
         const tag = this.add
-          .text((from.x + x) / 2, (from.y + y) / 2 - 10, sail === 'foul' ? 'foul wind' : 'fair wind', { fontFamily: TITLE_FONT, fontSize: '12px', color: sail === 'foul' ? '#8a1c10' : '#1f5a3a', fontStyle: 'bold italic' })
+          .text(at.x, at.y, sail === 'foul' ? 'foul wind' : 'fair wind', { fontFamily: TITLE_FONT, fontSize: '12px', color: sail === 'foul' ? '#8a1c10' : '#1f5a3a', fontStyle: 'bold italic' })
           .setOrigin(0.5)
           .setDepth(3.4);
         const back = this.add.rectangle(tag.x, tag.y, tag.width + 8, tag.height, PAPER, 0.85).setDepth(3.3);
@@ -648,6 +665,16 @@ export class SeaMapScene extends Phaser.Scene {
   }
 
   /** The curve a shoal shortcut is drawn along: bowed away from the nearest mark in the column it skips. */
+  /** Whether a short tag centred at (x, y) would cover no seal on the chart (nor its name), nor any of `tags`. */
+  private clearOfSeals(x: number, y: number, tags: { x: number; y: number }[]): boolean {
+    return (
+      this.run.chart.nodes.every((m) => {
+        const p = this.pos(m);
+        return Math.abs(p.x - x) > NODE_R + 34 || y < p.y - NODE_R - 10 || y > p.y + NODE_R + 26;
+      }) && tags.every((t) => Math.abs(t.x - x) > 62 || Math.abs(t.y - y) > 16)
+    );
+  }
+
   private reefCurve(from: SeaNode, to: SeaNode): Phaser.Curves.QuadraticBezier {
     const a = this.pos(from);
     const b = this.pos(to);
